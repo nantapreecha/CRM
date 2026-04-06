@@ -1,8 +1,11 @@
 import os
 import json
-from datetime import datetime, date
-from flask import Flask, request, jsonify, send_from_directory
+import hashlib
+import uuid
+from datetime import datetime
+from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
+from functools import wraps
 import openpyxl
 import psycopg2
 import psycopg2.extras
@@ -11,6 +14,16 @@ app = Flask(__name__, static_folder='static')
 CORS(app)
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
+
+TEAMS = ['CX', 'Sales', 'KAM', 'Merchandise', 'Inbound/QC', 'Outbound/Logistics', 'Management']
+FAULT_TEAMS = TEAMS + ['Customer']
+CASE_TYPES = ['Complain', 'Claim', 'Update Invoice']
+CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
+ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ']
+PRIORITIES = ['Urgent', 'High', 'Medium', 'Low']
 
 # ---------------------------------------------------------------------------
 # DB helpers
@@ -20,9 +33,7 @@ def get_db():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
-
 def query(sql, params=(), one=False):
-    # Convert ? placeholders to %s for psycopg2
     sql = sql.replace('?', '%s')
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -32,10 +43,8 @@ def query(sql, params=(), one=False):
     result = [dict(r) for r in rows]
     return result[0] if one and result else (None if one else result)
 
-
 def mutate(sql, params=()):
     sql = sql.replace('?', '%s')
-    # For INSERT ... RETURNING id
     conn = get_db()
     cur = conn.cursor()
     cur.execute(sql, params)
@@ -48,12 +57,52 @@ def mutate(sql, params=()):
     conn.close()
     return last_id
 
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def hash_password(p):
+    return hashlib.sha256(f"smm-crm-salt-2024{p}".encode()).hexdigest()
+
+def _get_user_from_token():
+    auth = request.headers.get('Authorization', '')
+    token = auth.replace('Bearer ', '').strip()
+    if not token:
+        return None
+    row = query("""
+        SELECT u.id AS user_id, u.username, u.display_name, u.team, u.role
+        FROM user_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.token = %s AND u.status = 'active'
+    """, (token,), one=True)
+    return row
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = _get_user_from_token()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        g.user = user
+        return f(*args, **kwargs)
+    return decorated
+
+def require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = _get_user_from_token()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        g.user = user
+        if g.user['role'] != 'admin':
+            return jsonify({'error': 'Admin only'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 # ---------------------------------------------------------------------------
 # DB init
 # ---------------------------------------------------------------------------
 
-SCHEMA = """
+SCHEMA_BASE = """
 CREATE TABLE IF NOT EXISTS accounts (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -70,8 +119,7 @@ CREATE TABLE IF NOT EXISTS outlets (
     erp_outlet_id TEXT,
     csc_code TEXT,
     status TEXT DEFAULT 'active',
-    FOREIGN KEY (account_id) REFERENCES accounts(id),
-    UNIQUE (account_id, name)
+    FOREIGN KEY (account_id) REFERENCES accounts(id)
 );
 
 CREATE TABLE IF NOT EXISTS account_notes (
@@ -145,6 +193,25 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (outlet_id) REFERENCES outlets(id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    team TEXT NOT NULL,
+    role TEXT DEFAULT 'staff',
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS'))
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS tickets (
     id SERIAL PRIMARY KEY,
     ticket_no TEXT UNIQUE,
@@ -153,20 +220,34 @@ CREATE TABLE IF NOT EXISTS tickets (
     sku_code TEXT,
     product_name TEXT,
     case_type TEXT,
-    fault_category TEXT,
-    fault_team TEXT,
+    case_subtype TEXT,
+    root_cause TEXT,
     priority TEXT DEFAULT 'Medium',
     status TEXT DEFAULT 'open',
     current_team TEXT DEFAULT 'CX',
-    workflow_step INTEGER DEFAULT 0,
-    workflow_branch TEXT,
-    assigned_employee_id INTEGER,
+    opener_team TEXT DEFAULT 'CX',
+    opener_user_id INTEGER,
+    fault_team TEXT,
     description TEXT,
     created_by TEXT,
     created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
-    resolved_at TEXT,
-    FOREIGN KEY (outlet_id) REFERENCES outlets(id),
-    FOREIGN KEY (assigned_employee_id) REFERENCES employees(id)
+    closed_at TEXT,
+    fault_attributed_at TEXT,
+    FOREIGN KEY (outlet_id) REFERENCES outlets(id)
+);
+
+CREATE TABLE IF NOT EXISTS ticket_assignments (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL,
+    team TEXT NOT NULL,
+    note TEXT,
+    employee_id INTEGER,
+    acknowledged_by TEXT,
+    acknowledged_user_id INTEGER,
+    acknowledged_at TEXT,
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    FOREIGN KEY (ticket_id) REFERENCES tickets(id),
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
 
 CREATE TABLE IF NOT EXISTS ticket_workflow_log (
@@ -176,10 +257,24 @@ CREATE TABLE IF NOT EXISTS ticket_workflow_log (
     to_team TEXT,
     action TEXT,
     note TEXT,
-    employee_id INTEGER,
+    image_url TEXT,
+    user_id INTEGER,
     created_by TEXT,
     created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)
+);
+
+CREATE TABLE IF NOT EXISTS ticket_fault_attribution (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL,
+    fault_team TEXT NOT NULL,
+    employee_id INTEGER,
+    note TEXT,
+    attributed_by TEXT,
+    attributed_user_id INTEGER,
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    FOREIGN KEY (ticket_id) REFERENCES tickets(id),
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
 );
 
 CREATE TABLE IF NOT EXISTS ticket_comments (
@@ -192,88 +287,181 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
 );
 """
 
-WORKFLOWS = {
-    'Claim': [
-        {'team': 'CX', 'label': 'รับเรื่อง + ถามลูกค้า', 'branches': ['ส่งใหม่', 'ตัดออก']},
-        {'team': 'BRANCH', 'label': 'เลือกแนวทาง', 'is_branch': True},
-        {'team': 'Merchandise', 'label': 'สั่งสินค้าใหม่', 'branch': 'ส่งใหม่'},
-        {'team': 'Inbound/QC', 'label': 'ตรวจรับสินค้า', 'branch': 'ส่งใหม่'},
-        {'team': 'Outbound/Logistics', 'label': 'เรียกรถ + จัดส่ง', 'branch': 'ส่งใหม่'},
-        {'team': 'Sales Co', 'label': 'ตัด SKU ออก', 'branch': 'ตัดออก'},
-        {'team': 'CX', 'label': 'ปิดเคส'},
-    ],
-    'น้ำหนักไม่ครบ': [
-        {'team': 'CX', 'label': 'รับเรื่อง + ถามลูกค้า', 'branches': ['ส่งเพิ่ม', 'ตัด Invoice', 'รอรอบถัดไป']},
-        {'team': 'Outbound/Logistics', 'label': 'จัดส่งเพิ่ม', 'branch': 'ส่งเพิ่ม'},
-        {'team': 'Sales Co', 'label': 'ตัด Invoice', 'branch': 'ตัด Invoice'},
-        {'team': 'CX', 'label': 'Note + รอรอบถัดไป', 'branch': 'รอรอบถัดไป'},
-        {'team': 'CX', 'label': 'ปิดเคส'},
-    ],
-    'ตกหล่น': [
-        {'team': 'CX', 'label': 'รับเรื่อง + ถามลูกค้า', 'branches': ['ส่งทันที', 'รอรอบถัดไป']},
-        {'team': 'Outbound/Logistics', 'label': 'จัดส่งทันที', 'branch': 'ส่งทันที'},
-        {'team': 'CX', 'label': 'Note + รอรอบถัดไป', 'branch': 'รอรอบถัดไป'},
-        {'team': 'CX', 'label': 'ปิดเคส'},
-    ],
-    'คุณภาพไม่ผ่าน/ผิดสเปค': [
-        {'team': 'CX', 'label': 'รับเรื่อง + ถามลูกค้า'},
-        {'team': 'CX', 'label': 'ตรวจ master spec', 'branches': ['master ถูก', 'master ผิด']},
-        {'team': 'Merchandise', 'label': 'หาสินค้าใหม่', 'branch': 'master ถูก'},
-        {'team': 'Inbound/QC', 'label': 'ตรวจรับสินค้า', 'branch': 'master ถูก'},
-        {'team': 'Merchandise', 'label': 'แก้ไข master spec', 'branch': 'master ผิด'},
-        {'team': 'CX', 'label': 'ปิดเคส'},
-    ],
-    'Sales Co Error': [
-        {'team': 'CX', 'label': 'รับเรื่อง'},
-        {'team': 'Sales Co', 'label': 'ดำเนินการ (ตัด SKU / แนบรูป / แก้ order)'},
-        {'team': 'CX', 'label': 'ปิดเคส'},
-    ],
-}
-
-
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    for stmt in SCHEMA.strip().split(';'):
+
+    # Create all tables
+    for stmt in SCHEMA_BASE.strip().split(';'):
         stmt = stmt.strip()
         if stmt:
             cur.execute(stmt)
-    # Add unique constraint on outlets if not exists
+
+    # Outlets unique constraint
     cur.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint
-                WHERE conname = 'outlets_account_id_name_key'
+                SELECT 1 FROM pg_constraint WHERE conname = 'outlets_account_id_name_key'
             ) THEN
                 ALTER TABLE outlets ADD CONSTRAINT outlets_account_id_name_key UNIQUE (account_id, name);
             END IF;
         END$$;
     """)
+
+    # Migrate tickets table — add new columns if not exist
+    migrations = [
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS case_subtype TEXT",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS root_cause TEXT",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS opener_team TEXT",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS opener_user_id INTEGER",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at TEXT",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fault_attributed_at TEXT",
+        "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS image_url TEXT",
+        "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS user_id INTEGER",
+    ]
+    for m in migrations:
+        try:
+            cur.execute(m)
+        except Exception:
+            conn.rollback()
+
+    # Default admin user
+    cur.execute("SELECT COUNT(*) FROM users")
+    cnt = cur.fetchone()[0]
+    if cnt == 0:
+        cur.execute(
+            "INSERT INTO users (username, password_hash, display_name, team, role) VALUES (%s,%s,%s,%s,%s)",
+            ('admin', hash_password('admin123'), 'Admin', 'CX', 'admin')
+        )
+        print("Created default admin user: admin / admin123")
+
     conn.commit()
     conn.close()
     print("Database initialized.")
 
-
 # ---------------------------------------------------------------------------
-# Static files
+# Static
 # ---------------------------------------------------------------------------
 
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
 
+# ---------------------------------------------------------------------------
+# Config (public)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    return jsonify({
+        'teams': TEAMS,
+        'fault_teams': FAULT_TEAMS,
+        'case_types': CASE_TYPES,
+        'claim_subtypes': CLAIM_SUBTYPES,
+        'root_causes': ROOT_CAUSES,
+        'priorities': PRIORITIES,
+    })
+
+@app.route('/api/workflows', methods=['GET'])
+def get_workflows():
+    return jsonify({})
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    d = request.json
+    user = query(
+        "SELECT * FROM users WHERE username=%s AND status='active'",
+        (d.get('username', ''),), one=True
+    )
+    if not user or user['password_hash'] != hash_password(d.get('password', '')):
+        return jsonify({'error': 'Username หรือ Password ไม่ถูกต้อง'}), 401
+    token = str(uuid.uuid4())
+    mutate("INSERT INTO user_sessions (user_id, token) VALUES (%s,%s) RETURNING id",
+           (user['id'], token))
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user['id'],
+            'username': user['username'],
+            'display_name': user['display_name'],
+            'team': user['team'],
+            'role': user['role'],
+        }
+    })
+
+@app.route('/api/auth/logout', methods=['POST'])
+@require_auth
+def auth_logout():
+    auth = request.headers.get('Authorization', '')
+    token = auth.replace('Bearer ', '').strip()
+    mutate("DELETE FROM user_sessions WHERE token=%s", (token,))
+    return jsonify({'ok': True})
+
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def auth_me():
+    return jsonify(g.user)
+
+# ---------------------------------------------------------------------------
+# User management (admin)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/users', methods=['GET'])
+@require_admin
+def get_users():
+    rows = query("SELECT id, username, display_name, team, role, status, created_at FROM users ORDER BY team, display_name")
+    return jsonify(rows)
+
+@app.route('/api/users', methods=['POST'])
+@require_admin
+def create_user():
+    d = request.json
+    if not d.get('username') or not d.get('password') or not d.get('display_name'):
+        return jsonify({'error': 'username, password และ display_name จำเป็น'}), 400
+    existing = query("SELECT id FROM users WHERE username=%s", (d['username'],), one=True)
+    if existing:
+        return jsonify({'error': 'Username นี้มีอยู่แล้ว'}), 400
+    id_ = mutate(
+        "INSERT INTO users (username, password_hash, display_name, team, role, status) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+        (d['username'], hash_password(d['password']), d['display_name'],
+         d.get('team', 'CX'), d.get('role', 'staff'), d.get('status', 'active'))
+    )
+    return jsonify({'id': id_}), 201
+
+@app.route('/api/users/<int:uid>', methods=['PUT'])
+@require_admin
+def update_user(uid):
+    d = request.json
+    mutate("UPDATE users SET display_name=%s, team=%s, role=%s, status=%s WHERE id=%s",
+           (d['display_name'], d['team'], d.get('role', 'staff'), d.get('status', 'active'), uid))
+    return jsonify({'ok': True})
+
+@app.route('/api/users/<int:uid>/password', methods=['PUT'])
+@require_admin
+def reset_password(uid):
+    d = request.json
+    if not d.get('new_password'):
+        return jsonify({'error': 'กรุณาใส่ password ใหม่'}), 400
+    mutate("UPDATE users SET password_hash=%s WHERE id=%s",
+           (hash_password(d['new_password']), uid))
+    return jsonify({'ok': True})
 
 # ---------------------------------------------------------------------------
 # Accounts
 # ---------------------------------------------------------------------------
 
 @app.route('/api/accounts', methods=['GET'])
+@require_auth
 def get_accounts():
     rows = query("""
         SELECT a.*,
                COUNT(DISTINCT o.id) AS outlet_count,
-               COUNT(DISTINCT CASE WHEN t.status NOT IN ('resolved','closed') THEN t.id END) AS open_tickets
+               COUNT(DISTINCT CASE WHEN t.status NOT IN ('closed') THEN t.id END) AS open_tickets
         FROM accounts a
         LEFT JOIN outlets o ON o.account_id = a.id
         LEFT JOIN tickets t ON t.outlet_id = o.id
@@ -281,61 +469,61 @@ def get_accounts():
     """)
     return jsonify(rows)
 
-
 @app.route('/api/accounts', methods=['POST'])
+@require_auth
 def create_account():
     d = request.json
     id_ = mutate("INSERT INTO accounts (name, owner, status) VALUES (%s,%s,%s) RETURNING id",
                  (d['name'], d.get('owner', ''), d.get('status', 'active')))
     return jsonify({'id': id_}), 201
 
-
 @app.route('/api/accounts/<int:aid>', methods=['GET'])
+@require_auth
 def get_account(aid):
     row = query("SELECT * FROM accounts WHERE id=%s", (aid,), one=True)
     if not row:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-
 @app.route('/api/accounts/<int:aid>', methods=['PUT'])
+@require_auth
 def update_account(aid):
     d = request.json
     mutate("UPDATE accounts SET name=%s, owner=%s, status=%s WHERE id=%s",
            (d['name'], d.get('owner', ''), d.get('status', 'active'), aid))
     return jsonify({'ok': True})
 
-
 @app.route('/api/accounts/<int:aid>/outlets', methods=['GET'])
+@require_auth
 def get_account_outlets(aid):
     rows = query("""
         SELECT o.*,
-               COUNT(DISTINCT CASE WHEN t.status NOT IN ('resolved','closed') THEN t.id END) AS open_tickets
+               COUNT(DISTINCT CASE WHEN t.status NOT IN ('closed') THEN t.id END) AS open_tickets
         FROM outlets o
         LEFT JOIN tickets t ON t.outlet_id = o.id
         WHERE o.account_id=%s GROUP BY o.id ORDER BY o.name
     """, (aid,))
     return jsonify(rows)
 
-
 @app.route('/api/accounts/<int:aid>/notes', methods=['GET'])
+@require_auth
 def get_account_notes(aid):
     return jsonify(query("SELECT * FROM account_notes WHERE account_id=%s ORDER BY created_at DESC", (aid,)))
 
-
 @app.route('/api/accounts/<int:aid>/notes', methods=['POST'])
+@require_auth
 def add_account_note(aid):
     d = request.json
     id_ = mutate("INSERT INTO account_notes (account_id, note, created_by) VALUES (%s,%s,%s) RETURNING id",
-                 (aid, d['note'], d.get('created_by', 'CX')))
+                 (aid, d['note'], d.get('created_by', g.user['display_name'])))
     return jsonify({'id': id_}), 201
-
 
 # ---------------------------------------------------------------------------
 # Outlets
 # ---------------------------------------------------------------------------
 
 @app.route('/api/outlets', methods=['GET'])
+@require_auth
 def get_outlets():
     search = request.args.get('q', '')
     if search:
@@ -353,8 +541,8 @@ def get_outlets():
         """)
     return jsonify(rows)
 
-
 @app.route('/api/outlets/<int:oid>', methods=['GET'])
+@require_auth
 def get_outlet(oid):
     row = query("""
         SELECT o.*, a.name AS account_name, a.owner
@@ -365,8 +553,8 @@ def get_outlet(oid):
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-
 @app.route('/api/outlets/<int:oid>/invoices', methods=['GET'])
+@require_auth
 def get_outlet_invoices(oid):
     rows = query("""
         SELECT invoice_number, doc_date, COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
@@ -375,14 +563,14 @@ def get_outlet_invoices(oid):
     """, (oid,))
     return jsonify(rows)
 
-
 @app.route('/api/outlets/<int:oid>/tickets', methods=['GET'])
+@require_auth
 def get_outlet_tickets(oid):
     rows = query("SELECT * FROM tickets WHERE outlet_id=%s ORDER BY created_at DESC", (oid,))
     return jsonify(rows)
 
-
 @app.route('/api/outlets/<int:oid>/notes', methods=['GET'])
+@require_auth
 def get_outlet_notes(oid):
     outlet = query("SELECT account_id FROM outlets WHERE id=%s", (oid,), one=True)
     if not outlet:
@@ -390,31 +578,30 @@ def get_outlet_notes(oid):
     return jsonify(query("SELECT * FROM account_notes WHERE account_id=%s ORDER BY created_at DESC",
                          (outlet['account_id'],)))
 
-
 # ---------------------------------------------------------------------------
-# Invoice / SKU lookup
+# Invoices
 # ---------------------------------------------------------------------------
 
 @app.route('/api/invoices/<invoice_number>/skus', methods=['GET'])
+@require_auth
 def get_invoice_skus(invoice_number):
     rows = query("""
         SELECT DISTINCT sku_code, product_name, qty, unit
-        FROM orders WHERE invoice_number=%s
-        ORDER BY product_name
+        FROM orders WHERE invoice_number=%s ORDER BY product_name
     """, (invoice_number,))
     return jsonify(rows)
-
 
 # ---------------------------------------------------------------------------
 # Suppliers
 # ---------------------------------------------------------------------------
 
 @app.route('/api/suppliers', methods=['GET'])
+@require_auth
 def get_suppliers():
     return jsonify(query("SELECT * FROM suppliers ORDER BY name"))
 
-
 @app.route('/api/suppliers', methods=['POST'])
+@require_auth
 def create_supplier():
     d = request.json
     id_ = mutate("""INSERT INTO suppliers
@@ -427,16 +614,16 @@ def create_supplier():
          d.get('rating',0), d.get('status','active')))
     return jsonify({'id': id_}), 201
 
-
 @app.route('/api/suppliers/<int:sid>', methods=['GET'])
+@require_auth
 def get_supplier(sid):
     row = query("SELECT * FROM suppliers WHERE id=%s", (sid,), one=True)
     if not row:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-
 @app.route('/api/suppliers/<int:sid>', methods=['PUT'])
+@require_auth
 def update_supplier(sid):
     d = request.json
     mutate("""UPDATE suppliers SET name=%s, supplier_type=%s, contact_person=%s,
@@ -448,33 +635,33 @@ def update_supplier(sid):
          d.get('rating',0), d.get('status','active'), sid))
     return jsonify({'ok': True})
 
-
 @app.route('/api/suppliers/<int:sid>/notes', methods=['GET'])
+@require_auth
 def get_supplier_notes(sid):
     return jsonify(query("SELECT * FROM supplier_notes WHERE supplier_id=%s ORDER BY created_at DESC", (sid,)))
 
-
 @app.route('/api/suppliers/<int:sid>/notes', methods=['POST'])
+@require_auth
 def add_supplier_note(sid):
     d = request.json
     id_ = mutate("INSERT INTO supplier_notes (supplier_id, note, note_type, created_by) VALUES (%s,%s,%s,%s) RETURNING id",
-                 (sid, d['note'], d.get('note_type','general'), d.get('created_by','CX')))
+                 (sid, d['note'], d.get('note_type','general'), d.get('created_by', g.user['display_name'])))
     return jsonify({'id': id_}), 201
-
 
 # ---------------------------------------------------------------------------
 # Employees
 # ---------------------------------------------------------------------------
 
 @app.route('/api/employees', methods=['GET'])
+@require_auth
 def get_employees():
     team = request.args.get('team')
     if team:
         return jsonify(query("SELECT * FROM employees WHERE team=%s AND status='active' ORDER BY name", (team,)))
     return jsonify(query("SELECT * FROM employees ORDER BY team, name"))
 
-
 @app.route('/api/employees', methods=['POST'])
+@require_auth
 def create_employee():
     d = request.json
     id_ = mutate("""INSERT INTO employees (name, employee_code, department, team, role, phone, email, status)
@@ -484,16 +671,16 @@ def create_employee():
          d.get('email',''), d.get('status','active')))
     return jsonify({'id': id_}), 201
 
-
 @app.route('/api/employees/<int:eid>', methods=['GET'])
+@require_auth
 def get_employee(eid):
     row = query("SELECT * FROM employees WHERE id=%s", (eid,), one=True)
     if not row:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-
 @app.route('/api/employees/<int:eid>', methods=['PUT'])
+@require_auth
 def update_employee(eid):
     d = request.json
     mutate("""UPDATE employees SET name=%s, employee_code=%s, department=%s, team=%s,
@@ -503,7 +690,6 @@ def update_employee(eid):
          d.get('email',''), d.get('status','active'), eid))
     return jsonify({'ok': True})
 
-
 # ---------------------------------------------------------------------------
 # Tickets
 # ---------------------------------------------------------------------------
@@ -512,203 +698,347 @@ def next_ticket_no():
     row = query("SELECT COUNT(*) AS cnt FROM tickets", one=True)
     return f"TK-{(row['cnt'] or 0) + 1:04d}"
 
-
-def get_workflow_steps(case_type, branch=None):
-    steps = WORKFLOWS.get(case_type, [])
-    if branch:
-        filtered = [s for s in steps if 'branch' not in s or s.get('branch') == branch or s.get('is_branch')]
-        return filtered
-    return steps
-
-
 @app.route('/api/tickets', methods=['GET'])
+@require_auth
 def get_tickets():
     team = request.args.get('team')
     status = request.args.get('status')
     outlet_id = request.args.get('outlet_id')
     params = []
     wheres = []
+
+    base = """
+        SELECT DISTINCT t.*, o.name AS outlet_name, a.name AS account_name
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN ticket_assignments ta ON ta.ticket_id = t.id AND ta.acknowledged_at IS NULL
+    """
+
     if team and team != 'Management':
-        wheres.append("t.current_team=%s")
-        params.append(team)
+        wheres.append("(t.current_team=%s OR (ta.team=%s AND t.case_type='Complain'))")
+        params.extend([team, team])
     if status:
         wheres.append("t.status=%s")
         params.append(status)
     if outlet_id:
         wheres.append("t.outlet_id=%s")
         params.append(outlet_id)
+
     where_clause = ("WHERE " + " AND ".join(wheres)) if wheres else ""
-    rows = query(f"""
-        SELECT t.*, o.name AS outlet_name, a.name AS account_name,
-               e.name AS assigned_employee_name
-        FROM tickets t
-        LEFT JOIN outlets o ON o.id=t.outlet_id
-        LEFT JOIN accounts a ON a.id=o.account_id
-        LEFT JOIN employees e ON e.id=t.assigned_employee_id
-        {where_clause}
-        ORDER BY t.created_at DESC
-    """, params)
+    rows = query(f"{base} {where_clause} ORDER BY t.created_at DESC", params)
     return jsonify(rows)
 
-
 @app.route('/api/tickets', methods=['POST'])
+@require_auth
 def create_ticket():
     d = request.json
     ticket_no = next_ticket_no()
     case_type = d.get('case_type', '')
-    workflow = WORKFLOWS.get(case_type, [])
-    first_team = workflow[0]['team'] if workflow else 'CX'
+    opener_team = g.user['team']
+    opener_user_id = g.user['user_id']
+    initial_teams = d.get('initial_teams', [])
+    if not initial_teams:
+        return jsonify({'error': 'กรุณาเลือกทีมที่จะส่งงานให้'}), 400
+
+    if case_type == 'Complain':
+        current_team = 'pending_ack'
+        status = 'open'
+    else:
+        current_team = initial_teams[0]
+        status = 'open'
 
     id_ = mutate("""INSERT INTO tickets
         (ticket_no, outlet_id, invoice_number, sku_code, product_name,
-         case_type, fault_category, fault_team, priority, status,
-         current_team, workflow_step, description, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+         case_type, case_subtype, root_cause, priority, status,
+         current_team, opener_team, opener_user_id, description, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
         (ticket_no, d.get('outlet_id'), d.get('invoice_number'),
          d.get('sku_code'), d.get('product_name'),
-         case_type, d.get('fault_category',''), d.get('fault_team',''),
-         d.get('priority','Medium'), 'open',
-         first_team, 0,
-         d.get('description',''), d.get('created_by','CX')))
+         case_type, d.get('case_subtype',''), d.get('root_cause',''),
+         d.get('priority','Medium'), status,
+         current_team, opener_team, opener_user_id,
+         d.get('description',''), g.user['display_name']))
 
+    # For Complain: create assignments for each team
+    if case_type == 'Complain':
+        for team in initial_teams:
+            mutate("""INSERT INTO ticket_assignments (ticket_id, team) VALUES (%s,%s) RETURNING id""",
+                   (id_, team))
+
+    # Log creation
     mutate("""INSERT INTO ticket_workflow_log
-        (ticket_id, from_team, to_team, action, note, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s)""",
-        (id_, '', first_team, 'สร้างเคส', d.get('description',''), d.get('created_by','CX')))
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (id_, opener_team, ', '.join(initial_teams), 'สร้างเคส',
+         d.get('description',''), opener_user_id, g.user['display_name']))
 
     return jsonify({'id': id_, 'ticket_no': ticket_no}), 201
 
-
 @app.route('/api/tickets/<int:tid>', methods=['GET'])
+@require_auth
 def get_ticket(tid):
     row = query("""
         SELECT t.*, o.name AS outlet_name, a.name AS account_name,
-               e.name AS assigned_employee_name
+               u.display_name AS opener_name
         FROM tickets t
-        LEFT JOIN outlets o ON o.id=t.outlet_id
-        LEFT JOIN accounts a ON a.id=o.account_id
-        LEFT JOIN employees e ON e.id=t.assigned_employee_id
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN users u ON u.id = t.opener_user_id
         WHERE t.id=%s
     """, (tid,), one=True)
     if not row:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-
-@app.route('/api/tickets/<int:tid>', methods=['PUT'])
-def update_ticket(tid):
-    d = request.json
-    mutate("""UPDATE tickets SET priority=%s, status=%s, fault_category=%s,
-        fault_team=%s, assigned_employee_id=%s, description=%s WHERE id=%s""",
-        (d.get('priority','Medium'), d.get('status','open'),
-         d.get('fault_category',''), d.get('fault_team',''),
-         d.get('assigned_employee_id'), d.get('description',''), tid))
-    return jsonify({'ok': True})
-
-
-@app.route('/api/tickets/<int:tid>/advance', methods=['POST'])
-def advance_ticket(tid):
-    d = request.json
-    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
-    if not ticket:
-        return jsonify({'error': 'Not found'}), 404
-
-    action = d.get('action', '')
-    note = d.get('note', '')
-    created_by = d.get('created_by', 'CX')
-    branch = d.get('branch', ticket.get('workflow_branch'))
-    employee_id = d.get('employee_id')
-
-    case_type = ticket['case_type']
-    workflow = WORKFLOWS.get(case_type, [])
-    current_step = ticket['workflow_step']
-    new_step = current_step + 1
-
-    next_team = ticket['current_team']
-    new_status = ticket['status']
-
-    effective_steps = [s for s in workflow if 'branch' not in s or s.get('branch') == branch or s.get('is_branch')]
-    if new_step < len(effective_steps):
-        next_step_def = effective_steps[new_step]
-        next_team = next_step_def['team']
-        if next_team == 'BRANCH':
-            branch = d.get('branch', '')
-            next_team = ticket['current_team']
-    else:
-        new_status = 'resolved'
-        next_team = 'CX'
-
-    resolved_at = datetime.now().isoformat() if new_status == 'resolved' else None
-
-    mutate("""UPDATE tickets SET current_team=%s, workflow_step=%s, workflow_branch=%s,
-        status=%s, assigned_employee_id=%s, resolved_at=%s WHERE id=%s""",
-        (next_team, new_step, branch, new_status, employee_id, resolved_at, tid))
-
-    mutate("""INSERT INTO ticket_workflow_log
-        (ticket_id, from_team, to_team, action, note, employee_id, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
-        (tid, ticket['current_team'], next_team, action, note, employee_id, created_by))
-
-    return jsonify({'ok': True, 'next_team': next_team, 'status': new_status})
-
-
-@app.route('/api/tickets/<int:tid>/acknowledge', methods=['POST'])
-def acknowledge_ticket(tid):
-    d = request.json
-    employee_id = d.get('employee_id')
-    created_by = d.get('created_by', '')
-    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
-    if not ticket:
-        return jsonify({'error': 'Not found'}), 404
-    mutate("UPDATE tickets SET assigned_employee_id=%s, status='in_progress' WHERE id=%s",
-           (employee_id, tid))
-    mutate("""INSERT INTO ticket_workflow_log
-        (ticket_id, from_team, to_team, action, note, employee_id, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
-        (tid, ticket['current_team'], ticket['current_team'], 'Acknowledge', '', employee_id, created_by))
-    return jsonify({'ok': True})
-
-
-@app.route('/api/tickets/<int:tid>/close', methods=['POST'])
-def close_ticket(tid):
-    d = request.json
-    mutate("UPDATE tickets SET status='closed', resolved_at=%s WHERE id=%s",
-           (datetime.now().isoformat(), tid))
-    mutate("""INSERT INTO ticket_workflow_log
-        (ticket_id, from_team, to_team, action, note, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s)""",
-        (tid, 'CX', '', 'ปิดเคส', d.get('note',''), d.get('created_by','CX')))
-    return jsonify({'ok': True})
-
-
-@app.route('/api/tickets/<int:tid>/comments', methods=['GET'])
-def get_ticket_comments(tid):
-    return jsonify(query("SELECT * FROM ticket_comments WHERE ticket_id=%s ORDER BY created_at", (tid,)))
-
-
-@app.route('/api/tickets/<int:tid>/comments', methods=['POST'])
-def add_ticket_comment(tid):
-    d = request.json
-    id_ = mutate("INSERT INTO ticket_comments (ticket_id, comment, created_by) VALUES (%s,%s,%s) RETURNING id",
-                 (tid, d['comment'], d.get('created_by','CX')))
-    return jsonify({'id': id_}), 201
-
-
-@app.route('/api/tickets/<int:tid>/log', methods=['GET'])
-def get_ticket_log(tid):
+@app.route('/api/tickets/<int:tid>/assignments', methods=['GET'])
+@require_auth
+def get_ticket_assignments(tid):
     rows = query("""
-        SELECT l.*, e.name AS employee_name
-        FROM ticket_workflow_log l
-        LEFT JOIN employees e ON e.id=l.employee_id
-        WHERE l.ticket_id=%s ORDER BY l.created_at
+        SELECT ta.*, e.name AS employee_name
+        FROM ticket_assignments ta
+        LEFT JOIN employees e ON e.id = ta.employee_id
+        WHERE ta.ticket_id=%s ORDER BY ta.team
     """, (tid,))
     return jsonify(rows)
 
+@app.route('/api/tickets/<int:tid>/forward', methods=['POST'])
+@require_auth
+def forward_ticket(tid):
+    d = request.json
+    to_team = (d.get('to_team') or '').strip()
+    note = (d.get('note') or '').strip()
+    image_url = d.get('image_url')
+    if not to_team:
+        return jsonify({'error': 'กรุณาเลือกทีมที่จะส่งต่อ'}), 400
+    if not note:
+        return jsonify({'error': 'กรุณาใส่ note ก่อนส่งต่อ'}), 400
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+    if ticket['status'] == 'closed':
+        return jsonify({'error': 'เคสนี้ปิดแล้ว'}), 400
 
-@app.route('/api/workflows', methods=['GET'])
-def get_workflows():
-    return jsonify(WORKFLOWS)
+    from_team = ticket['current_team']
+    mutate("UPDATE tickets SET current_team=%s, status='in_progress' WHERE id=%s", (to_team, tid))
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, image_url, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, from_team, to_team, 'ส่งต่อ', note, image_url,
+         g.user['user_id'], g.user['display_name']))
+    return jsonify({'ok': True, 'next_team': to_team})
 
+@app.route('/api/tickets/<int:tid>/complete', methods=['POST'])
+@require_auth
+def complete_ticket(tid):
+    d = request.json
+    note = (d.get('note') or '').strip()
+    image_url = d.get('image_url')
+    if not note:
+        return jsonify({'error': 'กรุณาใส่ note ก่อน Complete'}), 400
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+    if ticket['status'] == 'closed':
+        return jsonify({'error': 'เคสนี้ปิดแล้ว'}), 400
+
+    from_team = ticket['current_team']
+    back_team = ticket['opener_team'] or 'CX'
+    mutate("UPDATE tickets SET current_team=%s, status='in_progress' WHERE id=%s", (back_team, tid))
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, image_url, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, from_team, back_team, f'เสร็จแล้ว → กลับ {back_team}', note, image_url,
+         g.user['user_id'], g.user['display_name']))
+    return jsonify({'ok': True, 'back_to': back_team})
+
+@app.route('/api/tickets/<int:tid>/acknowledge', methods=['POST'])
+@require_auth
+def acknowledge_ticket(tid):
+    d = request.json
+    note = (d.get('note') or '').strip()
+    employee_id = d.get('employee_id')
+    if not note:
+        return jsonify({'error': 'กรุณาใส่ note ก่อน Acknowledge'}), 400
+    if not employee_id:
+        return jsonify({'error': 'กรุณาเลือกพนักงานที่รับผิดชอบ'}), 400
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+
+    my_team = g.user['team']
+    assignment = query(
+        "SELECT * FROM ticket_assignments WHERE ticket_id=%s AND team=%s AND acknowledged_at IS NULL",
+        (tid, my_team), one=True
+    )
+    if not assignment:
+        return jsonify({'error': 'ไม่มี assignment สำหรับทีมนี้ หรือ acknowledge แล้ว'}), 400
+
+    now = datetime.now().isoformat()
+    mutate("""UPDATE ticket_assignments
+        SET note=%s, employee_id=%s, acknowledged_by=%s, acknowledged_user_id=%s, acknowledged_at=%s
+        WHERE id=%s""",
+        (note, employee_id, g.user['display_name'], g.user['user_id'], now, assignment['id']))
+
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, my_team, my_team, 'Acknowledge', note, g.user['user_id'], g.user['display_name']))
+
+    # Check if all assignments acknowledged
+    pending = query(
+        "SELECT COUNT(*) AS cnt FROM ticket_assignments WHERE ticket_id=%s AND acknowledged_at IS NULL",
+        (tid,), one=True
+    )
+    if pending['cnt'] == 0:
+        back_team = ticket['opener_team'] or 'CX'
+        mutate("UPDATE tickets SET current_team=%s, status='in_progress' WHERE id=%s", (back_team, tid))
+        mutate("""INSERT INTO ticket_workflow_log
+            (ticket_id, from_team, to_team, action, note, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s)""",
+            (tid, 'system', back_team, 'ทุกทีม Acknowledge ครบแล้ว', '', 'system'))
+
+    return jsonify({'ok': True})
+
+@app.route('/api/tickets/<int:tid>/close', methods=['POST'])
+@require_auth
+def close_ticket(tid):
+    d = request.json
+    fault_team = (d.get('fault_team') or '').strip()
+    note = (d.get('note') or '').strip()
+    if not fault_team:
+        return jsonify({'error': 'กรุณาเลือก Fault Team ก่อนปิดเคส'}), 400
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+
+    my_team = g.user['team']
+    is_admin = g.user['role'] == 'admin'
+    if ticket['opener_team'] != my_team and not is_admin:
+        return jsonify({'error': 'เฉพาะทีมที่เปิดเคสเท่านั้นที่ปิดได้'}), 403
+
+    now = datetime.now().isoformat()
+    if fault_team == 'Customer':
+        new_status = 'closed'
+        mutate("""UPDATE tickets SET status=%s, fault_team=%s, closed_at=%s, fault_attributed_at=%s WHERE id=%s""",
+               (new_status, fault_team, now, now, tid))
+    else:
+        new_status = 'pending_fault'
+        mutate("""UPDATE tickets SET status=%s, fault_team=%s, closed_at=%s WHERE id=%s""",
+               (new_status, fault_team, now, tid))
+
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, my_team, '', 'ปิดเคส', note, g.user['user_id'], g.user['display_name']))
+
+    return jsonify({'ok': True, 'status': new_status})
+
+@app.route('/api/tickets/<int:tid>/attribute-fault', methods=['POST'])
+@require_auth
+def attribute_fault(tid):
+    d = request.json
+    employee_id = d.get('employee_id')
+    note = (d.get('note') or '').strip()
+    if not employee_id:
+        return jsonify({'error': 'กรุณาเลือกพนักงานที่รับผิดชอบ'}), 400
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+
+    my_team = g.user['team']
+    is_admin = g.user['role'] == 'admin'
+    if ticket['fault_team'] != my_team and not is_admin:
+        return jsonify({'error': 'เฉพาะ Fault Team เท่านั้นที่ระบุพนักงานได้'}), 403
+
+    now = datetime.now().isoformat()
+    mutate("""INSERT INTO ticket_fault_attribution
+        (ticket_id, fault_team, employee_id, note, attributed_by, attributed_user_id)
+        VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+        (tid, ticket['fault_team'], employee_id, note,
+         g.user['display_name'], g.user['user_id']))
+
+    mutate("UPDATE tickets SET status='closed', fault_attributed_at=%s WHERE id=%s", (now, tid))
+
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, my_team, '', 'ระบุผู้รับผิดชอบ', note, g.user['user_id'], g.user['display_name']))
+
+    return jsonify({'ok': True})
+
+@app.route('/api/tickets/<int:tid>/log', methods=['GET'])
+@require_auth
+def get_ticket_log(tid):
+    rows = query("""
+        SELECT l.*, u.display_name AS user_display_name
+        FROM ticket_workflow_log l
+        LEFT JOIN users u ON u.id = l.user_id
+        WHERE l.ticket_id=%s ORDER BY l.created_at
+    """, (tid,))
+    for i, row in enumerate(rows):
+        if i == 0:
+            row['duration_seconds'] = None
+        else:
+            try:
+                prev_t = datetime.fromisoformat(rows[i-1]['created_at'].replace('Z',''))
+                curr_t = datetime.fromisoformat(row['created_at'].replace('Z',''))
+                row['duration_seconds'] = int((curr_t - prev_t).total_seconds())
+            except Exception:
+                row['duration_seconds'] = None
+    return jsonify(rows)
+
+@app.route('/api/tickets/<int:tid>/comments', methods=['GET'])
+@require_auth
+def get_ticket_comments(tid):
+    return jsonify(query("SELECT * FROM ticket_comments WHERE ticket_id=%s ORDER BY created_at", (tid,)))
+
+@app.route('/api/tickets/<int:tid>/comments', methods=['POST'])
+@require_auth
+def add_ticket_comment(tid):
+    d = request.json
+    id_ = mutate("INSERT INTO ticket_comments (ticket_id, comment, created_by) VALUES (%s,%s,%s) RETURNING id",
+                 (tid, d['comment'], g.user['display_name']))
+    return jsonify({'id': id_}), 201
+
+@app.route('/api/tickets/<int:tid>/fault-attribution', methods=['GET'])
+@require_auth
+def get_fault_attribution(tid):
+    row = query("""
+        SELECT fa.*, e.name AS employee_name
+        FROM ticket_fault_attribution fa
+        LEFT JOIN employees e ON e.id = fa.employee_id
+        WHERE fa.ticket_id=%s ORDER BY fa.created_at DESC LIMIT 1
+    """, (tid,), one=True)
+    return jsonify(row)
+
+# ---------------------------------------------------------------------------
+# Image upload
+# ---------------------------------------------------------------------------
+
+@app.route('/api/upload/image', methods=['POST'])
+@require_auth
+def upload_image():
+    if not CLOUDINARY_CLOUD_NAME:
+        return jsonify({'error': 'Cloudinary ยังไม่ได้ตั้งค่า กรุณาเพิ่ม CLOUDINARY_CLOUD_NAME ใน environment variables'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    try:
+        import cloudinary
+        import cloudinary.uploader
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET
+        )
+        f = request.files['file']
+        result = cloudinary.uploader.upload(f, folder='smm-crm')
+        return jsonify({'url': result['secure_url']})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ---------------------------------------------------------------------------
 # Dashboard
@@ -727,67 +1057,127 @@ def date_filter_sql(alias='t'):
         params.append(end + 'T23:59:59')
     return (' AND ' + ' AND '.join(parts)) if parts else '', params
 
-
 @app.route('/api/dashboard/overview', methods=['GET'])
+@require_auth
 def dashboard_overview():
     extra, params = date_filter_sql()
     total = query(f"SELECT COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra}", params, one=True)
     by_status = query(f"SELECT status, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY status", params)
     by_case = query(f"SELECT case_type, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY case_type ORDER BY cnt DESC", params)
-    by_fault = query(f"SELECT fault_team, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY fault_team ORDER BY cnt DESC", params)
+    by_root = query(f"SELECT root_cause, COUNT(*) AS cnt FROM tickets t WHERE root_cause IS NOT NULL AND root_cause!='' {extra} GROUP BY root_cause ORDER BY cnt DESC", params)
     by_priority = query(f"SELECT priority, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY priority", params)
     return jsonify({
         'total': total['cnt'] if total else 0,
         'by_status': by_status,
         'by_case_type': by_case,
-        'by_fault_team': by_fault,
+        'by_root_cause': by_root,
         'by_priority': by_priority,
     })
 
-
 @app.route('/api/dashboard/sku-problems', methods=['GET'])
+@require_auth
 def dashboard_sku():
     extra, params = date_filter_sql()
     rows = query(f"""
         SELECT sku_code, product_name, COUNT(*) AS cnt,
-               STRING_AGG(DISTINCT case_type, ',') AS case_types,
-               STRING_AGG(DISTINCT fault_team, ',') AS fault_teams
+               STRING_AGG(DISTINCT case_type, ', ') AS case_types,
+               STRING_AGG(DISTINCT root_cause, ', ') AS root_causes
         FROM tickets t WHERE sku_code IS NOT NULL AND sku_code != '' {extra}
         GROUP BY sku_code, product_name ORDER BY cnt DESC LIMIT 20
     """, params)
     return jsonify(rows)
 
-
 @app.route('/api/dashboard/by-employee', methods=['GET'])
+@require_auth
 def dashboard_employee():
     extra, params = date_filter_sql()
     total_row = query(f"SELECT COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra}", params, one=True)
-    total = total_row['cnt'] if total_row else 1
+    total = total_row['cnt'] if total_row and total_row['cnt'] else 1
     rows = query(f"""
-        SELECT e.id, e.name, e.team, COUNT(t.id) AS cnt,
-               ROUND(COUNT(t.id)*100.0/%s, 1) AS pct,
-               STRING_AGG(DISTINCT t.case_type, ',') AS case_types
+        SELECT e.id, e.name, e.team, COUNT(DISTINCT tfa.ticket_id) AS cnt,
+               ROUND(COUNT(DISTINCT tfa.ticket_id)*100.0/%s, 1) AS pct
         FROM employees e
-        LEFT JOIN tickets t ON t.assigned_employee_id=e.id {('AND 1=1' + extra) if extra else ''}
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.employee_id = e.id
+        LEFT JOIN tickets t ON t.id = tfa.ticket_id {('AND 1=1' + extra) if extra else ''}
         GROUP BY e.id, e.name, e.team ORDER BY cnt DESC
     """, [total] + params)
     return jsonify(rows)
 
-
 @app.route('/api/dashboard/by-customer', methods=['GET'])
+@require_auth
 def dashboard_customer():
     extra, params = date_filter_sql()
     rows = query(f"""
         SELECT o.id AS outlet_id, o.name AS outlet_name, a.name AS account_name,
                COUNT(t.id) AS cnt,
-               STRING_AGG(DISTINCT t.case_type, ',') AS case_types
+               STRING_AGG(DISTINCT t.case_type, ', ') AS case_types
         FROM outlets o
-        JOIN accounts a ON a.id=o.account_id
-        LEFT JOIN tickets t ON t.outlet_id=o.id {('AND 1=1' + extra) if extra else ''}
+        JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN tickets t ON t.outlet_id = o.id {('AND 1=1' + extra) if extra else ''}
         GROUP BY o.id, o.name, a.name ORDER BY cnt DESC LIMIT 20
     """, params)
     return jsonify(rows)
 
+@app.route('/api/dashboard/bottleneck', methods=['GET'])
+@require_auth
+def dashboard_bottleneck():
+    logs = query("""
+        SELECT ticket_id, from_team, created_at
+        FROM ticket_workflow_log ORDER BY ticket_id, created_at
+    """)
+    team_totals = {}
+    team_counts = {}
+    by_ticket = {}
+    for row in logs:
+        tid = row['ticket_id']
+        if tid not in by_ticket:
+            by_ticket[tid] = []
+        by_ticket[tid].append(row)
+    for tid, entries in by_ticket.items():
+        for i in range(1, len(entries)):
+            try:
+                prev_t = datetime.fromisoformat(entries[i-1]['created_at'].replace('Z',''))
+                curr_t = datetime.fromisoformat(entries[i]['created_at'].replace('Z',''))
+                secs = (curr_t - prev_t).total_seconds()
+                team = entries[i-1]['from_team'] or 'unknown'
+                if team in ('system', 'unknown', ''):
+                    continue
+                team_totals[team] = team_totals.get(team, 0) + secs
+                team_counts[team] = team_counts.get(team, 0) + 1
+            except Exception:
+                pass
+    result = []
+    for team in TEAMS:
+        cnt = team_counts.get(team, 0)
+        total = team_totals.get(team, 0)
+        result.append({
+            'team': team,
+            'avg_seconds': int(total / cnt) if cnt > 0 else 0,
+            'ticket_count': cnt
+        })
+    result.sort(key=lambda x: x['avg_seconds'], reverse=True)
+    return jsonify(result)
+
+@app.route('/api/dashboard/fault-by-team', methods=['GET'])
+@require_auth
+def dashboard_fault_team():
+    rows = query("""
+        SELECT fault_team, COUNT(*) AS cnt FROM tickets
+        WHERE fault_team IS NOT NULL AND fault_team != ''
+        GROUP BY fault_team ORDER BY cnt DESC
+    """)
+    return jsonify(rows)
+
+@app.route('/api/dashboard/fault-by-employee', methods=['GET'])
+@require_auth
+def dashboard_fault_employee():
+    rows = query("""
+        SELECT e.name, e.team, COUNT(*) AS cnt
+        FROM ticket_fault_attribution fa
+        JOIN employees e ON e.id = fa.employee_id
+        GROUP BY e.id, e.name, e.team ORDER BY cnt DESC LIMIT 20
+    """)
+    return jsonify(rows)
 
 # ---------------------------------------------------------------------------
 # ERP Import
@@ -799,15 +1189,14 @@ def safe_str(v):
     s = str(v).strip()
     return None if s.lower() in ('nan', 'none', '') else s
 
-
 def safe_float(v):
     try:
         return float(v)
     except (TypeError, ValueError):
         return None
 
-
 @app.route('/api/import/erp', methods=['POST'])
+@require_auth
 def import_erp():
     if 'file' not in request.files:
         return jsonify({'error': 'No file'}), 400
@@ -852,7 +1241,6 @@ def import_erp():
                 return row[idx]
         return None
 
-    # ── STEP 1: parse all rows in memory ──────────────────────────────────────
     parsed = []
     for row in rows[1:]:
         erp_item_id = safe_str(get(row, 'order_item_id'))
@@ -899,15 +1287,13 @@ def import_erp():
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        # ── STEP 2: bulk check existing erp_item_ids ──────────────────────────
         all_ids = [p['erp_item_id'] for p in parsed]
         cur.execute("SELECT erp_item_id FROM orders WHERE erp_item_id = ANY(%s)", (all_ids,))
         existing_ids = {r['erp_item_id'] for r in cur.fetchall()}
         new_rows = [p for p in parsed if p['erp_item_id'] not in existing_ids]
         skipped = len(parsed) - len(new_rows)
 
-        # ── STEP 3: bulk upsert accounts ──────────────────────────────────────
-        account_map = {}  # name -> id
+        account_map = {}
         unique_accounts = {(p['account_name'], p['owner']) for p in new_rows}
         for acc_name, owner in unique_accounts:
             cur.execute("""
@@ -918,8 +1304,7 @@ def import_erp():
             r = cur.fetchone()
             account_map[r['name']] = r['id']
 
-        # ── STEP 4: bulk upsert outlets ───────────────────────────────────────
-        outlet_map = {}  # (account_id, outlet_name) -> id
+        outlet_map = {}
         unique_outlets = {(p['account_name'], p['outlet_name'], p['erp_customer_id'],
                            p['erp_outlet_id'], p['csc_code']) for p in new_rows}
         for acc_name, out_name, erp_cid, erp_oid, csc in unique_outlets:
@@ -938,7 +1323,6 @@ def import_erp():
             r = cur.fetchone()
             outlet_map[(acc_id, r['name'])] = r['id']
 
-        # ── STEP 5: bulk insert orders ────────────────────────────────────────
         order_tuples = []
         for p in new_rows:
             acc_id = account_map.get(p['account_name'])
@@ -971,7 +1355,6 @@ def import_erp():
         conn.close()
 
     return jsonify({'inserted': inserted, 'skipped': skipped, 'errors': errors})
-
 
 # ---------------------------------------------------------------------------
 # Run
