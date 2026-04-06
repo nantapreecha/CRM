@@ -1044,6 +1044,98 @@ function Users({ currentUser }) {
   );
 }
 
+// ── Accounts (drill-down) ─────────────────────────────────────────────────────
+function Accounts({ onSelectTicket }) {
+  const [accounts, setAccounts] = useState([]);
+  const [outlets, setOutlets] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingOutlets, setLoadingOutlets] = useState(false);
+
+  useEffect(() => {
+    api('/api/accounts').then(d => { setAccounts(d || []); setLoading(false); });
+  }, []);
+
+  const openAccount = acc => {
+    setSelectedAccount(acc);
+    setLoadingOutlets(true);
+    api(`/api/accounts/${acc.id}/outlets`).then(d => {
+      setOutlets(d || []);
+      setLoadingOutlets(false);
+    });
+  };
+
+  if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/></div>;
+
+  // Outlet drill-down view
+  if (selectedAccount) return (
+    <div className="p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <button className="btn btn-secondary text-sm" onClick={()=>{ setSelectedAccount(null); setOutlets(null); }}>← กลับ</button>
+        <h2 className="text-xl font-bold" style={{color:'var(--primary)'}}>👤 {selectedAccount.name}</h2>
+        {selectedAccount.owner && <span className="text-sm text-gray-400">เจ้าของ: {selectedAccount.owner}</span>}
+      </div>
+      {loadingOutlets ? <div className="text-center py-6 text-gray-400"><Spinner/></div> : (
+        outlets.length === 0 ? <div className="text-center py-6 text-gray-400">ไม่มี Outlet</div> : (
+          <div className="space-y-3">
+            {outlets.map(o => (
+              <div key={o.id} className="card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-800">🏪 {o.name}</p>
+                    <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                      {o.csc_code && <span>CSC: {o.csc_code}</span>}
+                      {o.erp_customer_id && <span>ERP: {o.erp_customer_id}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {(o.open_tickets > 0) ? (
+                      <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">
+                        🎫 {o.open_tickets} เคสเปิด
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-300">ไม่มีเคสเปิด</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+
+  // Account list view
+  return (
+    <div className="p-6">
+      <h2 className="text-xl font-bold mb-4" style={{color:'var(--primary)'}}>👤 ลูกค้า</h2>
+      {accounts.length === 0 ? <div className="text-center py-10 text-gray-400">ยังไม่มีข้อมูล — import ERP ก่อน</div> : (
+        <div className="space-y-2">
+          {accounts.map(a => (
+            <div key={a.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
+              onClick={()=>openAccount(a)}>
+              <div>
+                <p className="font-medium text-gray-800">{a.name}</p>
+                {a.owner && <p className="text-xs text-gray-400 mt-0.5">{a.owner}</p>}
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-gray-400">{a.outlet_count || 0} outlet</span>
+                {(a.open_tickets > 0) && (
+                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">
+                    🎫 {a.open_tickets} เคส
+                  </span>
+                )}
+                <span className="text-gray-300">›</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ImportERP ─────────────────────────────────────────────────────────────────
 function ImportERP() {
   const [file, setFile] = useState(null);
@@ -1162,7 +1254,6 @@ function App() {
     { id:'dashboard', label:'Dashboard', icon:'📊' },
     { id:'tickets', label:'เคส', icon:'🎫' },
     { id:'accounts', label:'ลูกค้า', icon:'👤' },
-    { id:'outlets', label:'Outlet', icon:'🏪' },
     { id:'suppliers', label:'Supplier', icon:'🏭' },
     { id:'employees', label:'พนักงาน', icon:'👷' },
     { id:'import', label:'Import ERP', icon:'📥' },
@@ -1175,8 +1266,7 @@ function App() {
     switch(page) {
       case 'dashboard': return <Dashboard/>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
-      case 'accounts': return <SimpleList title="👤 ลูกค้า" endpoint="/api/accounts" columns={[{key:'name',label:'ชื่อ'},{key:'owner',label:'เจ้าของ'},{key:'outlet_count',label:'Outlet'},{key:'open_tickets',label:'เคสเปิด'}]}/>;
-      case 'outlets': return <SimpleList title="🏪 Outlet" endpoint="/api/outlets" columns={[{key:'name',label:'ชื่อ'},{key:'account_name',label:'ลูกค้า'},{key:'csc_code',label:'CSC Code'}]}/>;
+      case 'accounts': return <Accounts/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'ชื่อ'},{key:'supplier_type',label:'ประเภท'},{key:'contact_person',label:'ผู้ติดต่อ'},{key:'phone',label:'โทร'}]}/>;
       case 'employees': return <SimpleList title="👷 พนักงาน" endpoint="/api/employees" columns={[{key:'name',label:'ชื่อ'},{key:'team',label:'ทีม'},{key:'role',label:'ตำแหน่ง'},{key:'phone',label:'โทร'}]}/>;
       case 'import': return <ImportERP/>;
