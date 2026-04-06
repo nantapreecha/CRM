@@ -1044,13 +1044,16 @@ function Users({ currentUser }) {
   );
 }
 
-// ── Accounts (drill-down) ─────────────────────────────────────────────────────
+// ── Accounts (3-level drill-down) ────────────────────────────────────────────
 function Accounts({ onSelectTicket }) {
   const [accounts, setAccounts] = useState([]);
-  const [outlets, setOutlets] = useState(null);
-  const [selectedAccount, setSelectedAccount] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [outlets, setOutlets] = useState([]);
   const [loadingOutlets, setLoadingOutlets] = useState(false);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
+  const [outletTickets, setOutletTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
 
   useEffect(() => {
     api('/api/accounts').then(d => { setAccounts(d || []); setLoading(false); });
@@ -1058,6 +1061,8 @@ function Accounts({ onSelectTicket }) {
 
   const openAccount = acc => {
     setSelectedAccount(acc);
+    setSelectedOutlet(null);
+    setOutletTickets([]);
     setLoadingOutlets(true);
     api(`/api/accounts/${acc.id}/outlets`).then(d => {
       setOutlets(d || []);
@@ -1065,22 +1070,69 @@ function Accounts({ onSelectTicket }) {
     });
   };
 
+  const openOutlet = outlet => {
+    setSelectedOutlet(outlet);
+    setLoadingTickets(true);
+    api(`/api/outlets/${outlet.id}/tickets`).then(d => {
+      setOutletTickets(d || []);
+      setLoadingTickets(false);
+    });
+  };
+
   if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/></div>;
 
-  // Outlet drill-down view
+  // Level 3: Ticket list for outlet
+  if (selectedOutlet) return (
+    <div className="p-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-5 flex-wrap">
+        <span className="cursor-pointer hover:text-gray-600" onClick={()=>{ setSelectedAccount(null); setSelectedOutlet(null); }}>👤 ลูกค้า</span>
+        <span>›</span>
+        <span className="cursor-pointer hover:text-gray-600" onClick={()=>setSelectedOutlet(null)}>{selectedAccount.name}</span>
+        <span>›</span>
+        <span className="text-gray-700 font-medium">🏪 {selectedOutlet.name}</span>
+      </div>
+
+      {loadingTickets ? <div className="text-center py-6 text-gray-400"><Spinner/></div> : (
+        outletTickets.length === 0
+          ? <div className="text-center py-10 text-gray-400">ไม่มีเคสใน Outlet นี้</div>
+          : <div className="space-y-3">
+              {outletTickets.map(t => (
+                <div key={t.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={()=>onSelectTicket(t.id)}>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-mono text-xs text-gray-400">#{t.id}</span>
+                    <span className={`status-${t.status}`}>{STATUS_LABELS[t.status]||t.status}</span>
+                    <span className={`text-xs font-medium priority-${t.priority}`}>{t.priority}</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{t.case_type}</span>
+                  </div>
+                  <p className="text-sm text-gray-800">{t.description}</p>
+                  <div className="mt-1 text-xs text-gray-400">{fmtDt(t.created_at)}</div>
+                </div>
+              ))}
+            </div>
+      )}
+    </div>
+  );
+
+  // Level 2: Outlet list for account
   if (selectedAccount) return (
     <div className="p-6">
-      <div className="flex items-center gap-3 mb-5">
-        <button className="btn btn-secondary text-sm" onClick={()=>{ setSelectedAccount(null); setOutlets(null); }}>← กลับ</button>
-        <h2 className="text-xl font-bold" style={{color:'var(--primary)'}}>👤 {selectedAccount.name}</h2>
-        {selectedAccount.owner && <span className="text-sm text-gray-400">เจ้าของ: {selectedAccount.owner}</span>}
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-5">
+        <span className="cursor-pointer hover:text-gray-600" onClick={()=>setSelectedAccount(null)}>👤 ลูกค้า</span>
+        <span>›</span>
+        <span className="text-gray-700 font-medium">{selectedAccount.name}</span>
+        {selectedAccount.owner && <span className="text-gray-400 text-xs ml-1">({selectedAccount.owner})</span>}
       </div>
+
       {loadingOutlets ? <div className="text-center py-6 text-gray-400"><Spinner/></div> : (
-        outlets.length === 0 ? <div className="text-center py-6 text-gray-400">ไม่มี Outlet</div> : (
-          <div className="space-y-3">
-            {outlets.map(o => (
-              <div key={o.id} className="card p-4">
-                <div className="flex items-center justify-between">
+        outlets.length === 0
+          ? <div className="text-center py-10 text-gray-400">ไม่มี Outlet</div>
+          : <div className="space-y-2">
+              {outlets.map(o => (
+                <div key={o.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
+                  onClick={()=>openOutlet(o)}>
                   <div>
                     <p className="font-medium text-gray-800">🏪 {o.name}</p>
                     <div className="flex gap-3 mt-1 text-xs text-gray-400">
@@ -1088,50 +1140,45 @@ function Accounts({ onSelectTicket }) {
                       {o.erp_customer_id && <span>ERP: {o.erp_customer_id}</span>}
                     </div>
                   </div>
-                  <div className="text-right">
-                    {(o.open_tickets > 0) ? (
-                      <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">
-                        🎫 {o.open_tickets} เคสเปิด
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-300">ไม่มีเคสเปิด</span>
-                    )}
+                  <div className="flex items-center gap-3">
+                    {(o.open_tickets > 0)
+                      ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {o.open_tickets} เคสเปิด</span>
+                      : <span className="text-xs text-gray-300">ไม่มีเคสเปิด</span>
+                    }
+                    <span className="text-gray-300">›</span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )
+              ))}
+            </div>
       )}
     </div>
   );
 
-  // Account list view
+  // Level 1: Account list
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4" style={{color:'var(--primary)'}}>👤 ลูกค้า</h2>
-      {accounts.length === 0 ? <div className="text-center py-10 text-gray-400">ยังไม่มีข้อมูล — import ERP ก่อน</div> : (
-        <div className="space-y-2">
-          {accounts.map(a => (
-            <div key={a.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
-              onClick={()=>openAccount(a)}>
-              <div>
-                <p className="font-medium text-gray-800">{a.name}</p>
-                {a.owner && <p className="text-xs text-gray-400 mt-0.5">{a.owner}</p>}
+      {accounts.length === 0
+        ? <div className="text-center py-10 text-gray-400">ยังไม่มีข้อมูล — import ERP ก่อน</div>
+        : <div className="space-y-2">
+            {accounts.map(a => (
+              <div key={a.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
+                onClick={()=>openAccount(a)}>
+                <div>
+                  <p className="font-medium text-gray-800">{a.name}</p>
+                  {a.owner && <p className="text-xs text-gray-400 mt-0.5">{a.owner}</p>}
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-gray-400">{a.outlet_count || 0} outlet</span>
+                  {(a.open_tickets > 0) &&
+                    <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {a.open_tickets} เคส</span>
+                  }
+                  <span className="text-gray-300">›</span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-400">{a.outlet_count || 0} outlet</span>
-                {(a.open_tickets > 0) && (
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">
-                    🎫 {a.open_tickets} เคส
-                  </span>
-                )}
-                <span className="text-gray-300">›</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+      }
     </div>
   );
 }
@@ -1266,7 +1313,7 @@ function App() {
     switch(page) {
       case 'dashboard': return <Dashboard/>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
-      case 'accounts': return <Accounts/>;
+      case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'ชื่อ'},{key:'supplier_type',label:'ประเภท'},{key:'contact_person',label:'ผู้ติดต่อ'},{key:'phone',label:'โทร'}]}/>;
       case 'employees': return <SimpleList title="👷 พนักงาน" endpoint="/api/employees" columns={[{key:'name',label:'ชื่อ'},{key:'team',label:'ทีม'},{key:'role',label:'ตำแหน่ง'},{key:'phone',label:'โทร'}]}/>;
       case 'import': return <ImportERP/>;
