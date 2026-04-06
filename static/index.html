@@ -1203,11 +1203,9 @@ function App() {
         </nav>
 
         <div className="mt-4 px-1 space-y-1">
-          {page === 'tickets' && !selectedTicket && !creating && (
-            <a onClick={()=>{ setCreating(true); setSelectedTicket(null); }} className="cursor-pointer">
-              ➕ เปิดเคสใหม่
-            </a>
-          )}
+          <a onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }} className="cursor-pointer" style={{background:'rgba(255,255,255,0.1)'}}>
+            ➕ เปิดเคสใหม่
+          </a>
           <a onClick={logout} style={{color:'#f87171'}}>🚪 ออกจากระบบ</a>
         </div>
       </div>
