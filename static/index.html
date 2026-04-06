@@ -1044,6 +1044,63 @@ function Users({ currentUser }) {
   );
 }
 
+// ── ImportERP ─────────────────────────────────────────────────────────────────
+function ImportERP() {
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState('');
+  const ref = useRef();
+
+  const submit = async e => {
+    e.preventDefault();
+    if (!file) return;
+    setUploading(true); setResult(null); setErr('');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await apiUpload('/api/import/erp', fd);
+    setUploading(false);
+    if (res && res.inserted !== undefined) setResult(res);
+    else setErr(res?.error || 'เกิดข้อผิดพลาด');
+  };
+
+  return (
+    <div className="p-6 max-w-xl">
+      <h2 className="text-xl font-bold mb-5" style={{color:'var(--primary)'}}>📥 Import ERP</h2>
+      <div className="card p-5">
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">เลือกไฟล์ Excel (.xlsx)</label>
+            <input ref={ref} type="file" accept=".xlsx,.xls"
+              onChange={e=>{ setFile(e.target.files[0]); setResult(null); setErr(''); }}/>
+          </div>
+          {err && <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{err}</div>}
+          {result && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm space-y-1">
+              <p className="font-semibold text-green-700">✅ Import สำเร็จ</p>
+              <p>แถวทั้งหมด: <strong>{result.total_rows}</strong></p>
+              <p>เพิ่มใหม่: <strong>{result.inserted}</strong></p>
+              <p>ซ้ำ (ข้าม): <strong>{result.skipped}</strong></p>
+              {result.errors > 0 && <p className="text-orange-600">มีข้อผิดพลาด: {result.errors} แถว</p>}
+            </div>
+          )}
+          <button type="submit" className="btn btn-primary w-full" disabled={uploading || !file}>
+            {uploading ? <><Spinner/> กำลัง import...</> : '📤 Import'}
+          </button>
+        </form>
+      </div>
+      <div className="card p-4 mt-4 text-sm text-gray-500">
+        <p className="font-medium text-gray-700 mb-2">คอลัมน์ที่ต้องมีในไฟล์:</p>
+        <ul className="space-y-1 list-disc list-inside">
+          <li>order_item_id, order_id, invoice_number</li>
+          <li>doc_date, account_name, outlet_name</li>
+          <li>sku_code, product_name, qty, unit, unit_price, total_sales</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // ── Accounts / Outlets / Suppliers / Employees (simple pass-through) ──────────
 function SimpleList({ title, endpoint, columns }) {
   const [data, setData] = useState([]);
@@ -1108,6 +1165,7 @@ function App() {
     { id:'outlets', label:'Outlet', icon:'🏪' },
     { id:'suppliers', label:'Supplier', icon:'🏭' },
     { id:'employees', label:'พนักงาน', icon:'👷' },
+    { id:'import', label:'Import ERP', icon:'📥' },
     ...(user.role === 'admin' ? [{ id:'users', label:'จัดการผู้ใช้', icon:'👥' }] : []),
   ];
 
@@ -1121,6 +1179,7 @@ function App() {
       case 'outlets': return <SimpleList title="🏪 Outlet" endpoint="/api/outlets" columns={[{key:'outlet_name',label:'ชื่อ'},{key:'account_name',label:'ลูกค้า'},{key:'province',label:'จังหวัด'}]}/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'supplier_name',label:'ชื่อ'},{key:'contact_name',label:'ผู้ติดต่อ'},{key:'phone',label:'โทร'}]}/>;
       case 'employees': return <SimpleList title="👷 พนักงาน" endpoint="/api/employees" columns={[{key:'name',label:'ชื่อ'},{key:'team',label:'ทีม'},{key:'position',label:'ตำแหน่ง'}]}/>;
+      case 'import': return <ImportERP/>;
       case 'users': return <Users currentUser={user}/>;
       default: return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
     }
