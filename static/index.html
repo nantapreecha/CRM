@@ -2,134 +2,94 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Sourcing BU CRM</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SMM Sourcing CRM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-  body { font-family: 'Segoe UI', Tahoma, sans-serif; background:#f0f4f8; }
-  .sidebar { width:220px; min-height:100vh; background:#0F766E; position:fixed; top:0; left:0; z-index:100; }
-  .main-content { margin-left:220px; padding:24px; min-height:100vh; }
-  .nav-item { display:flex; align-items:center; gap:10px; padding:12px 20px; color:#ccfbf1; cursor:pointer; transition:background 0.15s; border-radius:8px; margin:2px 8px; }
-  .nav-item:hover { background:rgba(255,255,255,0.15); }
-  .nav-item.active { background:rgba(255,255,255,0.2); color:#fff; font-weight:600; }
-  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:20px; }
-  .badge { display:inline-flex; align-items:center; padding:2px 10px; border-radius:9999px; font-size:12px; font-weight:500; }
-  .badge-open { background:#fef3c7; color:#92400e; }
-  .badge-in_progress { background:#dbeafe; color:#1e40af; }
-  .badge-resolved { background:#d1fae5; color:#065f46; }
-  .badge-closed { background:#f3f4f6; color:#6b7280; }
-  .badge-active { background:#d1fae5; color:#065f46; }
-  .badge-inactive { background:#fee2e2; color:#991b1b; }
-  .badge-high { background:#fee2e2; color:#991b1b; }
-  .badge-medium { background:#fef3c7; color:#92400e; }
-  .badge-low { background:#f0fdf4; color:#166534; }
-  .badge-urgent { background:#fce7f3; color:#9d174d; }
-  .btn { padding:8px 16px; border-radius:8px; font-weight:500; cursor:pointer; border:none; font-size:14px; transition:all 0.15s; }
-  .btn-primary { background:#0F766E; color:#fff; }
-  .btn-primary:hover { background:#0d5f5a; }
-  .btn-secondary { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
-  .btn-secondary:hover { background:#e2e8f0; }
-  .btn-danger { background:#ef4444; color:#fff; }
-  .btn-sm { padding:5px 12px; font-size:13px; }
-  .input { width:100%; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; font-size:14px; outline:none; transition:border 0.15s; }
-  .input:focus { border-color:#0F766E; box-shadow:0 0 0 3px rgba(15,118,110,0.1); }
-  .label { font-size:13px; font-weight:500; color:#374151; margin-bottom:4px; display:block; }
-  .table-container { overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  thead th { background:#f8fafc; padding:10px 12px; text-align:left; font-weight:600; color:#475569; border-bottom:1px solid #e2e8f0; }
-  tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.1s; }
-  tbody tr:hover { background:#f8fafc; cursor:pointer; }
-  tbody td { padding:10px 12px; }
-  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:flex; align-items:center; justify-content:center; }
-  .modal { background:#fff; border-radius:16px; padding:28px; width:90%; max-width:560px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
-  .tab { padding:8px 18px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; color:#64748b; transition:all 0.15s; }
-  .tab.active { background:#0F766E; color:#fff; }
-  .stat-card { background:#fff; border-radius:12px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
-  .star { color:#fbbf24; font-size:16px; }
-  .star-empty { color:#d1d5db; font-size:16px; }
-  select.input { appearance:auto; }
-  textarea.input { resize:vertical; min-height:80px; }
-  .note-item { background:#f8fafc; border-radius:8px; padding:12px; margin-bottom:8px; border-left:3px solid #0F766E; }
-  .comment-item { background:#f1f5f9; border-radius:8px; padding:12px; margin-bottom:8px; }
-  .priority-high { border-left:3px solid #ef4444; }
-  .priority-medium { border-left:3px solid #f59e0b; }
-  .priority-low { border-left:3px solid #10b981; }
-  .priority-urgent { border-left:3px solid #8b5cf6; }
-  .bar-container { background:#e2e8f0; border-radius:4px; height:8px; overflow:hidden; }
-  .bar-fill { height:100%; border-radius:4px; background:#0F766E; transition:width 0.3s; }
-  .search-box { position:relative; }
-  .search-box input { padding-left:36px; }
-  .search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#9ca3af; }
-  .empty-state { text-align:center; padding:60px 20px; color:#9ca3af; }
-  .empty-state .icon { font-size:48px; margin-bottom:12px; }
-  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-  .page-title { font-size:22px; font-weight:700; color:#0f172a; }
-  .breadcrumb { font-size:13px; color:#94a3b8; margin-bottom:16px; cursor:pointer; }
-  .breadcrumb:hover { color:#0F766E; }
-  .gp-positive { color:#059669; font-weight:600; }
-  .gp-negative { color:#dc2626; font-weight:600; }
-  .loading { display:flex; align-items:center; justify-content:center; padding:60px; color:#64748b; }
-  .spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top-color:#0F766E; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:12px; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .toast { position:fixed; bottom:24px; right:24px; background:#1e293b; color:#fff; padding:12px 20px; border-radius:10px; z-index:500; font-size:14px; box-shadow:0 4px 20px rgba(0,0,0,0.2); animation:slideIn 0.3s ease; }
-  .toast.success { background:#065f46; }
-  .toast.error { background:#991b1b; }
-  @keyframes slideIn { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+  :root { --primary: #0F4C45; --primary-light: #1a6b62; --primary-bg: #e8f5f3; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; }
+  .sidebar { background: var(--primary); min-height: 100vh; width: 220px; }
+  .sidebar a { color: #c8e6e3; transition: all .2s; }
+  .sidebar a:hover, .sidebar a.active { background: var(--primary-light); color: #fff; }
+  .badge { background:#ef4444; color:#fff; border-radius:9999px; padding:1px 7px; font-size:11px; }
+  .btn-primary { background: var(--primary); color:#fff; }
+  .btn-primary:hover { background: var(--primary-light); }
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .status-open { color:#2563eb; background:#eff6ff; }
+  .status-in_progress { color:#d97706; background:#fffbeb; }
+  .status-resolved { color:#16a34a; background:#f0fdf4; }
+  .status-closed { color:#6b7280; background:#f9fafb; }
+  .priority-Urgent { color:#dc2626; }
+  .priority-High { color:#ea580c; }
+  .priority-Medium { color:#d97706; }
+  .priority-Low { color:#16a34a; }
+  input, select, textarea { border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; width:100%; outline:none; }
+  input:focus, select:focus, textarea:focus { border-color:var(--primary); box-shadow:0 0 0 2px rgba(15,76,69,.15); }
+  .tab { padding:8px 16px; cursor:pointer; border-bottom:2px solid transparent; color:#6b7280; }
+  .tab.active { color:var(--primary); border-color:var(--primary); font-weight:600; }
+  .star { color:#f59e0b; }
+  .step-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; }
+  .step-done { background:#dcfce7; color:#16a34a; border:2px solid #16a34a; }
+  .step-active { background:var(--primary); color:#fff; }
+  .step-pending { background:#f3f4f6; color:#9ca3af; border:2px solid #e5e7eb; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { animation: spin 1s linear infinite; }
 </style>
 </head>
 <body>
 <div id="root"></div>
-
 <script type="text/babel">
 const { useState, useEffect, useCallback, useRef } = React;
+const API = '';
 
-// ── API HELPERS ──────────────────────────────
-const api = {
-  get: (url) => fetch(url).then(r => r.json()),
-  post: (url, data) => fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
-  put: (url, data) => fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
-  upload: (url, formData) => fetch(url, { method:'POST', body:formData }).then(r => r.json()),
-};
-
-const fmt = {
-  number: (n) => (n||0).toLocaleString('th-TH'),
-  currency: (n) => '฿' + (n||0).toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:0}),
-  date: (d) => d ? d.substring(0,10) : '-',
-  gp: (sales, cost) => sales > 0 ? (((sales-cost)/sales)*100).toFixed(1)+'%' : '-',
-};
-
-const DEPARTMENTS = ['Sales', 'Merchandise', 'Inbound Operations', 'Outbound Operations', 'Management'];
-const TEAMS = {
-  'Sales': ['Sales Coordinator', 'Key Accounts/Sales', 'Credit Control', 'Customer Experience'],
-  'Merchandise': ['Purchaser', 'Merchandise Management'],
-  'Inbound Operations': ['QC Team', 'Inbound Team'],
-  'Outbound Operations': ['Outbound Team', 'Logistics'],
-  'Management': ['Manager', 'Executive'],
-};
-const TICKET_TYPES = ['quality', 'delivery', 'pricing', 'qc_spec', 'claim', 'general'];
-const TICKET_TYPE_LABELS = { quality:'คืนสินค้า/คุณภาพ', delivery:'ส่งผิด/ล่าช้า', pricing:'เจรจาราคา', qc_spec:'QC/ไม่ตรงสเปค', claim:'Claim', general:'ทั่วไป' };
-const PRIORITIES = ['urgent','high','medium','low'];
-const PRIORITY_LABELS = { urgent:'ด่วนมาก', high:'สูง', medium:'ปานกลาง', low:'ต่ำ' };
-const STATUSES = ['open','in_progress','resolved','closed'];
-const STATUS_LABELS = { open:'เปิด', in_progress:'กำลังดำเนินการ', resolved:'แก้ไขแล้ว', closed:'ปิด' };
-
-// ── TOAST ────────────────────────────────────
-function Toast({ msg, type, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, []);
-  return <div className={`toast ${type}`}>{type==='success'?'✓ ':type==='error'?'✗ ':''}{msg}</div>;
+// ── helpers ──────────────────────────────────────────────────────────────────
+async function api(path, opts={}) {
+  const res = await fetch(API + path, {
+    headers: {'Content-Type':'application/json'},
+    ...opts
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
-// ── MODAL ────────────────────────────────────
-function Modal({ title, onClose, children, wide }) {
+function fmt(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return v;
+  return d.toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'numeric'});
+}
+function fmtDT(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return v;
+  return d.toLocaleString('th-TH', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function num(v) { return v == null ? '—' : Number(v).toLocaleString(); }
+function money(v) { return v == null ? '—' : Number(v).toLocaleString('th-TH',{minimumFractionDigits:2}); }
+
+const STATUS_LABELS = { open:'เปิด', in_progress:'กำลังดำเนินการ', resolved:'แก้ไขแล้ว', closed:'ปิดแล้ว' };
+const TEAMS = ['CX','Sales Co','Merchandise','Inbound/QC','Outbound/Logistics','Management'];
+const CASE_TYPES = ['Claim','น้ำหนักไม่ครบ','ตกหล่น','คุณภาพไม่ผ่าน/ผิดสเปค','Sales Co Error'];
+const ROOT_CAUSES = ['สินค้าเสียหาย/คุณภาพไม่ผ่าน','ส่งผิด SKU/ผิดจำนวน','เอกสารผิดพลาด','ความล่าช้า','Supplier ผิดพลาด','Customer แจ้งผิด','ระบบ/IT','อื่นๆ'];
+const FAULT_TEAMS = ['CX','Sales Co','Merchandise','Inbound/QC','Outbound/Logistics','Supplier','Management'];
+const PRIORITIES = ['Urgent','High','Medium','Low'];
+
+// ── Spinner ───────────────────────────────────────────────────────────────────
+function Spinner() {
+  return <div className="flex justify-center py-10"><div className="w-8 h-8 border-4 border-gray-200 border-t-green-700 rounded-full spin"/></div>;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function Modal({title, onClose, children, wide}) {
   return (
-    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
-      <div className="modal" style={wide?{maxWidth:720}:{}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-          <h2 style={{fontSize:18,fontWeight:700,color:'#0f172a'}}>{title}</h2>
-          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94a3b8',lineHeight:1}}>×</button>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-16 px-4" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className={`card p-6 w-full ${wide?'max-w-3xl':'max-w-lg'} max-h-[80vh] overflow-y-auto`}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="font-bold text-lg" style={{color:'var(--primary)'}}>{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
         {children}
       </div>
@@ -137,1311 +97,1473 @@ function Modal({ title, onClose, children, wide }) {
   );
 }
 
-// ── LOADING ──────────────────────────────────
-function Loading() {
-  return <div className="loading"><div className="spinner"/><span>กำลังโหลด...</span></div>;
+// ── Stars ─────────────────────────────────────────────────────────────────────
+function Stars({value, onChange}) {
+  return <div className="flex gap-1">
+    {[1,2,3,4,5].map(i=>(
+      <span key={i} className={`cursor-pointer text-xl ${i<=value?'star':'text-gray-300'}`}
+        onClick={()=>onChange&&onChange(i)}>★</span>
+    ))}
+  </div>;
 }
 
-// ── SIDEBAR ──────────────────────────────────
-function Sidebar({ nav, setNav }) {
-  const items = [
-    { key:'dashboard', icon:'📊', label:'Dashboard' },
-    { key:'customers', icon:'🏪', label:'ลูกค้า (Customer)' },
-    { key:'suppliers', icon:'🚛', label:'Supplier' },
-    { key:'tickets',   icon:'🎫', label:'Ticket / Case' },
-    { key:'employees', icon:'👥', label:'พนักงาน' },
-    { key:'import',    icon:'📥', label:'Import ERP' },
-  ];
+// ── StatusBadge ───────────────────────────────────────────────────────────────
+function StatusBadge({status}) {
+  return <span className={`px-2 py-0.5 rounded text-xs font-medium status-${status}`}>{STATUS_LABELS[status]||status}</span>;
+}
+
+// ── PriorityBadge ─────────────────────────────────────────────────────────────
+function PriorityBadge({priority}) {
+  const icons = {Urgent:'🔴',High:'🟠',Medium:'🟡',Low:'🟢'};
+  return <span className={`text-sm font-medium priority-${priority}`}>{icons[priority]||''} {priority}</span>;
+}
+
+// ── WorkflowTimeline ──────────────────────────────────────────────────────────
+function WorkflowTimeline({caseType, currentStep, branch, workflows}) {
+  const steps = workflows[caseType] || [];
+  const effective = steps.filter(s => !s.branch || s.branch === branch || s.is_branch);
   return (
-    <div className="sidebar">
-      <div style={{padding:'20px 16px 16px'}}>
-        <div style={{color:'#fff',fontWeight:700,fontSize:16,lineHeight:1.3}}>Sourcing BU</div>
-        <div style={{color:'#99f6e4',fontSize:12,marginTop:2}}>CRM System</div>
-      </div>
-      <div style={{padding:'8px 0'}}>
-        {items.map(i => (
-          <div key={i.key} className={`nav-item${nav===i.key?' active':''}`} onClick={()=>setNav(i.key)}>
-            <span style={{fontSize:16}}>{i.icon}</span>
-            <span style={{fontSize:14}}>{i.label}</span>
+    <div className="flex items-center gap-1 flex-wrap">
+      {effective.map((s,i)=>{
+        const done = i < currentStep;
+        const active = i === currentStep;
+        return <React.Fragment key={i}>
+          {i>0 && <div className="w-4 h-0.5 bg-gray-300"/>}
+          <div className="flex flex-col items-center gap-1">
+            <div className={`step-dot ${done?'step-done':active?'step-active':'step-pending'}`}>
+              {done?'✓':i+1}
+            </div>
+            <div className="text-center" style={{fontSize:'10px',maxWidth:'60px',lineHeight:'1.2'}}>
+              <div className="font-medium">{s.team}</div>
+              <div className="text-gray-500">{s.label}</div>
+            </div>
           </div>
-        ))}
-      </div>
-      <div style={{position:'absolute',bottom:16,left:0,right:0,padding:'0 16px'}}>
-        <div style={{color:'#5eead4',fontSize:11,textAlign:'center'}}>v1.0 © 2026 Sourcing BU</div>
+        </React.Fragment>;
+      })}
+    </div>
+  );
+}
+
+// ── DateRangeFilter ───────────────────────────────────────────────────────────
+function DateRangeFilter({value, onChange}) {
+  const [start, setStart] = useState(value?.start||'');
+  const [end, setEnd] = useState(value?.end||'');
+  function preset(days) {
+    const e = new Date(); e.setHours(23,59,59);
+    const s = new Date(); s.setDate(s.getDate()-days+1); s.setHours(0,0,0);
+    const fmt = d => d.toISOString().slice(0,10);
+    setStart(fmt(s)); setEnd(fmt(e));
+    onChange({start:fmt(s), end:fmt(e)});
+  }
+  function presetMonth(offset=0) {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth()+offset;
+    const s = new Date(y,m,1), e = new Date(y,m+1,0);
+    const fmt = d => d.toISOString().slice(0,10);
+    setStart(fmt(s)); setEnd(fmt(e));
+    onChange({start:fmt(s), end:fmt(e)});
+  }
+  function apply() { onChange({start,end}); }
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      {[['7 วัน',7],['14 วัน',14],['30 วัน',30],['90 วัน',90]].map(([l,d])=>(
+        <button key={l} onClick={()=>preset(d)} className="px-3 py-1 rounded-full text-sm border border-gray-300 hover:border-green-700 hover:text-green-800">{l}</button>
+      ))}
+      <button onClick={()=>presetMonth(0)} className="px-3 py-1 rounded-full text-sm border border-gray-300 hover:border-green-700">เดือนนี้</button>
+      <button onClick={()=>presetMonth(-1)} className="px-3 py-1 rounded-full text-sm border border-gray-300 hover:border-green-700">เดือนที่แล้ว</button>
+      <div className="flex gap-1 items-center">
+        <input type="date" value={start} onChange={e=>{setStart(e.target.value);}} style={{width:'130px'}}/>
+        <span className="text-gray-500">–</span>
+        <input type="date" value={end} onChange={e=>{setEnd(e.target.value);}} style={{width:'130px'}}/>
+        <button onClick={apply} className="btn-primary px-3 py-1 rounded text-sm">ค้นหา</button>
       </div>
     </div>
   );
 }
 
-// ── STARS ────────────────────────────────────
-function Stars({ value, onChange }) {
+// ══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════════
+function Dashboard() {
+  const [tab, setTab] = useState('overview');
+  const [dr, setDr] = useState(()=>{
+    const e=new Date(),s=new Date(); s.setDate(s.getDate()-6);
+    return {start:s.toISOString().slice(0,10), end:e.toISOString().slice(0,10)};
+  });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setData(null);
+    const qs = dr ? `?start=${dr.start}&end=${dr.end}` : '';
+    const endpoints = {
+      overview: `/api/dashboard/overview${qs}`,
+      'sku-problems': `/api/dashboard/sku-problems${qs}`,
+      'by-employee': `/api/dashboard/by-employee${qs}`,
+      'by-customer': `/api/dashboard/by-customer${qs}`,
+    };
+    api(endpoints[tab]).then(d=>{ setData(d); setLoading(false); }).catch(()=>setLoading(false));
+  }, [tab, dr]);
+
+  const tabs = [['overview','ภาพรวมทีม'],['sku-problems','SKU ปัญหา'],['by-employee','รายพนักงาน'],['by-customer','รายลูกค้า']];
+
   return (
-    <div style={{display:'flex',gap:2}}>
-      {[1,2,3,4,5].map(n => (
-        <span key={n} className={n<=value?'star':'star-empty'} style={onChange?{cursor:'pointer'}:{}}
-          onClick={()=>onChange&&onChange(n)}>{n<=value?'★':'☆'}</span>
+    <div>
+      <h1 className="text-2xl font-bold mb-4" style={{color:'var(--primary)'}}>Dashboard — Team Efficiency</h1>
+      <div className="card p-4 mb-4">
+        <DateRangeFilter value={dr} onChange={setDr}/>
+      </div>
+      <div className="flex gap-4 mb-4 border-b">
+        {tabs.map(([k,l])=>(
+          <div key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</div>
+        ))}
+      </div>
+      {loading ? <Spinner/> : <DashboardTab tab={tab} data={data}/>}
+    </div>
+  );
+}
+
+function StatCard({label, value, sub}) {
+  return (
+    <div className="card p-4">
+      <div className="text-sm text-gray-500 mb-1">{label}</div>
+      <div className="text-3xl font-bold" style={{color:'var(--primary)'}}>{value}</div>
+      {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function BarChart({data, labelKey, valueKey, color='var(--primary)'}) {
+  if (!data||!data.length) return <div className="text-gray-400 text-sm py-4 text-center">ไม่มีข้อมูล</div>;
+  const max = Math.max(...data.map(d=>d[valueKey]||0));
+  return (
+    <div className="space-y-2">
+      {data.map((d,i)=>(
+        <div key={i} className="flex items-center gap-2">
+          <div className="text-sm text-gray-600 w-32 truncate" title={d[labelKey]}>{d[labelKey]||'—'}</div>
+          <div className="flex-1 bg-gray-100 rounded h-5 overflow-hidden">
+            <div className="h-full rounded transition-all" style={{width:`${max?((d[valueKey]||0)/max*100):0}%`,background:color}}/>
+          </div>
+          <div className="text-sm font-medium w-8 text-right">{d[valueKey]||0}</div>
+        </div>
       ))}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// DASHBOARD
-// ─────────────────────────────────────────────
-function Dashboard() {
-  const [data, setData] = useState(null);
-  useEffect(() => { api.get('/api/dashboard').then(setData); }, []);
-  if (!data) return <Loading/>;
+function DashboardTab({tab, data}) {
+  if (!data) return null;
+  if (tab==='overview') {
+    const d = data;
+    const statusMap = Object.fromEntries((d.by_status||[]).map(s=>[s.status,s.cnt]));
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="เคสทั้งหมด" value={d.total||0}/>
+          <StatCard label="เปิดอยู่" value={statusMap.open||0}/>
+          <StatCard label="กำลังดำเนินการ" value={statusMap.in_progress||0}/>
+          <StatCard label="ปิดแล้ว" value={(statusMap.resolved||0)+(statusMap.closed||0)}/>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-4">
+            <h3 className="font-semibold mb-3 text-gray-700">Case Type</h3>
+            <BarChart data={d.by_case_type} labelKey="case_type" valueKey="cnt"/>
+          </div>
+          <div className="card p-4">
+            <h3 className="font-semibold mb-3 text-gray-700">Fault Team</h3>
+            <BarChart data={d.by_fault_team} labelKey="fault_team" valueKey="cnt" color="#ef4444"/>
+          </div>
+          <div className="card p-4">
+            <h3 className="font-semibold mb-3 text-gray-700">Priority</h3>
+            <BarChart data={d.by_priority} labelKey="priority" valueKey="cnt" color="#f59e0b"/>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (tab==='sku-problems') {
+    const rows1 = Array.isArray(data) ? data : [];
+    return (
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-gray-50 text-left">
+            <th className="px-4 py-3 text-gray-600">SKU</th>
+            <th className="px-4 py-3 text-gray-600">ชื่อสินค้า</th>
+            <th className="px-4 py-3 text-gray-600 text-center">เคส</th>
+            <th className="px-4 py-3 text-gray-600">Case Types</th>
+            <th className="px-4 py-3 text-gray-600">Fault Teams</th>
+          </tr></thead>
+          <tbody>
+            {rows1.map((r,i)=>(
+              <tr key={i} className={i%2===0?'':'bg-gray-50'}>
+                <td className="px-4 py-2 font-mono text-xs">{r.sku_code}</td>
+                <td className="px-4 py-2">{r.product_name}</td>
+                <td className="px-4 py-2 text-center font-bold text-red-600">{r.cnt}</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{r.case_types}</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{r.fault_teams}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(!data||!data.length)&&<div className="text-center py-8 text-gray-400">ไม่มีข้อมูล</div>}
+      </div>
+    );
+  }
+  if (tab==='by-employee') {
+    return (
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-gray-50 text-left">
+            <th className="px-4 py-3 text-gray-600">พนักงาน</th>
+            <th className="px-4 py-3 text-gray-600">ทีม</th>
+            <th className="px-4 py-3 text-gray-600 text-center">เคส</th>
+            <th className="px-4 py-3 text-gray-600 text-center">% ของทีม</th>
+            <th className="px-4 py-3 text-gray-600">Case Types บ่อย</th>
+          </tr></thead>
+          <tbody>
+            {(data||[]).map((r,i)=>(
+              <tr key={i} className={i%2===0?'':'bg-gray-50'}>
+                <td className="px-4 py-2 font-medium">{r.name}</td>
+                <td className="px-4 py-2 text-gray-500">{r.team}</td>
+                <td className="px-4 py-2 text-center font-bold">{r.cnt}</td>
+                <td className="px-4 py-2 text-center">{r.pct}%</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{r.case_types||'—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(!data||!data.length)&&<div className="text-center py-8 text-gray-400">ไม่มีข้อมูล</div>}
+      </div>
+    );
+  }
+  if (tab==='by-customer') {
+    return (
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-gray-50 text-left">
+            <th className="px-4 py-3 text-gray-600">Outlet</th>
+            <th className="px-4 py-3 text-gray-600">Account</th>
+            <th className="px-4 py-3 text-gray-600 text-center">เคส</th>
+            <th className="px-4 py-3 text-gray-600">Case Types บ่อย</th>
+          </tr></thead>
+          <tbody>
+            {(data||[]).map((r,i)=>(
+              <tr key={i} className={i%2===0?'':'bg-gray-50'}>
+                <td className="px-4 py-2 font-medium">{r.outlet_name}</td>
+                <td className="px-4 py-2 text-gray-500">{r.account_name}</td>
+                <td className="px-4 py-2 text-center font-bold">{r.cnt}</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{r.case_types||'—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(!data||!data.length)&&<div className="text-center py-8 text-gray-400">ไม่มีข้อมูล</div>}
+      </div>
+    );
+  }
+  return null;
+}
 
-  const { summary, monthly, claims, ticket_status, ticket_dept, top_customers } = data;
-  const totalRevenue = monthly.reduce((a,m)=>a+(m.total_sales||0), 0);
-  const totalCost    = monthly.reduce((a,m)=>a+(m.total_cost||0), 0);
-  const gp = totalRevenue > 0 ? ((totalRevenue-totalCost)/totalRevenue*100).toFixed(1) : 0;
+// ══════════════════════════════════════════════════════════════════════════════
+// ACCOUNTS
+// ══════════════════════════════════════════════════════════════════════════════
+function Accounts({onNavigate}) {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({name:'',owner:'',status:'active'});
+  const [search, setSearch] = useState('');
 
-  const tsByStatus = {};
-  (ticket_status||[]).forEach(t => tsByStatus[t.status] = t.cnt);
+  const load = () => api('/api/accounts').then(d=>{setAccounts(d);setLoading(false);});
+  useEffect(()=>{load();},[]);
 
-  const maxSales = Math.max(...monthly.map(m=>m.total_sales||0), 1);
+  const filtered = accounts.filter(a=>
+    a.name.toLowerCase().includes(search.toLowerCase()) ||
+    (a.owner||'').toLowerCase().includes(search.toLowerCase())
+  );
+
+  async function submit(e) {
+    e.preventDefault();
+    await api('/api/accounts', {method:'POST', body:JSON.stringify(form)});
+    setShowForm(false); setForm({name:'',owner:'',status:'active'}); load();
+  }
 
   return (
     <div>
-      <div className="page-header">
-        <div className="page-title">📊 Dashboard</div>
-        <div style={{fontSize:13,color:'#64748b'}}>{new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})}</div>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold" style={{color:'var(--primary)'}}>Accounts</h1>
+        <button onClick={()=>setShowForm(true)} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium">+ เพิ่ม Account</button>
       </div>
-
-      {/* Summary cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16,marginBottom:24}}>
-        {[
-          { label:'ลูกค้าทั้งหมด', value:fmt.number(summary.customers), icon:'🏪', color:'#0F766E' },
-          { label:'Supplier', value:fmt.number(summary.suppliers), icon:'🚛', color:'#2563eb' },
-          { label:'Ticket เปิดอยู่', value:fmt.number(summary.open_tickets), icon:'🎫', color:'#d97706' },
-          { label:'กำลังดำเนินการ', value:fmt.number(summary.inprogress_tickets), icon:'⚙️', color:'#7c3aed' },
-          { label:'GP% รวม', value:gp+'%', icon:'💹', color:'#059669' },
-          { label:'พนักงาน', value:fmt.number(summary.employees), icon:'👥', color:'#0891b2' },
-        ].map((c,i) => (
-          <div key={i} className="stat-card">
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-              <div>
-                <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{c.label}</div>
-                <div style={{fontSize:24,fontWeight:700,color:c.color}}>{c.value}</div>
-              </div>
-              <span style={{fontSize:28}}>{c.icon}</span>
+      <div className="card p-4 mb-4">
+        <input placeholder="ค้นหา Account หรือ Owner..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+      {loading ? <Spinner/> : (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-gray-600">Account</th>
+              <th className="px-4 py-3 text-gray-600">Owner (Sales)</th>
+              <th className="px-4 py-3 text-gray-600 text-center">Outlets</th>
+              <th className="px-4 py-3 text-gray-600 text-center">Ticket เปิด</th>
+              <th className="px-4 py-3 text-gray-600">สถานะ</th>
+            </tr></thead>
+            <tbody>
+              {filtered.map((a,i)=>(
+                <tr key={a.id} className={`cursor-pointer hover:bg-green-50 ${i%2===0?'':'bg-gray-50'}`}
+                  onClick={()=>onNavigate('account-detail',{id:a.id})}>
+                  <td className="px-4 py-3 font-medium text-green-800">{a.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{a.owner||'—'}</td>
+                  <td className="px-4 py-3 text-center">{a.outlet_count||0}</td>
+                  <td className="px-4 py-3 text-center">
+                    {a.open_tickets>0 && <span className="badge">{a.open_tickets}</span>}
+                    {!a.open_tickets && '—'}
+                  </td>
+                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs ${a.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{a.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!filtered.length&&<div className="text-center py-8 text-gray-400">ไม่พบ Account</div>}
+        </div>
+      )}
+      {showForm && (
+        <Modal title="เพิ่ม Account ใหม่" onClose={()=>setShowForm(false)}>
+          <form onSubmit={submit} className="space-y-3">
+            <div><label className="text-sm font-medium text-gray-700">ชื่อ Account *</label>
+              <input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น Kam's Roast"/></div>
+            <div><label className="text-sm font-medium text-gray-700">Owner (Sales)</label>
+              <input value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})}/></div>
+            <div><label className="text-sm font-medium text-gray-700">สถานะ</label>
+              <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                <option value="active">Active</option><option value="inactive">Inactive</option>
+              </select></div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 rounded border text-sm">ยกเลิก</button>
+              <button type="submit" className="btn-primary px-4 py-2 rounded text-sm">บันทึก</button>
             </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Account Detail ────────────────────────────────────────────────────────────
+function AccountDetail({id, onNavigate, onCreateTicket}) {
+  const [account, setAccount] = useState(null);
+  const [outlets, setOutlets] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
+  const [tab, setTab] = useState('outlets');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    Promise.all([
+      api(`/api/accounts/${id}`),
+      api(`/api/accounts/${id}/outlets`),
+      api(`/api/accounts/${id}/notes`),
+    ]).then(([a,o,n])=>{setAccount(a);setOutlets(o);setNotes(n);setLoading(false);});
+  },[id]);
+
+  async function addNote() {
+    if (!newNote.trim()) return;
+    await api(`/api/accounts/${id}/notes`, {method:'POST', body:JSON.stringify({note:newNote,created_by:'CX'})});
+    setNewNote('');
+    api(`/api/accounts/${id}/notes`).then(setNotes);
+  }
+
+  if (loading) return <Spinner/>;
+  if (!account) return <div>ไม่พบข้อมูล</div>;
+
+  return (
+    <div>
+      <button onClick={()=>onNavigate('accounts')} className="text-sm text-green-700 mb-3 flex items-center gap-1">← กลับ Accounts</button>
+      <div className="card p-5 mb-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold" style={{color:'var(--primary)'}}>{account.name}</h1>
+            <div className="text-gray-500 mt-1">Owner: <span className="font-medium">{account.owner||'—'}</span></div>
+            <div className="text-gray-500">สถานะ: <span className={`px-2 py-0.5 rounded text-xs ${account.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{account.status}</span></div>
           </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold text-green-800">{outlets.length}</div>
+            <div className="text-sm text-gray-500">Outlets</div>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-4 border-b mb-4">
+        {[['outlets','Outlets'],['notes','Notes']].map(([k,l])=>(
+          <div key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</div>
         ))}
       </div>
+      {tab==='outlets' && (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-gray-600">Outlet</th>
+              <th className="px-4 py-3 text-gray-600">CSC Code</th>
+              <th className="px-4 py-3 text-gray-600 text-center">Ticket เปิด</th>
+              <th className="px-4 py-3 text-gray-600">Action</th>
+            </tr></thead>
+            <tbody>
+              {outlets.map((o,i)=>(
+                <tr key={o.id} className={i%2===0?'':'bg-gray-50'}>
+                  <td className="px-4 py-3">
+                    <button className="text-green-700 font-medium hover:underline text-left"
+                      onClick={()=>onNavigate('outlet-detail',{id:o.id})}>{o.name}</button>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{o.csc_code||'—'}</td>
+                  <td className="px-4 py-3 text-center">{o.open_tickets>0?<span className="badge">{o.open_tickets}</span>:'—'}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={()=>onCreateTicket(o.id)} className="text-xs btn-primary px-2 py-1 rounded">สร้าง Ticket</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!outlets.length&&<div className="text-center py-6 text-gray-400">ไม่มี Outlet</div>}
+        </div>
+      )}
+      {tab==='notes' && (
+        <div className="space-y-3">
+          <div className="card p-4">
+            <textarea rows={3} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="เพิ่ม note..."/>
+            <div className="flex justify-end mt-2">
+              <button onClick={addNote} className="btn-primary px-3 py-1 rounded text-sm">บันทึก Note</button>
+            </div>
+          </div>
+          {notes.map(n=>(
+            <div key={n.id} className="card p-4">
+              <div className="text-sm text-gray-500 mb-1">{fmtDT(n.created_at)} — {n.created_by}</div>
+              <div className="text-gray-800 whitespace-pre-wrap">{n.note}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}}>
-        {/* Monthly Sales Chart */}
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>ยอดขายรายเดือน</div>
-          {monthly.length === 0 ? (
-            <div className="empty-state"><div className="icon">📈</div><div>ยังไม่มีข้อมูล — กรุณา Import ERP ก่อน</div></div>
+// ── Outlet Detail ─────────────────────────────────────────────────────────────
+function OutletDetail({id, onNavigate, onCreateTicket}) {
+  const [outlet, setOutlet] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
+  const [tab, setTab] = useState('orders');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    Promise.all([
+      api(`/api/outlets/${id}`),
+      api(`/api/outlets/${id}/invoices`),
+      api(`/api/outlets/${id}/tickets`),
+      api(`/api/outlets/${id}/notes`),
+    ]).then(([o,inv,t,n])=>{setOutlet(o);setInvoices(inv);setTickets(t);setNotes(n);setLoading(false);});
+  },[id]);
+
+  async function addNote() {
+    if (!newNote.trim()) return;
+    await api(`/api/accounts/${outlet.account_id}/notes`, {method:'POST', body:JSON.stringify({note:newNote,created_by:'CX'})});
+    setNewNote('');
+    api(`/api/outlets/${id}/notes`).then(setNotes);
+  }
+
+  if (loading) return <Spinner/>;
+  if (!outlet) return <div>ไม่พบข้อมูล</div>;
+
+  return (
+    <div>
+      <button onClick={()=>onNavigate('account-detail',{id:outlet.account_id})} className="text-sm text-green-700 mb-3">← กลับ {outlet.account_name}</button>
+      <div className="card p-5 mb-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-xl font-bold" style={{color:'var(--primary)'}}>{outlet.name}</h1>
+            <div className="text-gray-500 mt-1">Account: <span className="font-medium">{outlet.account_name}</span></div>
+            <div className="text-gray-500">Owner: {outlet.owner||'—'} | CSC: {outlet.csc_code||'—'} | Outlet ID: {outlet.erp_outlet_id||'—'}</div>
+          </div>
+          <button onClick={()=>onCreateTicket(id)} className="btn-primary px-4 py-2 rounded text-sm">+ สร้าง Ticket</button>
+        </div>
+      </div>
+      <div className="flex gap-4 border-b mb-4">
+        {[['orders','ประวัติ Invoice'],['tickets','Tickets'],['notes','Notes']].map(([k,l])=>(
+          <div key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</div>
+        ))}
+      </div>
+      {tab==='orders' && (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-gray-600">Invoice</th>
+              <th className="px-4 py-3 text-gray-600">วันที่</th>
+              <th className="px-4 py-3 text-gray-600 text-right">SKU</th>
+              <th className="px-4 py-3 text-gray-600 text-right">ยอดขาย</th>
+            </tr></thead>
+            <tbody>
+              {invoices.map((r,i)=>(
+                <tr key={i} className={i%2===0?'':'bg-gray-50'}>
+                  <td className="px-4 py-2 font-mono text-xs">{r.invoice_number}</td>
+                  <td className="px-4 py-2">{fmt(r.doc_date)}</td>
+                  <td className="px-4 py-2 text-right">{r.sku_count}</td>
+                  <td className="px-4 py-2 text-right">{money(r.total_sales)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!invoices.length&&<div className="text-center py-6 text-gray-400">ไม่มีประวัติ Invoice</div>}
+        </div>
+      )}
+      {tab==='tickets' && (
+        <div className="space-y-2">
+          {tickets.map(t=>(
+            <div key={t.id} className="card p-4 flex justify-between items-center cursor-pointer hover:bg-green-50"
+              onClick={()=>onNavigate('ticket-detail',{id:t.id})}>
+              <div>
+                <span className="font-mono font-medium text-green-800">{t.ticket_no}</span>
+                <span className="ml-2 text-sm text-gray-600">{t.case_type}</span>
+                <span className="ml-2 text-xs text-gray-400">{t.product_name}</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <StatusBadge status={t.status}/>
+                <span className="text-xs text-gray-400">{fmt(t.created_at)}</span>
+              </div>
+            </div>
+          ))}
+          {!tickets.length&&<div className="text-center py-6 text-gray-400">ไม่มี Ticket</div>}
+        </div>
+      )}
+      {tab==='notes' && (
+        <div className="space-y-3">
+          <div className="card p-4">
+            <textarea rows={3} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="เพิ่ม note..."/>
+            <div className="flex justify-end mt-2">
+              <button onClick={addNote} className="btn-primary px-3 py-1 rounded text-sm">บันทึก</button>
+            </div>
+          </div>
+          {notes.map(n=>(
+            <div key={n.id} className="card p-4">
+              <div className="text-sm text-gray-500 mb-1">{fmtDT(n.created_at)} — {n.created_by}</div>
+              <div className="text-gray-800 whitespace-pre-wrap">{n.note}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SUPPLIERS
+// ══════════════════════════════════════════════════════════════════════════════
+function Suppliers({onNavigate}) {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({name:'',supplier_type:'',contact_person:'',phone:'',line_id:'',email:'',payment_method:'',credit_days:0,rating:0,status:'active'});
+
+  const load = () => api('/api/suppliers').then(d=>{setList(d);setLoading(false);});
+  useEffect(()=>{load();},[]);
+
+  async function submit(e) {
+    e.preventDefault();
+    await api('/api/suppliers', {method:'POST', body:JSON.stringify(form)});
+    setShowForm(false); setForm({name:'',supplier_type:'',contact_person:'',phone:'',line_id:'',email:'',payment_method:'',credit_days:0,rating:0,status:'active'}); load();
+  }
+
+  if (loading) return <Spinner/>;
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold" style={{color:'var(--primary)'}}>Suppliers</h1>
+        <button onClick={()=>setShowForm(true)} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium">+ เพิ่ม Supplier</button>
+      </div>
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-gray-50 text-left">
+            <th className="px-4 py-3 text-gray-600">ชื่อ</th>
+            <th className="px-4 py-3 text-gray-600">ประเภท</th>
+            <th className="px-4 py-3 text-gray-600">Contact</th>
+            <th className="px-4 py-3 text-gray-600">เบอร์</th>
+            <th className="px-4 py-3 text-gray-600">Rating</th>
+            <th className="px-4 py-3 text-gray-600">สถานะ</th>
+          </tr></thead>
+          <tbody>
+            {list.map((s,i)=>(
+              <tr key={s.id} className={`cursor-pointer hover:bg-green-50 ${i%2===0?'':'bg-gray-50'}`}
+                onClick={()=>onNavigate('supplier-detail',{id:s.id})}>
+                <td className="px-4 py-3 font-medium text-green-800">{s.name}</td>
+                <td className="px-4 py-3 text-gray-500">{s.supplier_type||'—'}</td>
+                <td className="px-4 py-3">{s.contact_person||'—'}</td>
+                <td className="px-4 py-3 font-mono text-xs">{s.phone||'—'}</td>
+                <td className="px-4 py-3"><Stars value={s.rating||0}/></td>
+                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs ${s.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{s.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!list.length&&<div className="text-center py-8 text-gray-400">ไม่มี Supplier</div>}
+      </div>
+      {showForm && (
+        <Modal title="เพิ่ม Supplier" onClose={()=>setShowForm(false)}>
+          <form onSubmit={submit} className="space-y-3">
+            <div><label className="text-sm font-medium text-gray-700">ชื่อ *</label>
+              <input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm font-medium text-gray-700">ประเภท</label>
+                <input value={form.supplier_type} onChange={e=>setForm({...form,supplier_type:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Contact Person</label>
+                <input value={form.contact_person} onChange={e=>setForm({...form,contact_person:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">เบอร์โทร</label>
+                <input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">LINE ID</label>
+                <input value={form.line_id} onChange={e=>setForm({...form,line_id:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Email</label>
+                <input value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">วิธีชำระ</label>
+                <input value={form.payment_method} onChange={e=>setForm({...form,payment_method:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Credit Days</label>
+                <input type="number" value={form.credit_days} onChange={e=>setForm({...form,credit_days:+e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Rating</label>
+                <Stars value={form.rating} onChange={v=>setForm({...form,rating:v})}/></div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 rounded border text-sm">ยกเลิก</button>
+              <button type="submit" className="btn-primary px-4 py-2 rounded text-sm">บันทึก</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function SupplierDetail({id, onNavigate}) {
+  const [supplier, setSupplier] = useState(null);
+  const [notes, setNotes] = useState([]);
+  const [form, setForm] = useState(null);
+  const [newNote, setNewNote] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState('info');
+
+  useEffect(()=>{
+    api(`/api/suppliers/${id}`).then(d=>{setSupplier(d);setForm({...d});});
+    api(`/api/suppliers/${id}/notes`).then(setNotes);
+  },[id]);
+
+  async function save() {
+    await api(`/api/suppliers/${id}`, {method:'PUT', body:JSON.stringify(form)});
+    setEditing(false);
+    api(`/api/suppliers/${id}`).then(d=>{setSupplier(d);setForm({...d});});
+  }
+  async function addNote() {
+    if (!newNote.trim()) return;
+    await api(`/api/suppliers/${id}/notes`, {method:'POST', body:JSON.stringify({note:newNote,created_by:'CX'})});
+    setNewNote(''); api(`/api/suppliers/${id}/notes`).then(setNotes);
+  }
+
+  if (!supplier||!form) return <Spinner/>;
+  return (
+    <div>
+      <button onClick={()=>onNavigate('suppliers')} className="text-sm text-green-700 mb-3">← กลับ Suppliers</button>
+      <div className="card p-5 mb-4">
+        <div className="flex justify-between">
+          <h1 className="text-xl font-bold" style={{color:'var(--primary)'}}>{supplier.name}</h1>
+          <div className="flex gap-2">
+            {editing
+              ? <><button onClick={save} className="btn-primary px-3 py-1 rounded text-sm">บันทึก</button>
+                  <button onClick={()=>setEditing(false)} className="px-3 py-1 rounded border text-sm">ยกเลิก</button></>
+              : <button onClick={()=>setEditing(true)} className="px-3 py-1 rounded border text-sm">แก้ไข</button>}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-4 border-b mb-4">
+        {[['info','ข้อมูล'],['notes','Notes']].map(([k,l])=>(
+          <div key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</div>
+        ))}
+      </div>
+      {tab==='info' && (
+        <div className="card p-5 space-y-3">
+          {editing ? (
+            <div className="grid grid-cols-2 gap-3">
+              {[['name','ชื่อ'],['supplier_type','ประเภท'],['contact_person','Contact Person'],['phone','เบอร์โทร'],['line_id','LINE ID'],['email','Email'],['payment_method','วิธีชำระ']].map(([k,l])=>(
+                <div key={k}><label className="text-sm font-medium text-gray-700">{l}</label>
+                  <input value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/></div>
+              ))}
+              <div><label className="text-sm font-medium text-gray-700">Credit Days</label>
+                <input type="number" value={form.credit_days||0} onChange={e=>setForm({...form,credit_days:+e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Rating</label>
+                <Stars value={form.rating||0} onChange={v=>setForm({...form,rating:v})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">สถานะ</label>
+                <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                  <option value="active">Active</option><option value="inactive">Inactive</option>
+                </select></div>
+            </div>
           ) : (
-            <div>
-              {monthly.map((m,i) => {
-                const gpm = m.total_sales>0 ? ((m.total_sales-m.total_cost)/m.total_sales*100).toFixed(1) : 0;
-                return (
-                  <div key={i} style={{marginBottom:12}}>
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4}}>
-                      <span style={{fontWeight:500}}>{m.month_source}</span>
-                      <span>{fmt.currency(m.total_sales)} <span className="gp-positive">GP {gpm}%</span></span>
-                    </div>
-                    <div className="bar-container">
-                      <div className="bar-fill" style={{width:`${(m.total_sales/maxSales*100).toFixed(0)}%`}}/>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-2 gap-4">
+              {[['ประเภท',supplier.supplier_type],['Contact',supplier.contact_person],['เบอร์',supplier.phone],['LINE',supplier.line_id],['Email',supplier.email],['วิธีชำระ',supplier.payment_method],['Credit Days',supplier.credit_days+' วัน']].map(([l,v])=>(
+                <div key={l}><div className="text-xs text-gray-500">{l}</div><div className="font-medium">{v||'—'}</div></div>
+              ))}
+              <div><div className="text-xs text-gray-500">Rating</div><Stars value={supplier.rating||0}/></div>
             </div>
           )}
         </div>
-
-        {/* Tickets */}
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>สถานะ Ticket</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
-            {['open','in_progress','resolved','closed'].map(s => (
-              <div key={s} style={{background:'#f8fafc',borderRadius:8,padding:12,textAlign:'center'}}>
-                <div style={{fontSize:20,fontWeight:700,color:'#0f172a'}}>{tsByStatus[s]||0}</div>
-                <div style={{fontSize:12,color:'#64748b'}}><span className={`badge badge-${s}`}>{STATUS_LABELS[s]}</span></div>
-              </div>
-            ))}
-          </div>
-          <div style={{fontWeight:600,marginBottom:10,fontSize:14,color:'#374151'}}>Ticket by ทีม</div>
-          {(ticket_dept||[]).length===0 ? <div style={{color:'#94a3b8',fontSize:13}}>ไม่มี ticket ที่ยังเปิดอยู่</div> :
-            (ticket_dept||[]).map((d,i) => (
-              <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'4px 0',borderBottom:'1px solid #f1f5f9'}}>
-                <span>{d.assigned_department||'ไม่ระบุ'}</span>
-                <span style={{fontWeight:600,color:'#0F766E'}}>{d.cnt} เคส</span>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        {/* Top Customers */}
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:12,color:'#0f172a'}}>Top ลูกค้า (ยอดซื้อสูงสุด)</div>
-          {top_customers.length===0 ? <div style={{color:'#94a3b8',fontSize:13}}>ยังไม่มีข้อมูล</div> :
-            top_customers.slice(0,8).map((c,i) => (
-              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid #f1f5f9',fontSize:13}}>
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:'50%',width:22,height:22,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:600}}>{i+1}</span>
-                  <span style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.customer_name}</span>
-                </div>
-                <span style={{fontWeight:600,color:'#0F766E'}}>{fmt.currency(c.revenue)}</span>
-              </div>
-            ))
-          }
-        </div>
-
-        {/* Claims */}
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>ภาพรวม Claim</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-            {[
-              { label:'Claim ตัด', value:claims.cut_count||0, color:'#f59e0b', icon:'✂️' },
-              { label:'Claim จัดส่ง', value:claims.delivery_count||0, color:'#ef4444', icon:'🚚' },
-              { label:'สายรายการทั้งหมด', value:fmt.number(claims.total_lines||0), color:'#6366f1', icon:'📋' },
-              { label:'Claim Rate', value:claims.total_lines>0?((((claims.cut_count||0)+(claims.delivery_count||0))/claims.total_lines)*100).toFixed(1)+'%':'0%', color:'#0F766E', icon:'📊' },
-            ].map((c,i) => (
-              <div key={i} style={{background:'#f8fafc',borderRadius:10,padding:14,textAlign:'center'}}>
-                <div style={{fontSize:22,marginBottom:4}}>{c.icon}</div>
-                <div style={{fontSize:22,fontWeight:700,color:c.color}}>{typeof c.value==='number'?fmt.number(c.value):c.value}</div>
-                <div style={{fontSize:12,color:'#64748b'}}>{c.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// CUSTOMER LIST
-// ─────────────────────────────────────────────
-function CustomerList({ onSelect }) {
-  const [customers, setCustomers] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:'', customer_type:'', phone:'', contact_person:'', credit_days:0, status:'active' });
-  const [toast, setToast] = useState(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    api.get(`/api/customers?search=${encodeURIComponent(search)}`).then(d => { setCustomers(d); setLoading(false); });
-  }, [search]);
-
-  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
-
-  const save = () => {
-    if (!form.name) return setToast({msg:'กรุณากรอกชื่อลูกค้า', type:'error'});
-    api.post('/api/customers', form).then(r => {
-      if (r.error) return setToast({msg:r.error, type:'error'});
-      setToast({msg:'เพิ่มลูกค้าสำเร็จ', type:'success'});
-      setShowAdd(false);
-      setForm({ name:'', customer_type:'', phone:'', contact_person:'', credit_days:0, status:'active' });
-      load();
-    });
-  };
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="page-header">
-        <div className="page-title">🏪 ลูกค้า (Customer)</div>
-        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่มลูกค้า</button>
-      </div>
-      <div className="card">
-        <div style={{marginBottom:16}}>
-          <div className="search-box">
-            <span className="search-icon">🔍</span>
-            <input className="input" style={{paddingLeft:36}} placeholder="ค้นหาชื่อลูกค้า..." value={search} onChange={e=>setSearch(e.target.value)}/>
-          </div>
-        </div>
-        {loading ? <Loading/> : customers.length===0 ? (
-          <div className="empty-state"><div className="icon">🏪</div><div>ไม่พบลูกค้า</div></div>
-        ) : (
-          <div className="table-container">
-            <table>
-              <thead><tr>
-                <th>ชื่อลูกค้า</th><th>ประเภท</th><th>ผู้ติดต่อ</th><th>เบอร์โทร</th><th>Credit (วัน)</th><th>สถานะ</th><th>Order ล่าสุด</th>
-              </tr></thead>
-              <tbody>
-                {customers.map(c => (
-                  <tr key={c.id} onClick={()=>onSelect(c.id)}>
-                    <td style={{fontWeight:600,color:'#0F766E'}}>{c.name}</td>
-                    <td>{c.customer_type||'-'}</td>
-                    <td>{c.contact_person||'-'}</td>
-                    <td>{c.phone||'-'}</td>
-                    <td>{c.credit_days||0}</td>
-                    <td><span className={`badge badge-${c.status}`}>{c.status==='active'?'Active':'Inactive'}</span></td>
-                    <td style={{color:'#64748b'}}>{fmt.date(c.last_order)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {showAdd && (
-        <Modal title="เพิ่มลูกค้าใหม่" onClose={()=>setShowAdd(false)}>
-          <div style={{display:'grid',gap:14}}>
-            <div><label className="label">ชื่อลูกค้า *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น ไชโยหมูจุ่ม บรรทัดทอง"/></div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">ประเภท</label><input className="input" value={form.customer_type} onChange={e=>setForm({...form,customer_type:e.target.value})} placeholder="เช่น ร้านอาหาร, โรงแรม"/></div>
-              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">ผู้ติดต่อ</label><input className="input" value={form.contact_person} onChange={e=>setForm({...form,contact_person:e.target.value})}/></div>
-              <div><label className="label">Credit (วัน)</label><input className="input" type="number" value={form.credit_days} onChange={e=>setForm({...form,credit_days:parseInt(e.target.value)||0})}/></div>
-            </div>
-            <div><label className="label">ที่อยู่</label><input className="input" value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})}/></div>
-            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
-              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
-              <button className="btn btn-primary" onClick={save}>บันทึก</button>
+      )}
+      {tab==='notes' && (
+        <div className="space-y-3">
+          <div className="card p-4">
+            <textarea rows={3} value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Negotiation notes..."/>
+            <div className="flex justify-end mt-2">
+              <button onClick={addNote} className="btn-primary px-3 py-1 rounded text-sm">บันทึก</button>
             </div>
           </div>
-        </Modal>
+          {notes.map(n=>(
+            <div key={n.id} className="card p-4">
+              <div className="text-sm text-gray-500 mb-1">{fmtDT(n.created_at)} — {n.created_by}</div>
+              <div className="whitespace-pre-wrap text-gray-800">{n.note}</div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// CUSTOMER DETAIL
-// ─────────────────────────────────────────────
-function CustomerDetail({ id, onBack, onNewTicket }) {
-  const [data, setData] = useState(null);
-  const [tab, setTab] = useState('info');
-  const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState({});
-  const [noteText, setNoteText] = useState('');
-  const [noteBy, setNoteBy] = useState('');
-  const [toast, setToast] = useState(null);
-  const [saving, setSaving] = useState(false);
-
-  const load = () => api.get(`/api/customers/${id}`).then(d => { setData(d); setForm(d); });
-  useEffect(() => { load(); }, [id]);
-
-  if (!data) return <Loading/>;
-
-  const { stats } = data;
-  const gp = stats.total_revenue > 0 ? ((stats.total_revenue - stats.total_cost)/stats.total_revenue*100).toFixed(1) : 0;
-
-  const saveInfo = () => {
-    setSaving(true);
-    api.put(`/api/customers/${id}`, form).then(r => {
-      setSaving(false);
-      if (r.error) return setToast({msg:r.error, type:'error'});
-      setData({...data,...r}); setEditMode(false);
-      setToast({msg:'บันทึกสำเร็จ', type:'success'});
-    });
-  };
-
-  const addNote = () => {
-    if (!noteText.trim()) return;
-    api.post(`/api/customers/${id}/notes`, { note:noteText, created_by:noteBy }).then(() => {
-      setNoteText(''); load();
-      setToast({msg:'เพิ่ม Note สำเร็จ', type:'success'});
-    });
-  };
-
-  const claims = (data.orders||[]).filter(o=>o.claim_cut_check||o.claim_delivery_check);
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="breadcrumb" onClick={onBack}>← กลับ รายการลูกค้า</div>
-
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
-          <div>
-            <h1 style={{fontSize:22,fontWeight:700,color:'#0f172a'}}>{data.name}</h1>
-            <div style={{color:'#64748b',fontSize:14,marginTop:4}}>{data.customer_type||'ไม่ระบุประเภท'} • {data.contact_person||'-'} • {data.phone||'-'}</div>
-          </div>
-          <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-            {[
-              { label:'ยอดขายรวม', value:fmt.currency(stats.total_revenue), color:'#0F766E' },
-              { label:'GP%', value:gp+'%', color: parseFloat(gp)>=20?'#059669':'#dc2626' },
-              { label:'Orders', value:fmt.number(stats.total_orders), color:'#2563eb' },
-              { label:'Claim', value:fmt.number((stats.claim_cut_count||0)+(stats.claim_delivery_count||0)), color:'#d97706' },
-            ].map((s,i) => (
-              <div key={i} style={{background:'#f8fafc',borderRadius:8,padding:'10px 16px',textAlign:'center',minWidth:90}}>
-                <div style={{fontSize:18,fontWeight:700,color:s.color}}>{s.value}</div>
-                <div style={{fontSize:11,color:'#64748b'}}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-        {[['info','📋 ข้อมูล'],['orders','🛒 คำสั่งซื้อ'],['claims','⚠️ Claim'],['notes','📝 Note']].map(([k,l])=>(
-          <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{l}</button>
-        ))}
-        <button className="btn btn-secondary btn-sm" style={{marginLeft:'auto'}} onClick={()=>onNewTicket({related_type:'customer',related_id:id,related_name:data.name})}>🎫 สร้าง Ticket</button>
-      </div>
-
-      <div className="card">
-        {/* INFO TAB */}
-        {tab==='info' && (
-          <div>
-            <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}>
-              {editMode
-                ? <><button className="btn btn-secondary btn-sm" style={{marginRight:8}} onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={saveInfo}>{saving?'กำลังบันทึก...':'บันทึก'}</button></>
-                : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
-              }
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-              {[
-                ['ชื่อลูกค้า','name'],['ประเภท','customer_type'],['ผู้ติดต่อ','contact_person'],
-                ['เบอร์โทร','phone'],['Email','email'],['Credit (วัน)','credit_days'],
-              ].map(([l,k])=>(
-                <div key={k}>
-                  <label className="label">{l}</label>
-                  {editMode ? <input className="input" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/>
-                    : <div style={{padding:'8px 0',color:'#1e293b'}}>{data[k]||'-'}</div>}
-                </div>
-              ))}
-              <div style={{gridColumn:'1/-1'}}>
-                <label className="label">ที่อยู่</label>
-                {editMode ? <input className="input" value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})}/>
-                  : <div style={{padding:'8px 0',color:'#1e293b'}}>{data.address||'-'}</div>}
-              </div>
-              <div>
-                <label className="label">สถานะ</label>
-                {editMode ? (
-                  <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
-                    <option value="active">Active</option><option value="inactive">Inactive</option>
-                  </select>
-                ) : <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ORDERS TAB */}
-        {tab==='orders' && (
-          <div>
-            <div style={{marginBottom:12,color:'#64748b',fontSize:13}}>{fmt.number(data.orders.length)} รายการ</div>
-            {data.orders.length===0 ? <div className="empty-state"><div className="icon">🛒</div><div>ยังไม่มีข้อมูล</div></div> : (
-              <div className="table-container">
-                <table>
-                  <thead><tr><th>วันที่</th><th>เลขที่</th><th>สินค้า</th><th>ราคา</th><th>จำนวน</th><th>ยอดขาย</th><th>ต้นทุน</th><th>GP%</th><th>แหล่ง</th></tr></thead>
-                  <tbody>
-                    {data.orders.map((o,i) => {
-                      const gp = o.total_sales>0?((o.total_sales-o.product_cost)/o.total_sales*100).toFixed(1):'-';
-                      return (
-                        <tr key={i}>
-                          <td>{fmt.date(o.doc_date)}</td>
-                          <td style={{fontSize:12,color:'#64748b'}}>{o.document_no}</td>
-                          <td>{o.product_name}</td>
-                          <td>{fmt.number(o.price)}</td>
-                          <td>{o.qty}</td>
-                          <td>{fmt.currency(o.total_sales)}</td>
-                          <td>{fmt.currency(o.product_cost)}</td>
-                          <td className={parseFloat(gp)>=20?'gp-positive':'gp-negative'}>{gp}%</td>
-                          <td><span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:4,padding:'2px 6px',fontSize:11}}>{o.assign_name||'-'}</span></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* CLAIMS TAB */}
-        {tab==='claims' && (
-          <div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-              <div style={{background:'#fffbeb',borderRadius:8,padding:14,textAlign:'center'}}>
-                <div style={{fontSize:24,fontWeight:700,color:'#d97706'}}>{stats.claim_cut_count||0}</div>
-                <div style={{fontSize:13,color:'#64748b'}}>✂️ Claim ตัด</div>
-              </div>
-              <div style={{background:'#fef2f2',borderRadius:8,padding:14,textAlign:'center'}}>
-                <div style={{fontSize:24,fontWeight:700,color:'#dc2626'}}>{stats.claim_delivery_count||0}</div>
-                <div style={{fontSize:13,color:'#64748b'}}>🚚 Claim จัดส่ง</div>
-              </div>
-            </div>
-            {claims.length===0 ? <div className="empty-state"><div className="icon">✅</div><div>ไม่มี Claim</div></div> : (
-              <div className="table-container">
-                <table>
-                  <thead><tr><th>วันที่</th><th>สินค้า</th><th>Claim ตัด</th><th>Claim จัดส่ง</th></tr></thead>
-                  <tbody>
-                    {claims.map((o,i) => (
-                      <tr key={i}>
-                        <td>{fmt.date(o.doc_date)}</td>
-                        <td>{o.product_name}</td>
-                        <td>{o.claim_cut_check ? <span style={{color:'#d97706'}}>✂️ {o.claim_cut_qty}</span> : '-'}</td>
-                        <td>{o.claim_delivery_check ? <span style={{color:'#dc2626'}}>🚚 {o.claim_delivery_qty}</span> : '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* NOTES TAB */}
-        {tab==='notes' && (
-          <div>
-            <div style={{background:'#f0fdf4',borderRadius:10,padding:16,marginBottom:16}}>
-              <div style={{fontWeight:600,marginBottom:10,fontSize:14}}>📝 เพิ่ม Note ใหม่</div>
-              <textarea className="input" placeholder="บันทึกข้อมูล เช่น พฤติกรรมการสั่ง, ความพึงพอใจ, ข้อมูลสำคัญ..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
-              <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center'}}>
-                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={noteBy} onChange={e=>setNoteBy(e.target.value)}/>
-                <button className="btn btn-primary" onClick={addNote}>บันทึก</button>
-              </div>
-            </div>
-            {(data.notes||[]).length===0 ? <div className="empty-state"><div className="icon">📝</div><div>ยังไม่มี Note</div></div> :
-              (data.notes||[]).map(n => (
-                <div key={n.id} className="note-item">
-                  <div style={{whiteSpace:'pre-wrap'}}>{n.note}</div>
-                  <div style={{fontSize:12,color:'#94a3b8',marginTop:6}}>{n.created_by||'ไม่ระบุ'} • {n.created_at}</div>
-                </div>
-              ))
-            }
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// SUPPLIER LIST
-// ─────────────────────────────────────────────
-function SupplierList({ onSelect }) {
-  const [suppliers, setSuppliers] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:'', supplier_type:'', contact_person:'', phone:'', line_id:'', payment_method:'', credit_days:0, rating:3 });
-  const [toast, setToast] = useState(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    api.get(`/api/suppliers?search=${encodeURIComponent(search)}`).then(d => { setSuppliers(d); setLoading(false); });
-  }, [search]);
-
-  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
-
-  const save = () => {
-    if (!form.name) return setToast({msg:'กรุณากรอกชื่อ Supplier', type:'error'});
-    api.post('/api/suppliers', form).then(r => {
-      if (r.error) return setToast({msg:r.error, type:'error'});
-      setToast({msg:'เพิ่ม Supplier สำเร็จ', type:'success'});
-      setShowAdd(false);
-      setForm({ name:'', supplier_type:'', contact_person:'', phone:'', line_id:'', payment_method:'', credit_days:0, rating:3 });
-      load();
-    });
-  };
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="page-header">
-        <div className="page-title">🚛 Supplier</div>
-        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่ม Supplier</button>
-      </div>
-      <div className="card">
-        <div style={{marginBottom:16}}>
-          <div className="search-box">
-            <span className="search-icon">🔍</span>
-            <input className="input" style={{paddingLeft:36}} placeholder="ค้นหา Supplier..." value={search} onChange={e=>setSearch(e.target.value)}/>
-          </div>
-        </div>
-        {loading ? <Loading/> : suppliers.length===0 ? (
-          <div className="empty-state"><div className="icon">🚛</div><div>ไม่พบ Supplier</div></div>
-        ) : (
-          <div className="table-container">
-            <table>
-              <thead><tr><th>ชื่อ Supplier</th><th>ประเภท</th><th>ผู้ติดต่อ</th><th>เบอร์โทร</th><th>LINE</th><th>Credit</th><th>Rating</th><th>สถานะ</th></tr></thead>
-              <tbody>
-                {suppliers.map(s => (
-                  <tr key={s.id} onClick={()=>onSelect(s.id)}>
-                    <td style={{fontWeight:600,color:'#0F766E'}}>{s.name}</td>
-                    <td>{s.supplier_type||'-'}</td>
-                    <td>{s.contact_person||'-'}</td>
-                    <td>{s.phone||'-'}</td>
-                    <td>{s.line_id||'-'}</td>
-                    <td>{s.credit_days||0} วัน</td>
-                    <td><Stars value={s.rating||3}/></td>
-                    <td><span className={`badge badge-${s.status}`}>{s.status==='active'?'Active':'Inactive'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {showAdd && (
-        <Modal title="เพิ่ม Supplier ใหม่" onClose={()=>setShowAdd(false)} wide>
-          <div style={{display:'grid',gap:14}}>
-            <div><label className="label">ชื่อ Supplier *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">ประเภทสินค้า</label><input className="input" value={form.supplier_type} onChange={e=>setForm({...form,supplier_type:e.target.value})} placeholder="เช่น ผัก, ผลไม้, แห้ง"/></div>
-              <div><label className="label">ผู้ติดต่อ</label><input className="input" value={form.contact_person} onChange={e=>setForm({...form,contact_person:e.target.value})}/></div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
-              <div><label className="label">LINE ID</label><input className="input" value={form.line_id} onChange={e=>setForm({...form,line_id:e.target.value})}/></div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">วิธีชำระ</label><input className="input" value={form.payment_method} onChange={e=>setForm({...form,payment_method:e.target.value})} placeholder="เช่น โอน, เงินสด, เครดิต"/></div>
-              <div><label className="label">Credit (วัน)</label><input className="input" type="number" value={form.credit_days} onChange={e=>setForm({...form,credit_days:parseInt(e.target.value)||0})}/></div>
-            </div>
-            <div><label className="label">Rating เริ่มต้น</label><Stars value={form.rating} onChange={v=>setForm({...form,rating:v})}/></div>
-            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
-              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
-              <button className="btn btn-primary" onClick={save}>บันทึก</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// SUPPLIER DETAIL
-// ─────────────────────────────────────────────
-function SupplierDetail({ id, onBack, onNewTicket }) {
-  const [data, setData] = useState(null);
-  const [tab, setTab] = useState('info');
-  const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState({});
-  const [noteText, setNoteText] = useState('');
-  const [noteType, setNoteType] = useState('general');
-  const [noteBy, setNoteBy] = useState('');
-  const [toast, setToast] = useState(null);
-
-  const load = () => api.get(`/api/suppliers/${id}`).then(d => { setData(d); setForm(d); });
-  useEffect(() => { load(); }, [id]);
-  if (!data) return <Loading/>;
-
-  const saveInfo = () => {
-    api.put(`/api/suppliers/${id}`, form).then(r => {
-      if (r.error) return setToast({msg:r.error,type:'error'});
-      setData({...data,...r}); setEditMode(false);
-      setToast({msg:'บันทึกสำเร็จ', type:'success'});
-    });
-  };
-
-  const addNote = () => {
-    if (!noteText.trim()) return;
-    api.post(`/api/suppliers/${id}/notes`, { note:noteText, note_type:noteType, created_by:noteBy }).then(() => {
-      setNoteText(''); load();
-      setToast({msg:'เพิ่ม Note สำเร็จ', type:'success'});
-    });
-  };
-
-  const NOTE_TYPE_LABELS = { general:'ทั่วไป', negotiation:'การเจรจา', trade_term:'Trade Term', quality:'คุณภาพ' };
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Supplier</div>
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-          <div>
-            <h1 style={{fontSize:22,fontWeight:700,color:'#0f172a'}}>{data.name}</h1>
-            <div style={{color:'#64748b',fontSize:14,marginTop:4}}>{data.supplier_type||'-'}</div>
-            <div style={{marginTop:8}}><Stars value={data.rating||3}/></div>
-          </div>
-          <div>
-            <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>
-            <button className="btn btn-secondary btn-sm" style={{marginLeft:12}} onClick={()=>onNewTicket({related_type:'supplier',related_id:id,related_name:data.name})}>🎫 สร้าง Ticket</button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:'flex',gap:8,marginBottom:16}}>
-        {[['info','📋 ข้อมูล'],['notes','📝 การเจรจา/Note'],['tickets','🎫 Ticket']].map(([k,l])=>(
-          <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{l}</button>
-        ))}
-      </div>
-
-      <div className="card">
-        {tab==='info' && (
-          <div>
-            <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}>
-              {editMode
-                ? <><button className="btn btn-secondary btn-sm" style={{marginRight:8}} onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={saveInfo}>บันทึก</button></>
-                : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
-              }
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-              {[['ชื่อ Supplier','name'],['ประเภทสินค้า','supplier_type'],['ผู้ติดต่อ','contact_person'],['เบอร์โทร','phone'],['LINE ID','line_id'],['Email','email'],['วิธีชำระ','payment_method'],['Credit (วัน)','credit_days']].map(([l,k])=>(
-                <div key={k}>
-                  <label className="label">{l}</label>
-                  {editMode ? <input className="input" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/>
-                    : <div style={{padding:'8px 0',color:'#1e293b'}}>{data[k]||'-'}</div>}
-                </div>
-              ))}
-              <div>
-                <label className="label">Rating</label>
-                {editMode ? <Stars value={form.rating||3} onChange={v=>setForm({...form,rating:v})}/> : <Stars value={data.rating||3}/>}
-              </div>
-              <div>
-                <label className="label">สถานะ</label>
-                {editMode ? (
-                  <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
-                    <option value="active">Active</option><option value="inactive">Inactive</option>
-                  </select>
-                ) : <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab==='notes' && (
-          <div>
-            <div style={{background:'#f0fdf4',borderRadius:10,padding:16,marginBottom:16}}>
-              <div style={{fontWeight:600,marginBottom:10,fontSize:14}}>📝 บันทึกการเจรจา / Note</div>
-              <textarea className="input" placeholder="บันทึกผลการเจรจา, trade term, ข้อตกลง..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
-              <div style={{display:'flex',gap:10,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
-                <select className="input" style={{flex:'0 0 160px'}} value={noteType} onChange={e=>setNoteType(e.target.value)}>
-                  {Object.entries(NOTE_TYPE_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
-                </select>
-                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={noteBy} onChange={e=>setNoteBy(e.target.value)}/>
-                <button className="btn btn-primary" onClick={addNote}>บันทึก</button>
-              </div>
-            </div>
-            {(data.notes||[]).length===0 ? <div className="empty-state"><div className="icon">📝</div><div>ยังไม่มี Note</div></div> :
-              (data.notes||[]).map(n => (
-                <div key={n.id} className="note-item">
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                    <span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:4,padding:'2px 8px',fontSize:11}}>{NOTE_TYPE_LABELS[n.note_type]||n.note_type}</span>
-                    <span style={{fontSize:12,color:'#94a3b8'}}>{n.created_by||'ไม่ระบุ'} • {n.created_at}</span>
-                  </div>
-                  <div style={{whiteSpace:'pre-wrap'}}>{n.note}</div>
-                </div>
-              ))
-            }
-          </div>
-        )}
-
-        {tab==='tickets' && (
-          <div>
-            {(data.tickets||[]).length===0 ? <div className="empty-state"><div className="icon">🎫</div><div>ไม่มี Ticket</div></div> :
-              (data.tickets||[]).map(t => (
-                <div key={t.id} className={`note-item priority-${t.priority}`} style={{cursor:'pointer'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                    <span style={{fontWeight:600}}>{t.ticket_no} — {t.title}</span>
-                    <span className={`badge badge-${t.status}`}>{STATUS_LABELS[t.status]}</span>
-                  </div>
-                  <div style={{fontSize:12,color:'#64748b'}}>{t.assigned_department||'-'} • {t.assigned_employee_name||'-'} • {t.created_at}</div>
-                </div>
-              ))
-            }
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// TICKET LIST
-// ─────────────────────────────────────────────
-function TicketList({ onSelect, onNew }) {
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterDept, setFilterDept] = useState('');
-  const [search, setSearch] = useState('');
-  const [toast, setToast] = useState(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (filterStatus) params.set('status', filterStatus);
-    if (filterDept) params.set('department', filterDept);
-    if (search) params.set('search', search);
-    api.get(`/api/tickets?${params}`).then(d => { setTickets(d); setLoading(false); });
-  }, [filterStatus, filterDept, search]);
-
-  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="page-header">
-        <div className="page-title">🎫 Ticket / Case</div>
-        <button className="btn btn-primary" onClick={onNew}>+ สร้าง Ticket</button>
-      </div>
-
-      {/* Filters */}
-      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
-        <div className="search-box" style={{flex:'1 1 200px'}}>
-          <span className="search-icon">🔍</span>
-          <input className="input" style={{paddingLeft:36}} placeholder="ค้นหา Ticket..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        </div>
-        <select className="input" style={{flex:'0 0 160px'}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
-          <option value="">ทุกสถานะ</option>
-          {STATUSES.map(s=><option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-        </select>
-        <select className="input" style={{flex:'0 0 200px'}} value={filterDept} onChange={e=>setFilterDept(e.target.value)}>
-          <option value="">ทุกทีม</option>
-          {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-        </select>
-      </div>
-
-      <div className="card">
-        {loading ? <Loading/> : tickets.length===0 ? (
-          <div className="empty-state"><div className="icon">🎫</div><div>ไม่พบ Ticket</div></div>
-        ) : (
-          <div className="table-container">
-            <table>
-              <thead><tr><th>Ticket No.</th><th>หัวข้อ</th><th>ประเภท</th><th>เกี่ยวกับ</th><th>ทีม</th><th>ผู้รับผิดชอบ</th><th>ความเร่งด่วน</th><th>สถานะ</th><th>วันที่</th></tr></thead>
-              <tbody>
-                {tickets.map(t => (
-                  <tr key={t.id} onClick={()=>onSelect(t.id)} className={`priority-${t.priority}`}>
-                    <td style={{fontWeight:600,color:'#0F766E',whiteSpace:'nowrap'}}>{t.ticket_no}</td>
-                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</td>
-                    <td style={{fontSize:12}}>{TICKET_TYPE_LABELS[t.ticket_type]||t.ticket_type}</td>
-                    <td style={{fontSize:12}}>{t.related_name||'-'}</td>
-                    <td style={{fontSize:12}}>{t.assigned_department||'-'}</td>
-                    <td style={{fontSize:12}}>{t.assigned_employee_name||'-'}</td>
-                    <td><span className={`badge badge-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span></td>
-                    <td><span className={`badge badge-${t.status}`}>{STATUS_LABELS[t.status]}</span></td>
-                    <td style={{fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>{fmt.date(t.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// TICKET DETAIL
-// ─────────────────────────────────────────────
-function TicketDetail({ id, onBack }) {
-  const [data, setData] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState({});
-  const [comment, setComment] = useState('');
-  const [commentBy, setCommentBy] = useState('');
-  const [employees, setEmployees] = useState([]);
-  const [toast, setToast] = useState(null);
-
-  const load = () => api.get(`/api/tickets/${id}`).then(d => { setData(d); setForm(d); });
-  useEffect(() => { load(); api.get('/api/employees').then(setEmployees); }, [id]);
-  if (!data) return <Loading/>;
-
-  const deptEmps = employees.filter(e => !form.assigned_department || e.department === form.assigned_department);
-
-  const save = () => {
-    api.put(`/api/tickets/${id}`, form).then(r => {
-      if (r.error) return setToast({msg:r.error,type:'error'});
-      setData({...data,...r,comments:data.comments}); setEditMode(false);
-      setToast({msg:'อัปเดตสำเร็จ',type:'success'});
-    });
-  };
-
-  const addComment = () => {
-    if (!comment.trim()) return;
-    api.post(`/api/tickets/${id}/comments`, { comment, created_by:commentBy }).then(() => {
-      setComment(''); load();
-    });
-  };
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Ticket</div>
-
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
-          <div>
-            <div style={{fontSize:13,color:'#64748b',marginBottom:4}}>{data.ticket_no}</div>
-            {editMode
-              ? <input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} style={{fontSize:18,fontWeight:600}}/>
-              : <h1 style={{fontSize:20,fontWeight:700,color:'#0f172a'}}>{data.title}</h1>
-            }
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            <span className={`badge badge-${data.priority}`}>{PRIORITY_LABELS[data.priority]}</span>
-            <span className={`badge badge-${data.status}`}>{STATUS_LABELS[data.status]}</span>
-            {editMode
-              ? <><button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={save}>บันทึก</button></>
-              : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
-            }
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
-        <div>
-          <div className="card" style={{marginBottom:16}}>
-            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>รายละเอียด</div>
-            {editMode
-              ? <textarea className="input" style={{minHeight:100}} value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/>
-              : <div style={{whiteSpace:'pre-wrap',color:'#374151',lineHeight:1.7}}>{data.description||'ไม่มีรายละเอียด'}</div>
-            }
-          </div>
-
-          <div className="card">
-            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>💬 ความคืบหน้า / Comments ({(data.comments||[]).length})</div>
-            {(data.comments||[]).length===0 ? <div style={{color:'#94a3b8',fontSize:13,marginBottom:16}}>ยังไม่มี comment</div> :
-              (data.comments||[]).map(c => (
-                <div key={c.id} className="comment-item">
-                  <div style={{whiteSpace:'pre-wrap'}}>{c.comment}</div>
-                  <div style={{fontSize:12,color:'#94a3b8',marginTop:6}}>{c.created_by||'ไม่ระบุ'} • {c.created_at}</div>
-                </div>
-              ))
-            }
-            <div style={{background:'#f8fafc',borderRadius:10,padding:14,marginTop:12}}>
-              <textarea className="input" placeholder="เพิ่มความคืบหน้า หรือ comment..." value={comment} onChange={e=>setComment(e.target.value)}/>
-              <div style={{display:'flex',gap:10,marginTop:8,alignItems:'center'}}>
-                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={commentBy} onChange={e=>setCommentBy(e.target.value)}/>
-                <button className="btn btn-primary" onClick={addComment}>ส่ง</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card" style={{alignSelf:'start'}}>
-          <div style={{fontWeight:600,marginBottom:14,fontSize:15}}>📌 ข้อมูล Ticket</div>
-          <div style={{display:'grid',gap:14}}>
-            <div>
-              <label className="label">สถานะ</label>
-              {editMode ? (
-                <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
-                  {STATUSES.map(s=><option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                </select>
-              ) : <span className={`badge badge-${data.status}`}>{STATUS_LABELS[data.status]}</span>}
-            </div>
-            <div>
-              <label className="label">ความเร่งด่วน</label>
-              {editMode ? (
-                <select className="input" value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>
-                  {PRIORITIES.map(p=><option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-                </select>
-              ) : <span className={`badge badge-${data.priority}`}>{PRIORITY_LABELS[data.priority]}</span>}
-            </div>
-            <div>
-              <label className="label">ประเภท</label>
-              {editMode ? (
-                <select className="input" value={form.ticket_type} onChange={e=>setForm({...form,ticket_type:e.target.value})}>
-                  {TICKET_TYPES.map(t=><option key={t} value={t}>{TICKET_TYPE_LABELS[t]}</option>)}
-                </select>
-              ) : <div style={{color:'#374151'}}>{TICKET_TYPE_LABELS[data.ticket_type]||data.ticket_type}</div>}
-            </div>
-            <div>
-              <label className="label">เกี่ยวกับ</label>
-              <div style={{color:'#374151'}}>{data.related_type==='customer'?'🏪':'🚛'} {data.related_name||'-'}</div>
-            </div>
-            <div>
-              <label className="label">ทีมรับผิดชอบ</label>
-              {editMode ? (
-                <select className="input" value={form.assigned_department||''} onChange={e=>setForm({...form,assigned_department:e.target.value,assigned_employee_id:null,assigned_employee_name:''})}>
-                  <option value="">เลือกทีม</option>
-                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-                </select>
-              ) : <div style={{color:'#374151'}}>{data.assigned_department||'-'}</div>}
-            </div>
-            <div>
-              <label className="label">ผู้รับผิดชอบ</label>
-              {editMode ? (
-                <select className="input" value={form.assigned_employee_id||''} onChange={e=>{
-                  const emp = employees.find(x=>x.id==e.target.value);
-                  setForm({...form,assigned_employee_id:e.target.value,assigned_employee_name:emp?emp.name:''});
-                }}>
-                  <option value="">เลือกพนักงาน</option>
-                  {deptEmps.map(e=><option key={e.id} value={e.id}>{e.name} ({e.team||e.department})</option>)}
-                </select>
-              ) : <div style={{color:'#374151'}}>{data.assigned_employee_name||'-'}</div>}
-            </div>
-            <div>
-              <label className="label">สร้างโดย</label>
-              <div style={{color:'#374151'}}>{data.created_by||'-'}</div>
-            </div>
-            <div>
-              <label className="label">วันที่สร้าง</label>
-              <div style={{color:'#374151'}}>{fmt.date(data.created_at)}</div>
-            </div>
-            {data.resolved_at && <div>
-              <label className="label">วันที่แก้ไขแล้ว</label>
-              <div style={{color:'#059669'}}>{fmt.date(data.resolved_at)}</div>
-            </div>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// NEW TICKET
-// ─────────────────────────────────────────────
-function NewTicket({ onBack, prefill }) {
-  const [form, setForm] = useState({
-    title:'', description:'', ticket_type:'general', priority:'medium',
-    related_type: prefill?.related_type||'', related_id: prefill?.related_id||'',
-    related_name: prefill?.related_name||'', assigned_department:'',
-    assigned_employee_id:'', assigned_employee_name:'', created_by:''
-  });
-  const [employees, setEmployees] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [toast, setToast] = useState(null);
-
-  useEffect(() => {
-    api.get('/api/employees').then(setEmployees);
-    api.get('/api/customers').then(setCustomers);
-    api.get('/api/suppliers').then(setSuppliers);
-  }, []);
-
-  const deptEmps = employees.filter(e => !form.assigned_department || e.department === form.assigned_department);
-
-  const submit = () => {
-    if (!form.title.trim()) return setToast({msg:'กรุณากรอกหัวข้อ',type:'error'});
-    api.post('/api/tickets', form).then(r => {
-      if (r.error) return setToast({msg:r.error,type:'error'});
-      setToast({msg:`สร้าง Ticket ${r.ticket_no} สำเร็จ`,type:'success'});
-      setTimeout(onBack, 1200);
-    });
-  };
-
-  const relatedList = form.related_type==='customer' ? customers : form.related_type==='supplier' ? suppliers : [];
-
-  return (
-    <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Ticket</div>
-      <div className="page-title" style={{marginBottom:16}}>🎫 สร้าง Ticket ใหม่</div>
-      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
-        <div className="card">
-          <div style={{display:'grid',gap:14}}>
-            <div><label className="label">หัวข้อ Ticket *</label><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="อธิบายปัญหาหรือเรื่องที่ต้องดำเนินการ"/></div>
-            <div>
-              <label className="label">รายละเอียด</label>
-              <textarea className="input" style={{minHeight:120}} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="อธิบายรายละเอียดเพิ่มเติม เช่น สินค้าที่มีปัญหา, จำนวน, สาเหตุ..."/>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label className="label">ประเภท Ticket</label>
-                <select className="input" value={form.ticket_type} onChange={e=>setForm({...form,ticket_type:e.target.value})}>
-                  {TICKET_TYPES.map(t=><option key={t} value={t}>{TICKET_TYPE_LABELS[t]}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">ความเร่งด่วน</label>
-                <select className="input" value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>
-                  {PRIORITIES.map(p=><option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-                </select>
-              </div>
-            </div>
-            <div><label className="label">สร้างโดย</label><input className="input" value={form.created_by} onChange={e=>setForm({...form,created_by:e.target.value})} placeholder="ชื่อผู้สร้าง ticket"/></div>
-          </div>
-        </div>
-
-        <div style={{display:'flex',flexDirection:'column',gap:16}}>
-          <div className="card">
-            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>🔗 เชื่อมโยงกับ</div>
-            <div style={{display:'grid',gap:12}}>
-              <div>
-                <label className="label">ประเภท</label>
-                <select className="input" value={form.related_type} onChange={e=>setForm({...form,related_type:e.target.value,related_id:'',related_name:''})}>
-                  <option value="">ไม่ระบุ</option>
-                  <option value="customer">ลูกค้า</option>
-                  <option value="supplier">Supplier</option>
-                </select>
-              </div>
-              {form.related_type && (
-                <div>
-                  <label className="label">{form.related_type==='customer'?'ลูกค้า':'Supplier'}</label>
-                  <select className="input" value={form.related_id} onChange={e=>{
-                    const item = relatedList.find(x=>x.id==e.target.value);
-                    setForm({...form,related_id:e.target.value,related_name:item?item.name:''});
-                  }}>
-                    <option value="">เลือก...</option>
-                    {relatedList.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="card">
-            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>👥 มอบหมาย</div>
-            <div style={{display:'grid',gap:12}}>
-              <div>
-                <label className="label">ทีมรับผิดชอบ</label>
-                <select className="input" value={form.assigned_department} onChange={e=>setForm({...form,assigned_department:e.target.value,assigned_employee_id:'',assigned_employee_name:''})}>
-                  <option value="">เลือกทีม</option>
-                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">ผู้รับผิดชอบ</label>
-                <select className="input" value={form.assigned_employee_id} onChange={e=>{
-                  const emp = employees.find(x=>x.id==e.target.value);
-                  setForm({...form,assigned_employee_id:e.target.value,assigned_employee_name:emp?emp.name:''});
-                }}>
-                  <option value="">เลือกพนักงาน</option>
-                  {deptEmps.map(e=><option key={e.id} value={e.id}>{e.name} ({e.team||e.department})</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <button className="btn btn-primary" style={{padding:'12px'}} onClick={submit}>🎫 สร้าง Ticket</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
 // EMPLOYEES
-// ─────────────────────────────────────────────
-function EmployeeList() {
-  const [employees, setEmployees] = useState([]);
+// ══════════════════════════════════════════════════════════════════════════════
+function Employees() {
+  const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterDept, setFilterDept] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:'', employee_code:'', department:'', team:'', role:'', phone:'', email:'' });
-  const [toast, setToast] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const blank = {name:'',employee_code:'',department:'',team:'CX',role:'',phone:'',email:'',status:'active'};
+  const [form, setForm] = useState(blank);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    api.get(`/api/employees?department=${encodeURIComponent(filterDept)}`).then(d => { setEmployees(d); setLoading(false); });
-  }, [filterDept]);
+  const load = () => api('/api/employees').then(d=>{setList(d);setLoading(false);});
+  useEffect(()=>{load();},[]);
 
-  useEffect(() => { load(); }, [load]);
+  async function submit(e) {
+    e.preventDefault();
+    await api('/api/employees', {method:'POST', body:JSON.stringify(form)});
+    setShowForm(false); setForm(blank); load();
+  }
 
-  const save = () => {
-    if (!form.name) return setToast({msg:'กรุณากรอกชื่อ',type:'error'});
-    api.post('/api/employees', form).then(r => {
-      if (r.error) return setToast({msg:r.error,type:'error'});
-      setToast({msg:'เพิ่มพนักงานสำเร็จ',type:'success'});
-      setShowAdd(false);
-      setForm({ name:'', employee_code:'', department:'', team:'', role:'', phone:'', email:'' });
-      load();
-    });
-  };
+  const byTeam = TEAMS.slice(0,-1).map(t=>({team:t, emps:list.filter(e=>e.team===t)}));
 
-  const grouped = {};
-  employees.forEach(e => { const d=e.department||'ไม่ระบุ'; if(!grouped[d]) grouped[d]=[]; grouped[d].push(e); });
-
+  if (loading) return <Spinner/>;
   return (
     <div>
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
-      <div className="page-header">
-        <div className="page-title">👥 พนักงาน</div>
-        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่มพนักงาน</button>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold" style={{color:'var(--primary)'}}>พนักงาน</h1>
+        <button onClick={()=>setShowForm(true)} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium">+ เพิ่มพนักงาน</button>
       </div>
-      <div style={{marginBottom:16}}>
-        <select className="input" style={{maxWidth:220}} value={filterDept} onChange={e=>setFilterDept(e.target.value)}>
-          <option value="">ทุกแผนก</option>
-          {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-        </select>
+      <div className="space-y-4">
+        {byTeam.map(({team,emps})=>(
+          <div key={team} className="card overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 font-semibold text-green-800 flex justify-between">
+              <span>{team}</span><span className="text-gray-500">{emps.length} คน</span>
+            </div>
+            {emps.length ? (
+              <table className="w-full text-sm">
+                <tbody>
+                  {emps.map((e,i)=>(
+                    <tr key={e.id} className={i%2===0?'':'bg-gray-50'}>
+                      <td className="px-4 py-2 font-medium">{e.name}</td>
+                      <td className="px-4 py-2 text-gray-500 font-mono text-xs">{e.employee_code||'—'}</td>
+                      <td className="px-4 py-2 text-gray-500">{e.role||'—'}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{e.phone||'—'}</td>
+                      <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${e.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{e.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <div className="text-center py-4 text-gray-400 text-sm">ไม่มีพนักงาน</div>}
+          </div>
+        ))}
       </div>
-
-      {loading ? <Loading/> : employees.length===0 ? (
-        <div className="card"><div className="empty-state"><div className="icon">👥</div><div>ยังไม่มีข้อมูลพนักงาน</div></div></div>
-      ) : (
-        Object.entries(grouped).map(([dept, emps]) => (
-          <div key={dept} className="card" style={{marginBottom:16}}>
-            <div style={{fontWeight:700,fontSize:16,color:'#0f172a',marginBottom:12,paddingBottom:8,borderBottom:'2px solid #f0fdf4'}}>
-              🏢 {dept} <span style={{fontSize:13,fontWeight:400,color:'#64748b'}}>({emps.length} คน)</span>
+      {showForm && (
+        <Modal title="เพิ่มพนักงาน" onClose={()=>setShowForm(false)}>
+          <form onSubmit={submit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-sm font-medium text-gray-700">ชื่อ *</label>
+                <input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">รหัสพนักงาน</label>
+                <input value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">ทีม</label>
+                <select value={form.team} onChange={e=>setForm({...form,team:e.target.value})}>
+                  {TEAMS.slice(0,-1).map(t=><option key={t} value={t}>{t}</option>)}
+                </select></div>
+              <div><label className="text-sm font-medium text-gray-700">Role</label>
+                <input value={form.role} onChange={e=>setForm({...form,role:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">เบอร์โทร</label>
+                <input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+              <div><label className="text-sm font-medium text-gray-700">Email</label>
+                <input value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
-              {emps.map(e => (
-                <div key={e.id} style={{background:'#f8fafc',borderRadius:10,padding:14,border:'1px solid #e2e8f0'}}>
-                  <div style={{fontWeight:600,color:'#0f172a'}}>{e.name}</div>
-                  <div style={{fontSize:12,color:'#64748b',marginTop:2}}>{e.team||e.role||'-'}</div>
-                  {e.phone && <div style={{fontSize:13,marginTop:4}}>📞 {e.phone}</div>}
-                  {e.email && <div style={{fontSize:12,color:'#64748b'}}>{e.email}</div>}
-                </div>
-              ))}
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 rounded border text-sm">ยกเลิก</button>
+              <button type="submit" className="btn-primary px-4 py-2 rounded text-sm">บันทึก</button>
             </div>
-          </div>
-        ))
-      )}
-
-      {showAdd && (
-        <Modal title="เพิ่มพนักงาน" onClose={()=>setShowAdd(false)} wide>
-          <div style={{display:'grid',gap:14}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">ชื่อ-นามสกุล *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
-              <div><label className="label">รหัสพนักงาน</label><input className="input" value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label className="label">แผนก</label>
-                <select className="input" value={form.department} onChange={e=>setForm({...form,department:e.target.value,team:''})}>
-                  <option value="">เลือกแผนก</option>
-                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">ทีม</label>
-                <select className="input" value={form.team} onChange={e=>setForm({...form,team:e.target.value})}>
-                  <option value="">เลือกทีม</option>
-                  {(TEAMS[form.department]||[]).map(t=><option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">ตำแหน่ง</label><input className="input" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}/></div>
-              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
-            </div>
-            <div><label className="label">Email</label><input className="input" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
-            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
-              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
-              <button className="btn btn-primary" onClick={save}>บันทึก</button>
-            </div>
-          </div>
+          </form>
         </Modal>
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// IMPORT PAGE
-// ─────────────────────────────────────────────
-function ImportPage() {
-  const [file, setFile] = useState(null);
-  const [month, setMonth] = useState('JAN');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const fileRef = useRef();
+// ══════════════════════════════════════════════════════════════════════════════
+// CREATE TICKET
+// ══════════════════════════════════════════════════════════════════════════════
+function CreateTicket({preOutletId, onClose, onCreated, currentUser}) {
+  const [step, setStep] = useState(1);
+  const [outlets, setOutlets] = useState([]);
+  const [outletSearch, setOutletSearch] = useState('');
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [selectedInvoice, setSelectedInvoice] = useState('');
+  const [skus, setSkus] = useState([]);
+  const [selectedSku, setSelectedSku] = useState(null);
+  const [caseType, setCaseType] = useState('');
+  const [faultCategory, setFaultCategory] = useState('');
+  const [faultTeam, setFaultTeam] = useState('');
+  const [priority, setPriority] = useState('Medium');
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [workflows, setWorkflows] = useState({});
 
-  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  useEffect(()=>{
+    api('/api/outlets?q=').then(setOutlets);
+    api('/api/workflows').then(setWorkflows);
+    if (preOutletId) {
+      api(`/api/outlets/${preOutletId}`).then(o=>{
+        setSelectedOutlet(o);
+        setOutletSearch(o.name);
+        api(`/api/outlets/${preOutletId}/invoices`).then(setInvoices);
+        setStep(2);
+      });
+    }
+  },[preOutletId]);
 
-  const doImport = () => {
-    if (!file) return;
-    setLoading(true); setResult(null);
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('month', month);
-    api.upload('/api/import/erp', fd).then(r => {
-      setLoading(false);
-      setResult(r);
-    }).catch(e => { setLoading(false); setResult({error: e.toString()}); });
-  };
+  const filteredOutlets = outlets.filter(o=>
+    o.name.toLowerCase().includes(outletSearch.toLowerCase()) ||
+    (o.account_name||'').toLowerCase().includes(outletSearch.toLowerCase())
+  ).slice(0,20);
+
+  function selectOutlet(o) {
+    setSelectedOutlet(o);
+    setOutletSearch(o.name);
+    api(`/api/outlets/${o.id}/invoices`).then(setInvoices);
+    setStep(2);
+  }
+
+  function selectInvoice(inv) {
+    setSelectedInvoice(inv);
+    api(`/api/invoices/${inv}/skus`).then(setSkus);
+    setStep(3);
+  }
+
+  async function submit() {
+    if (!selectedSku||!caseType) return;
+    setSubmitting(true);
+    const res = await api('/api/tickets', {method:'POST', body:JSON.stringify({
+      outlet_id: selectedOutlet.id,
+      invoice_number: selectedInvoice,
+      sku_code: selectedSku.sku_code,
+      product_name: selectedSku.product_name,
+      case_type: caseType,
+      fault_category: faultCategory,
+      fault_team: faultTeam,
+      priority, description,
+      created_by: currentUser,
+    })});
+    setSubmitting(false);
+    onCreated(res.ticket_no, res.id);
+  }
+
+  const wf = workflows[caseType] || [];
 
   return (
-    <div>
-      <div className="page-title" style={{marginBottom:20}}>📥 Import ข้อมูลจาก ERP</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:16,fontSize:16}}>อัปโหลดไฟล์ ERP (.xlsx)</div>
-          <div style={{marginBottom:14}}>
-            <label className="label">เดือนของข้อมูล</label>
-            <select className="input" value={month} onChange={e=>setMonth(e.target.value)}>
-              {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
+    <Modal title="สร้าง Ticket ใหม่" onClose={onClose} wide>
+      {/* Steps indicator */}
+      <div className="flex gap-2 mb-5">
+        {['Outlet','Invoice','SKU','รายละเอียด'].map((l,i)=>(
+          <div key={i} className="flex items-center gap-1">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+              ${step>i+1?'bg-green-500 text-white':step===i+1?'bg-green-800 text-white':'bg-gray-200 text-gray-500'}`}>
+              {step>i+1?'✓':i+1}
+            </div>
+            <span className={`text-xs ${step===i+1?'font-semibold text-green-800':'text-gray-400'}`}>{l}</span>
+            {i<3&&<div className="w-4 h-0.5 bg-gray-300"/>}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 1: Outlet */}
+      {step>=1 && (
+        <div className="mb-4">
+          <label className="text-sm font-semibold text-gray-700 mb-1 block">1. เลือก Outlet</label>
+          <input value={outletSearch} onChange={e=>{setOutletSearch(e.target.value);setSelectedOutlet(null);}}
+            placeholder="ค้นหา Outlet หรือ Account..."/>
+          {!selectedOutlet && outletSearch && (
+            <div className="border rounded mt-1 max-h-40 overflow-y-auto bg-white shadow">
+              {filteredOutlets.map(o=>(
+                <div key={o.id} className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm"
+                  onClick={()=>selectOutlet(o)}>
+                  <span className="font-medium">{o.name}</span>
+                  <span className="text-gray-400 ml-2 text-xs">{o.account_name}</span>
+                </div>
+              ))}
+              {!filteredOutlets.length&&<div className="px-3 py-2 text-gray-400 text-sm">ไม่พบ</div>}
+            </div>
+          )}
+          {selectedOutlet && <div className="text-xs text-green-700 mt-1">✓ {selectedOutlet.name} ({selectedOutlet.account_name})</div>}
+        </div>
+      )}
+
+      {/* Step 2: Invoice */}
+      {step>=2 && (
+        <div className="mb-4">
+          <label className="text-sm font-semibold text-gray-700 mb-1 block">2. เลือก Invoice</label>
+          <select value={selectedInvoice} onChange={e=>e.target.value&&selectInvoice(e.target.value)}>
+            <option value="">-- เลือก Invoice --</option>
+            {invoices.map(inv=>(
+              <option key={inv.invoice_number} value={inv.invoice_number}>
+                {inv.invoice_number} ({fmt(inv.doc_date)}) — {inv.sku_count} SKU
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Step 3: SKU */}
+      {step>=3 && skus.length>0 && (
+        <div className="mb-4">
+          <label className="text-sm font-semibold text-gray-700 mb-1 block">3. เลือก SKU ที่มีปัญหา</label>
+          <div className="border rounded overflow-hidden max-h-48 overflow-y-auto">
+            {skus.map(s=>(
+              <div key={s.sku_code} className={`px-3 py-2 cursor-pointer flex justify-between text-sm
+                ${selectedSku?.sku_code===s.sku_code?'bg-green-100 border-l-4 border-green-600':'hover:bg-gray-50'}`}
+                onClick={()=>{setSelectedSku(s);setStep(4);}}>
+                <span>{s.product_name}</span>
+                <span className="text-gray-400 font-mono text-xs">{s.sku_code}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Details */}
+      {step>=4 && selectedSku && (
+        <div className="space-y-3">
+          <div className="bg-green-50 rounded p-3 text-sm">
+            <span className="font-medium">SKU:</span> {selectedSku.product_name} ({selectedSku.sku_code})
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-gray-700 mb-1 block">4. Case Type *</label>
+            <select value={caseType} onChange={e=>setCaseType(e.target.value)}>
+              <option value="">-- เลือก Case Type --</option>
+              {CASE_TYPES.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div
-            style={{border:'2px dashed #cbd5e1',borderRadius:12,padding:40,textAlign:'center',cursor:'pointer',marginBottom:16,background:file?'#f0fdf4':'#fafafa'}}
-            onClick={()=>fileRef.current.click()}
-          >
-            <div style={{fontSize:40,marginBottom:8}}>{file?'✅':'📂'}</div>
-            <div style={{color:'#64748b',fontSize:14}}>
-              {file ? file.name : 'คลิกเพื่อเลือกไฟล์ .xlsx จาก ERP'}
-            </div>
-            {file && <div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{(file.size/1024).toFixed(0)} KB</div>}
-          </div>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={e=>setFile(e.target.files[0])}/>
-          <button className="btn btn-primary" style={{width:'100%',padding:12}} onClick={doImport} disabled={!file||loading}>
-            {loading ? '⏳ กำลัง Import...' : '📥 Import ข้อมูล'}
-          </button>
-        </div>
-
-        <div className="card">
-          <div style={{fontWeight:600,marginBottom:16,fontSize:16}}>📋 รายละเอียดการ Import</div>
-          <div style={{fontSize:14,color:'#475569',lineHeight:2,marginBottom:16}}>
-            <div>✅ รองรับไฟล์: .xlsx จาก ERP รายเดือน</div>
-            <div>✅ Sheet ที่ค้นหา: Table_Invoice_Archive</div>
-            <div>✅ ข้อมูลที่ Import: คำสั่งซื้อ, ลูกค้า, สินค้า, claim</div>
-            <div>✅ ป้องกันข้อมูลซ้ำ: ตรวจสอบด้วย ERP ID + เดือน</div>
-            <div>✅ สร้างลูกค้าใหม่อัตโนมัติ: ถ้าชื่อยังไม่มีในระบบ</div>
-          </div>
-          {result && (
-            <div style={{borderRadius:10,padding:16,background:result.error?'#fef2f2':'#f0fdf4',border:`1px solid ${result.error?'#fecaca':'#bbf7d0'}`}}>
-              {result.error
-                ? <div style={{color:'#dc2626'}}>❌ เกิดข้อผิดพลาด: {result.error}</div>
-                : <div>
-                    <div style={{color:'#059669',fontWeight:600,fontSize:15,marginBottom:8}}>✅ Import สำเร็จ!</div>
-                    <div>นำเข้า: <strong>{result.imported}</strong> รายการ</div>
-                    <div style={{color:'#64748b',fontSize:13}}>ข้ามซ้ำ: {result.skipped} รายการ</div>
-                  </div>
-              }
+          {caseType && wf.length>0 && (
+            <div className="bg-blue-50 p-3 rounded">
+              <div className="text-xs font-semibold text-blue-700 mb-2">Workflow Preview:</div>
+              <div className="flex flex-wrap gap-1 items-center">
+                {wf.map((s,i)=>(
+                  <React.Fragment key={i}>
+                    {i>0&&<span className="text-gray-400 text-xs">→</span>}
+                    <span className="bg-white border border-blue-200 rounded px-2 py-0.5 text-xs">{s.team}: {s.label}</span>
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
           )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-1 block">Root Cause</label>
+              <select value={faultCategory} onChange={e=>setFaultCategory(e.target.value)}>
+                <option value="">-- เลือก --</option>
+                {ROOT_CAUSES.map(r=><option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-1 block">Fault Team</label>
+              <select value={faultTeam} onChange={e=>setFaultTeam(e.target.value)}>
+                <option value="">-- เลือก --</option>
+                {FAULT_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-gray-700 mb-1 block">Priority</label>
+            <select value={priority} onChange={e=>setPriority(e.target.value)}>
+              {PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-gray-700 mb-1 block">รายละเอียด</label>
+            <textarea rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder="อธิบายปัญหา..."/>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={onClose} className="px-4 py-2 rounded border text-sm">ยกเลิก</button>
+            <button onClick={submit} disabled={!caseType||submitting}
+              className="btn-primary px-5 py-2 rounded text-sm disabled:opacity-50">
+              {submitting?'กำลังสร้าง...':'สร้าง Ticket'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TICKET LIST
+// ══════════════════════════════════════════════════════════════════════════════
+function TicketList({onNavigate, currentTeam, onCreateTicket}) {
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+
+  const load = () => {
+    const qs = new URLSearchParams();
+    if (currentTeam && currentTeam!=='Management') qs.set('team',currentTeam);
+    if (statusFilter) qs.set('status',statusFilter);
+    api(`/api/tickets?${qs}`).then(d=>{setTickets(d);setLoading(false);});
+  };
+  useEffect(()=>{setLoading(true);load();},[currentTeam,statusFilter]);
+
+  const filtered = tickets.filter(t=>
+    !search ||
+    t.ticket_no.toLowerCase().includes(search.toLowerCase()) ||
+    (t.outlet_name||'').toLowerCase().includes(search.toLowerCase()) ||
+    (t.product_name||'').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold" style={{color:'var(--primary)'}}>
+          Tickets {currentTeam && currentTeam!=='Management' && <span className="text-lg text-gray-500">— {currentTeam}</span>}
+        </h1>
+        <button onClick={onCreateTicket} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium">+ สร้าง Ticket</button>
+      </div>
+      <div className="card p-4 mb-4 flex gap-3 flex-wrap">
+        <input className="flex-1" placeholder="ค้นหา ticket no / outlet / สินค้า..." value={search} onChange={e=>setSearch(e.target.value)} style={{minWidth:'200px'}}/>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{width:'150px'}}>
+          <option value="">ทุก status</option>
+          {Object.entries(STATUS_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      {loading ? <Spinner/> : (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-gray-600">Ticket</th>
+              <th className="px-4 py-3 text-gray-600">Outlet</th>
+              <th className="px-4 py-3 text-gray-600">สินค้า</th>
+              <th className="px-4 py-3 text-gray-600">Case Type</th>
+              <th className="px-4 py-3 text-gray-600">Priority</th>
+              <th className="px-4 py-3 text-gray-600">Status</th>
+              <th className="px-4 py-3 text-gray-600">ทีมปัจจุบัน</th>
+              <th className="px-4 py-3 text-gray-600">วันที่</th>
+            </tr></thead>
+            <tbody>
+              {filtered.map((t,i)=>(
+                <tr key={t.id} className={`cursor-pointer hover:bg-green-50 ${i%2===0?'':'bg-gray-50'}`}
+                  onClick={()=>onNavigate('ticket-detail',{id:t.id})}>
+                  <td className="px-4 py-3 font-mono font-medium text-green-800">{t.ticket_no}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{t.outlet_name}</div>
+                    <div className="text-xs text-gray-400">{t.account_name}</div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{t.product_name||'—'}</td>
+                  <td className="px-4 py-3"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">{t.case_type}</span></td>
+                  <td className="px-4 py-3"><PriorityBadge priority={t.priority}/></td>
+                  <td className="px-4 py-3"><StatusBadge status={t.status}/></td>
+                  <td className="px-4 py-3 text-gray-600">{t.current_team}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">{fmt(t.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!filtered.length&&<div className="text-center py-8 text-gray-400">ไม่มี Ticket</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TICKET DETAIL
+// ══════════════════════════════════════════════════════════════════════════════
+function TicketDetail({id, onNavigate, currentUser, currentTeam}) {
+  const [ticket, setTicket] = useState(null);
+  const [log, setLog] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [advanceNote, setAdvanceNote] = useState('');
+  const [advanceBranch, setAdvanceBranch] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [workflows, setWorkflows] = useState({});
+  const [tab, setTab] = useState('detail');
+
+  const load = () => Promise.all([
+    api(`/api/tickets/${id}`),
+    api(`/api/tickets/${id}/log`),
+    api(`/api/tickets/${id}/comments`),
+    api('/api/workflows'),
+    api('/api/employees'),
+  ]).then(([t,l,c,w,e])=>{setTicket(t);setLog(l);setComments(c);setWorkflows(w);setEmployees(e);});
+
+  useEffect(()=>{load();},[id]);
+
+  async function addComment() {
+    if (!newComment.trim()) return;
+    await api(`/api/tickets/${id}/comments`, {method:'POST', body:JSON.stringify({comment:newComment,created_by:currentUser})});
+    setNewComment(''); api(`/api/tickets/${id}/comments`).then(setComments);
+  }
+
+  async function acknowledge() {
+    await api(`/api/tickets/${id}/acknowledge`, {method:'POST', body:JSON.stringify({employee_id:+selectedEmployee||null,created_by:currentUser})});
+    load();
+  }
+
+  async function advance(action) {
+    const wf = workflows[ticket.case_type]||[];
+    const needsBranch = wf[ticket.workflow_step]?.branches;
+    if (needsBranch && !advanceBranch) { alert('กรุณาเลือกแนวทาง'); return; }
+    await api(`/api/tickets/${id}/advance`, {method:'POST', body:JSON.stringify({
+      action, note:advanceNote, created_by:currentUser,
+      branch: advanceBranch||ticket.workflow_branch,
+      employee_id:+selectedEmployee||null
+    })});
+    setAdvanceNote(''); setAdvanceBranch('');
+    load();
+  }
+
+  async function closeTicket() {
+    await api(`/api/tickets/${id}/close`, {method:'POST', body:JSON.stringify({created_by:currentUser})});
+    load();
+  }
+
+  if (!ticket) return <Spinner/>;
+
+  const wf = workflows[ticket.case_type]||[];
+  const currentStep = wf[ticket.workflow_step];
+  const branches = currentStep?.branches || [];
+  const isMyTeam = currentTeam === ticket.current_team || currentTeam === 'Management';
+  const isClosed = ticket.status==='closed'||ticket.status==='resolved';
+  const isCX = ticket.current_team==='CX';
+  const teamEmps = employees.filter(e=>e.team===ticket.current_team && e.status==='active');
+
+  return (
+    <div>
+      <button onClick={()=>onNavigate('tickets')} className="text-sm text-green-700 mb-3">← กลับ Tickets</button>
+      {/* Header */}
+      <div className="card p-5 mb-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold font-mono" style={{color:'var(--primary)'}}>{ticket.ticket_no}</h1>
+              <StatusBadge status={ticket.status}/>
+              <PriorityBadge priority={ticket.priority}/>
+            </div>
+            <div className="text-gray-600">{ticket.outlet_name} <span className="text-gray-400">({ticket.account_name})</span></div>
+            <div className="text-gray-600 text-sm mt-1">Invoice: <span className="font-mono">{ticket.invoice_number||'—'}</span> | SKU: {ticket.product_name} ({ticket.sku_code})</div>
+            <div className="text-gray-500 text-sm">Case: <span className="font-medium text-blue-700">{ticket.case_type}</span> | Fault: {ticket.fault_team} | Root Cause: {ticket.fault_category}</div>
+            <div className="text-gray-400 text-xs mt-1">เปิดโดย {ticket.created_by} เมื่อ {fmtDT(ticket.created_at)}</div>
+          </div>
+          <div className="text-right text-sm">
+            <div className="font-medium text-gray-700">ทีมปัจจุบัน</div>
+            <div className="text-xl font-bold" style={{color:'var(--primary)'}}>{ticket.current_team}</div>
+            {ticket.assigned_employee_name && <div className="text-gray-500 text-xs">รับผิดชอบ: {ticket.assigned_employee_name}</div>}
+          </div>
+        </div>
+        {/* Workflow */}
+        {wf.length>0 && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="text-xs text-gray-500 mb-2">Workflow Progress:</div>
+            <WorkflowTimeline caseType={ticket.case_type} currentStep={ticket.workflow_step} branch={ticket.workflow_branch} workflows={workflows}/>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-4 border-b mb-4">
+        {[['detail','รายละเอียด'],['log','Log'],['comments','Comments']].map(([k,l])=>(
+          <div key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}
+            {k==='comments'&&comments.length>0&&<span className="ml-1 badge">{comments.length}</span>}
+          </div>
+        ))}
+      </div>
+
+      {tab==='detail' && (
+        <div className="space-y-4">
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-2">รายละเอียด</h3>
+            <p className="text-gray-700 whitespace-pre-wrap">{ticket.description||'—'}</p>
+          </div>
+          {/* Action Panel */}
+          {isMyTeam && !isClosed && (
+            <div className="card p-4 border-2 border-green-200">
+              <h3 className="font-semibold text-green-800 mb-3">ดำเนินการ</h3>
+              {/* Acknowledge */}
+              {ticket.status==='open' && (
+                <div className="mb-3 flex gap-2 items-center">
+                  <select value={selectedEmployee} onChange={e=>setSelectedEmployee(e.target.value)} style={{width:'200px'}}>
+                    <option value="">-- เลือกพนักงาน --</option>
+                    {teamEmps.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                  <button onClick={acknowledge} className="btn-primary px-3 py-1.5 rounded text-sm">Acknowledge</button>
+                </div>
+              )}
+              {/* Branch selection */}
+              {branches.length>0 && (
+                <div className="mb-3">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">เลือกแนวทาง:</label>
+                  <div className="flex gap-2">
+                    {branches.map(b=>(
+                      <button key={b} onClick={()=>setAdvanceBranch(b)}
+                        className={`px-3 py-1.5 rounded border text-sm ${advanceBranch===b?'border-green-600 bg-green-50 text-green-700':'border-gray-300'}`}>
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="mb-3">
+                <textarea rows={2} value={advanceNote} onChange={e=>setAdvanceNote(e.target.value)} placeholder="Note (optional)..."/>
+              </div>
+              <div className="flex gap-2">
+                {!isCX && <button onClick={()=>advance('ดำเนินการแล้ว')} className="btn-primary px-4 py-2 rounded text-sm">ส่งต่อ →</button>}
+                {isCX && ticket.status!=='open' && (
+                  <button onClick={closeTicket} className="bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700">ปิดเคส</button>
+                )}
+                {isCX && ticket.status==='open' && <button onClick={()=>advance('รับเรื่องแล้ว')} className="btn-primary px-4 py-2 rounded text-sm">รับเรื่อง + ส่งต่อ →</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==='log' && (
+        <div className="space-y-2">
+          {log.map(l=>(
+            <div key={l.id} className="card p-3 flex gap-3">
+              <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0"/>
+              <div className="flex-1">
+                <div className="text-sm"><span className="font-medium">{l.action}</span>
+                  {l.from_team&&<span className="text-gray-400 text-xs ml-2">{l.from_team} → {l.to_team}</span>}
+                </div>
+                {l.note&&<div className="text-gray-500 text-xs mt-0.5">{l.note}</div>}
+                <div className="text-gray-400 text-xs mt-0.5">{fmtDT(l.created_at)} {l.employee_name&&`— ${l.employee_name}`} {l.created_by&&`(${l.created_by})`}</div>
+              </div>
+            </div>
+          ))}
+          {!log.length&&<div className="text-center py-6 text-gray-400">ไม่มี Log</div>}
+        </div>
+      )}
+
+      {tab==='comments' && (
+        <div className="space-y-3">
+          <div className="card p-4">
+            <textarea rows={3} value={newComment} onChange={e=>setNewComment(e.target.value)} placeholder="เพิ่ม comment..."/>
+            <div className="flex justify-end mt-2">
+              <button onClick={addComment} className="btn-primary px-3 py-1 rounded text-sm">ส่ง</button>
+            </div>
+          </div>
+          {comments.map(c=>(
+            <div key={c.id} className="card p-3">
+              <div className="text-sm text-gray-500 mb-1">{c.created_by} — {fmtDT(c.created_at)}</div>
+              <div className="text-gray-800 whitespace-pre-wrap">{c.comment}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ERP IMPORT
+// ══════════════════════════════════════════════════════════════════════════════
+function ERPImport() {
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function upload(e) {
+    e.preventDefault();
+    if (!file) return;
+    setLoading(true); setResult(null); setError('');
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/import/erp', {method:'POST', body:fd});
+      const data = await res.json();
+      if (!res.ok) setError(data.error||'เกิดข้อผิดพลาด');
+      else setResult(data);
+    } catch(err) { setError(err.message); }
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-4" style={{color:'var(--primary)'}}>Import ERP Data</h1>
+      <div className="card p-6 max-w-lg">
+        <div className="mb-4 text-sm text-gray-600 space-y-1">
+          <div>• รองรับไฟล์ <code>.xlsx</code> export จาก ERP</div>
+          <div>• Sheet name: <code>sheet1</code></div>
+          <div>• Map columns by name (ไม่ใช่ position)</div>
+          <div>• ตรวจ duplicate ด้วย <code>order_item_id</code></div>
+          <div>• Auto-create Account และ Outlet ที่ยังไม่มี</div>
+        </div>
+        <form onSubmit={upload} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">เลือกไฟล์ ERP (.xlsx)</label>
+            <input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files[0])}/>
+          </div>
+          <button type="submit" disabled={!file||loading} className="btn-primary w-full py-2 rounded disabled:opacity-50">
+            {loading ? 'กำลัง Import...' : 'Import'}
+          </button>
+        </form>
+        {error && <div className="mt-4 p-3 bg-red-50 text-red-700 rounded text-sm">{error}</div>}
+        {result && (
+          <div className="mt-4 p-4 bg-green-50 rounded space-y-1">
+            <div className="font-semibold text-green-800">Import สำเร็จ</div>
+            <div className="text-sm text-green-700">เพิ่มใหม่: <span className="font-bold">{result.inserted}</span> รายการ</div>
+            <div className="text-sm text-gray-600">ข้ามซ้ำ: {result.skipped} รายการ</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TEAM SELECTOR (on first visit)
+// ══════════════════════════════════════════════════════════════════════════════
+function TeamSelector({onSelect}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{background:'var(--primary)'}}>
+      <div className="card p-8 w-full max-w-md text-center">
+        <div className="text-4xl mb-2">🌿</div>
+        <h1 className="text-2xl font-bold mb-1" style={{color:'var(--primary)'}}>SMM Sourcing CRM</h1>
+        <p className="text-gray-500 mb-6 text-sm">เลือกทีมของคุณเพื่อเข้าใช้งาน</p>
+        <div className="space-y-2">
+          {TEAMS.map(t=>(
+            <button key={t} onClick={()=>onSelect(t)}
+              className="w-full py-3 px-4 rounded-lg border-2 border-transparent hover:border-green-700 hover:bg-green-50 text-left font-medium text-gray-700 transition-all">
+              {t==='Management'?'👔':t==='CX'?'📞':t==='Sales Co'?'💼':t==='Merchandise'?'📦':t==='Inbound/QC'?'🔍':'🚚'} {t}
+            </button>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// APP ROOT
-// ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// APP SHELL
+// ══════════════════════════════════════════════════════════════════════════════
 function App() {
-  const [nav, setNav] = useState('dashboard');
-  const [view, setView] = useState('list'); // list | detail | new
-  const [selectedId, setSelectedId] = useState(null);
-  const [ticketPrefill, setTicketPrefill] = useState(null);
+  const [currentTeam, setCurrentTeam] = useState(null);
+  const [currentUser, setCurrentUser] = useState('CX');
+  const [page, setPage] = useState('dashboard');
+  const [pageParams, setPageParams] = useState({});
+  const [createTicketOutlet, setCreateTicketOutlet] = useState(null);
+  const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [ticketCounts, setTicketCounts] = useState({});
 
-  const goto = (page, v='list', id=null, prefill=null) => {
-    setNav(page); setView(v); setSelectedId(id); setTicketPrefill(prefill);
-    window.scrollTo(0,0);
-  };
+  useEffect(()=>{
+    if (!currentTeam) return;
+    // Load badge counts per team
+    Promise.all(TEAMS.slice(0,-1).map(t=>api(`/api/tickets?team=${t}&status=open`))).then(results=>{
+      const counts = {};
+      TEAMS.slice(0,-1).forEach((t,i)=>{ counts[t]=results[i].length; });
+      setTicketCounts(counts);
+    });
+  },[currentTeam, page]);
 
-  const handleNewTicket = (prefill) => { goto('tickets','new',null,prefill); };
+  function navigate(p, params={}) { setPage(p); setPageParams(params); }
+
+  function openCreateTicket(outletId=null) {
+    setCreateTicketOutlet(outletId);
+    setShowCreateTicket(true);
+  }
+
+  if (!currentTeam) return <TeamSelector onSelect={t=>{setCurrentTeam(t);setCurrentUser(t);}}/>;
+
+  const navItems = [
+    {key:'dashboard', label:'Dashboard', icon:'📊'},
+    {key:'tickets', label:'Tickets', icon:'🎫'},
+    {key:'accounts', label:'Accounts', icon:'🏢'},
+    {key:'suppliers', label:'Suppliers', icon:'🏭'},
+    {key:'employees', label:'พนักงาน', icon:'👥'},
+    {key:'import', label:'Import ERP', icon:'📥'},
+  ];
+
+  function renderPage() {
+    switch(page) {
+      case 'dashboard': return <Dashboard/>;
+      case 'tickets': return <TicketList onNavigate={navigate} currentTeam={currentTeam} onCreateTicket={()=>openCreateTicket()}/>;
+      case 'ticket-detail': return <TicketDetail id={pageParams.id} onNavigate={navigate} currentUser={currentUser} currentTeam={currentTeam}/>;
+      case 'accounts': return <Accounts onNavigate={navigate}/>;
+      case 'account-detail': return <AccountDetail id={pageParams.id} onNavigate={navigate} onCreateTicket={oid=>openCreateTicket(oid)}/>;
+      case 'outlet-detail': return <OutletDetail id={pageParams.id} onNavigate={navigate} onCreateTicket={oid=>openCreateTicket(oid)}/>;
+      case 'suppliers': return <Suppliers onNavigate={navigate}/>;
+      case 'supplier-detail': return <SupplierDetail id={pageParams.id} onNavigate={navigate}/>;
+      case 'employees': return <Employees/>;
+      case 'import': return <ERPImport/>;
+      default: return <Dashboard/>;
+    }
+  }
 
   return (
-    <div>
-      <Sidebar nav={nav} setNav={(p) => goto(p)} />
-      <div className="main-content">
-        {nav==='dashboard' && <Dashboard/>}
-
-        {nav==='customers' && view==='list' && <CustomerList onSelect={id=>goto('customers','detail',id)}/>}
-        {nav==='customers' && view==='detail' && (
-          <CustomerDetail id={selectedId} onBack={()=>goto('customers')} onNewTicket={handleNewTicket}/>
-        )}
-
-        {nav==='suppliers' && view==='list' && <SupplierList onSelect={id=>goto('suppliers','detail',id)}/>}
-        {nav==='suppliers' && view==='detail' && (
-          <SupplierDetail id={selectedId} onBack={()=>goto('suppliers')} onNewTicket={handleNewTicket}/>
-        )}
-
-        {nav==='tickets' && view==='list' && (
-          <TicketList onSelect={id=>goto('tickets','detail',id)} onNew={()=>goto('tickets','new')}/>
-        )}
-        {nav==='tickets' && view==='detail' && (
-          <TicketDetail id={selectedId} onBack={()=>goto('tickets')}/>
-        )}
-        {nav==='tickets' && view==='new' && (
-          <NewTicket onBack={()=>goto('tickets')} prefill={ticketPrefill}/>
-        )}
-
-        {nav==='employees' && <EmployeeList/>}
-        {nav==='import' && <ImportPage/>}
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <div className="sidebar flex flex-col flex-shrink-0">
+        <div className="p-4 border-b border-white/10">
+          <div className="text-white font-bold text-lg">🌿 SMM CRM</div>
+          <div className="text-white/60 text-xs mt-0.5">Sourcing Business Unit</div>
+        </div>
+        {/* Team badge */}
+        <div className="px-4 py-2 border-b border-white/10">
+          <div className="text-white/50 text-xs">ทีมของคุณ</div>
+          <div className="text-white font-semibold text-sm">{currentTeam}</div>
+        </div>
+        <nav className="flex-1 py-2">
+          {navItems.map(({key,label,icon})=>(
+            <a key={key} href="#" className={`flex items-center justify-between px-4 py-2.5 text-sm ${(page===key||(page.startsWith(key.split('-')[0])&&key!=='dashboard'))?'active':''}`}
+              onClick={e=>{e.preventDefault();navigate(key);}}>
+              <span>{icon} {label}</span>
+              {key==='tickets'&&ticketCounts[currentTeam]>0&&<span className="badge">{ticketCounts[currentTeam]}</span>}
+            </a>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-white/10">
+          <button onClick={()=>setCurrentTeam(null)} className="text-white/50 text-xs hover:text-white/80">↩ เปลี่ยนทีม</button>
+        </div>
       </div>
+      {/* Main */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          {renderPage()}
+        </div>
+      </div>
+      {/* Create Ticket Modal */}
+      {showCreateTicket && (
+        <CreateTicket
+          preOutletId={createTicketOutlet}
+          currentUser={currentUser}
+          onClose={()=>setShowCreateTicket(false)}
+          onCreated={(no,id)=>{setShowCreateTicket(false);navigate('ticket-detail',{id});}}
+        />
+      )}
     </div>
   );
 }
