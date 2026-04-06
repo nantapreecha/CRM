@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS outlets (
     erp_outlet_id TEXT,
     csc_code TEXT,
     status TEXT DEFAULT 'active',
-    FOREIGN KEY (account_id) REFERENCES accounts(id)
+    FOREIGN KEY (account_id) REFERENCES accounts(id),
+    UNIQUE (account_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS account_notes (
@@ -839,6 +840,46 @@ def import_erp():
                 return row[idx]
         return None
 
+    # ── STEP 1: parse all rows in memory ──────────────────────────────────────
+    parsed = []
+    for row in rows[1:]:
+        erp_item_id = safe_str(get(row, 'order_item_id'))
+        if not erp_item_id:
+            continue
+        doc_date = safe_str(get(row, 'Doc_date'))
+        if doc_date and 'T' not in doc_date and '-' not in doc_date:
+            try:
+                from openpyxl.utils.datetime import from_excel
+                doc_date = str(from_excel(float(doc_date)).date())
+            except Exception:
+                pass
+        parsed.append({
+            'erp_item_id': erp_item_id,
+            'account_name': safe_str(get(row, 'account_name')) or 'Unknown',
+            'outlet_name': safe_str(get(row, 'Customer_Name')) or 'Unknown',
+            'owner': safe_str(get(row, 'Owner')) or '',
+            'erp_customer_id': safe_str(get(row, 'customer_id')),
+            'erp_outlet_id': safe_str(get(row, 'outlet_id')),
+            'csc_code': safe_str(get(row, 'csc_code')),
+            'order_id': safe_str(get(row, 'order_id')),
+            'invoice_number': safe_str(get(row, 'invoice_number')),
+            'doc_no': safe_str(get(row, 'doc_no')),
+            'doc_date': doc_date,
+            'sku_code': safe_str(get(row, 'SKU')),
+            'product_name': safe_str(get(row, 'Product_Name')),
+            'qty': safe_float(get(row, 'QTY')),
+            'unit': safe_str(get(row, 'unit')),
+            'total_sales': safe_float(get(row, 'Total_Sales')),
+            'vat_price': safe_float(get(row, 'vat_price')),
+            'is_vat': 1 if get(row, 'is_vat') else 0,
+            'sku_group': safe_str(get(row, 'sku_group')),
+            'sku_category': safe_str(get(row, 'sku_category')),
+            'sku_type': safe_str(get(row, 'sku_type')),
+            'delivery_started_at': safe_str(get(row, 'delivery_started_at')),
+            'delivery_finished_at': safe_str(get(row, 'delivery_finished_at')),
+            'loaded_at': safe_str(get(row, 'loaded_at')),
+        })
+
     inserted = 0
     skipped = 0
     errors = []
@@ -846,79 +887,68 @@ def import_erp():
     conn = get_db()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        for row_num, row in enumerate(rows[1:], start=2):
-            erp_item_id = safe_str(get(row, 'order_item_id'))
-            if not erp_item_id:
+        # ── STEP 2: bulk check existing erp_item_ids ──────────────────────────
+        all_ids = [p['erp_item_id'] for p in parsed]
+        cur.execute("SELECT erp_item_id FROM orders WHERE erp_item_id = ANY(%s)", (all_ids,))
+        existing_ids = {r['erp_item_id'] for r in cur.fetchall()}
+        new_rows = [p for p in parsed if p['erp_item_id'] not in existing_ids]
+        skipped = len(parsed) - len(new_rows)
+
+        # ── STEP 3: bulk upsert accounts ──────────────────────────────────────
+        account_map = {}  # name -> id
+        unique_accounts = {(p['account_name'], p['owner']) for p in new_rows}
+        for acc_name, owner in unique_accounts:
+            cur.execute("""
+                INSERT INTO accounts (name, owner) VALUES (%s, %s)
+                ON CONFLICT (name) DO UPDATE SET owner=EXCLUDED.owner
+                RETURNING id, name
+            """, (acc_name, owner))
+            r = cur.fetchone()
+            account_map[r['name']] = r['id']
+
+        # ── STEP 4: bulk upsert outlets ───────────────────────────────────────
+        outlet_map = {}  # (account_id, outlet_name) -> id
+        unique_outlets = {(p['account_name'], p['outlet_name'], p['erp_customer_id'],
+                           p['erp_outlet_id'], p['csc_code']) for p in new_rows}
+        for acc_name, out_name, erp_cid, erp_oid, csc in unique_outlets:
+            acc_id = account_map.get(acc_name)
+            if acc_id is None:
                 continue
+            cur.execute("""
+                INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (account_id, name) DO UPDATE
+                    SET erp_customer_id=EXCLUDED.erp_customer_id,
+                        erp_outlet_id=EXCLUDED.erp_outlet_id,
+                        csc_code=EXCLUDED.csc_code
+                RETURNING id, name, account_id
+            """, (acc_id, out_name, erp_cid, erp_oid, csc))
+            r = cur.fetchone()
+            outlet_map[(acc_id, r['name'])] = r['id']
 
-            cur.execute("SELECT id FROM orders WHERE erp_item_id=%s", (erp_item_id,))
-            if cur.fetchone():
-                skipped += 1
-                continue
+        # ── STEP 5: bulk insert orders ────────────────────────────────────────
+        order_tuples = []
+        for p in new_rows:
+            acc_id = account_map.get(p['account_name'])
+            out_id = outlet_map.get((acc_id, p['outlet_name'])) if acc_id else None
+            order_tuples.append((
+                p['erp_item_id'], p['order_id'], p['invoice_number'], p['doc_no'],
+                p['doc_date'], out_id, p['sku_code'], p['product_name'],
+                p['qty'], p['unit'], p['total_sales'], p['vat_price'], p['is_vat'],
+                p['sku_group'], p['sku_category'], p['sku_type'],
+                p['delivery_started_at'], p['delivery_finished_at'], p['loaded_at'],
+            ))
 
-            account_name = safe_str(get(row, 'account_name')) or 'Unknown'
-            outlet_name = safe_str(get(row, 'Customer_Name')) or 'Unknown'
-            owner = safe_str(get(row, 'Owner')) or ''
-            erp_customer_id = safe_str(get(row, 'customer_id'))
-            erp_outlet_id = safe_str(get(row, 'outlet_id'))
-            csc_code = safe_str(get(row, 'csc_code'))
-
-            cur.execute("SELECT id FROM accounts WHERE name=%s", (account_name,))
-            acc = cur.fetchone()
-            if acc:
-                account_id = acc['id']
-                cur.execute("UPDATE accounts SET owner=%s WHERE id=%s", (owner, account_id))
-            else:
-                cur.execute("INSERT INTO accounts (name, owner) VALUES (%s,%s) RETURNING id", (account_name, owner))
-                account_id = cur.fetchone()['id']
-
-            cur.execute("SELECT id FROM outlets WHERE account_id=%s AND name=%s", (account_id, outlet_name))
-            out = cur.fetchone()
-            if out:
-                outlet_id = out['id']
-                cur.execute("UPDATE outlets SET erp_customer_id=%s, erp_outlet_id=%s, csc_code=%s WHERE id=%s",
-                            (erp_customer_id, erp_outlet_id, csc_code, outlet_id))
-            else:
-                cur.execute("""INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
-                    VALUES (%s,%s,%s,%s,%s) RETURNING id""",
-                    (account_id, outlet_name, erp_customer_id, erp_outlet_id, csc_code))
-                outlet_id = cur.fetchone()['id']
-
-            doc_date = safe_str(get(row, 'Doc_date'))
-            if doc_date and 'T' not in doc_date and '-' not in doc_date:
-                try:
-                    from openpyxl.utils.datetime import from_excel
-                    doc_date = str(from_excel(float(doc_date)).date())
-                except Exception:
-                    pass
-
-            cur.execute("""INSERT INTO orders
+        if order_tuples:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO orders
                 (erp_item_id, order_id, invoice_number, doc_no, doc_date,
                  outlet_id, sku_code, product_name, qty, unit,
                  total_sales, vat_price, is_vat, sku_group, sku_category,
                  sku_type, delivery_started_at, delivery_finished_at, loaded_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (erp_item_id) DO NOTHING""",
-                (erp_item_id,
-                 safe_str(get(row, 'order_id')),
-                 safe_str(get(row, 'invoice_number')),
-                 safe_str(get(row, 'doc_no')),
-                 doc_date,
-                 outlet_id,
-                 safe_str(get(row, 'SKU')),
-                 safe_str(get(row, 'Product_Name')),
-                 safe_float(get(row, 'QTY')),
-                 safe_str(get(row, 'unit')),
-                 safe_float(get(row, 'Total_Sales')),
-                 safe_float(get(row, 'vat_price')),
-                 1 if get(row, 'is_vat') else 0,
-                 safe_str(get(row, 'sku_group')),
-                 safe_str(get(row, 'sku_category')),
-                 safe_str(get(row, 'sku_type')),
-                 safe_str(get(row, 'delivery_started_at')),
-                 safe_str(get(row, 'delivery_finished_at')),
-                 safe_str(get(row, 'loaded_at'))))
-            inserted += 1
+                VALUES %s ON CONFLICT (erp_item_id) DO NOTHING
+            """, order_tuples, page_size=500)
+            inserted = len(order_tuples)
 
         conn.commit()
     except Exception as e:
