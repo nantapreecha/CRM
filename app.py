@@ -238,6 +238,18 @@ def init_db():
         stmt = stmt.strip()
         if stmt:
             cur.execute(stmt)
+    # Add unique constraint on outlets if not exists
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'outlets_account_id_name_key'
+            ) THEN
+                ALTER TABLE outlets ADD CONSTRAINT outlets_account_id_name_key UNIQUE (account_id, name);
+            END IF;
+        END$$;
+    """)
     conn.commit()
     conn.close()
     print("Database initialized.")
