@@ -2,3 +2,4 @@ flask
 flask-cors
 openpyxl
 gunicorn
+psycopg2-binary
