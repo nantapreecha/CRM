@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sourcing BU CRM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet"/>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background:#f0f4f8; }
+  .sidebar { width:220px; min-height:100vh; background:#0F766E; position:fixed; top:0; left:0; z-index:100; }
+  .main-content { margin-left:220px; padding:24px; min-height:100vh; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding:12px 20px; color:#ccfbf1; cursor:pointer; transition:background 0.15s; border-radius:8px; margin:2px 8px; }
+  .nav-item:hover { background:rgba(255,255,255,0.15); }
+  .nav-item.active { background:rgba(255,255,255,0.2); color:#fff; font-weight:600; }
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:20px; }
+  .badge { display:inline-flex; align-items:center; padding:2px 10px; border-radius:9999px; font-size:12px; font-weight:500; }
+  .badge-open { background:#fef3c7; color:#92400e; }
+  .badge-in_progress { background:#dbeafe; color:#1e40af; }
+  .badge-resolved { background:#d1fae5; color:#065f46; }
+  .badge-closed { background:#f3f4f6; color:#6b7280; }
+  .badge-active { background:#d1fae5; color:#065f46; }
+  .badge-inactive { background:#fee2e2; color:#991b1b; }
+  .badge-high { background:#fee2e2; color:#991b1b; }
+  .badge-medium { background:#fef3c7; color:#92400e; }
+  .badge-low { background:#f0fdf4; color:#166534; }
+  .badge-urgent { background:#fce7f3; color:#9d174d; }
+  .btn { padding:8px 16px; border-radius:8px; font-weight:500; cursor:pointer; border:none; font-size:14px; transition:all 0.15s; }
+  .btn-primary { background:#0F766E; color:#fff; }
+  .btn-primary:hover { background:#0d5f5a; }
+  .btn-secondary { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+  .btn-secondary:hover { background:#e2e8f0; }
+  .btn-danger { background:#ef4444; color:#fff; }
+  .btn-sm { padding:5px 12px; font-size:13px; }
+  .input { width:100%; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; font-size:14px; outline:none; transition:border 0.15s; }
+  .input:focus { border-color:#0F766E; box-shadow:0 0 0 3px rgba(15,118,110,0.1); }
+  .label { font-size:13px; font-weight:500; color:#374151; margin-bottom:4px; display:block; }
+  .table-container { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  thead th { background:#f8fafc; padding:10px 12px; text-align:left; font-weight:600; color:#475569; border-bottom:1px solid #e2e8f0; }
+  tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.1s; }
+  tbody tr:hover { background:#f8fafc; cursor:pointer; }
+  tbody td { padding:10px 12px; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:flex; align-items:center; justify-content:center; }
+  .modal { background:#fff; border-radius:16px; padding:28px; width:90%; max-width:560px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+  .tab { padding:8px 18px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; color:#64748b; transition:all 0.15s; }
+  .tab.active { background:#0F766E; color:#fff; }
+  .stat-card { background:#fff; border-radius:12px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+  .star { color:#fbbf24; font-size:16px; }
+  .star-empty { color:#d1d5db; font-size:16px; }
+  select.input { appearance:auto; }
+  textarea.input { resize:vertical; min-height:80px; }
+  .note-item { background:#f8fafc; border-radius:8px; padding:12px; margin-bottom:8px; border-left:3px solid #0F766E; }
+  .comment-item { background:#f1f5f9; border-radius:8px; padding:12px; margin-bottom:8px; }
+  .priority-high { border-left:3px solid #ef4444; }
+  .priority-medium { border-left:3px solid #f59e0b; }
+  .priority-low { border-left:3px solid #10b981; }
+  .priority-urgent { border-left:3px solid #8b5cf6; }
+  .bar-container { background:#e2e8f0; border-radius:4px; height:8px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; background:#0F766E; transition:width 0.3s; }
+  .search-box { position:relative; }
+  .search-box input { padding-left:36px; }
+  .search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#9ca3af; }
+  .empty-state { text-align:center; padding:60px 20px; color:#9ca3af; }
+  .empty-state .icon { font-size:48px; margin-bottom:12px; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .page-title { font-size:22px; font-weight:700; color:#0f172a; }
+  .breadcrumb { font-size:13px; color:#94a3b8; margin-bottom:16px; cursor:pointer; }
+  .breadcrumb:hover { color:#0F766E; }
+  .gp-positive { color:#059669; font-weight:600; }
+  .gp-negative { color:#dc2626; font-weight:600; }
+  .loading { display:flex; align-items:center; justify-content:center; padding:60px; color:#64748b; }
+  .spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top-color:#0F766E; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:12px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .toast { position:fixed; bottom:24px; right:24px; background:#1e293b; color:#fff; padding:12px 20px; border-radius:10px; z-index:500; font-size:14px; box-shadow:0 4px 20px rgba(0,0,0,0.2); animation:slideIn 0.3s ease; }
+  .toast.success { background:#065f46; }
+  .toast.error { background:#991b1b; }
+  @keyframes slideIn { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── API HELPERS ──────────────────────────────
+const api = {
+  get: (url) => fetch(url).then(r => r.json()),
+  post: (url, data) => fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
+  put: (url, data) => fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()),
+  upload: (url, formData) => fetch(url, { method:'POST', body:formData }).then(r => r.json()),
+};
+
+const fmt = {
+  number: (n) => (n||0).toLocaleString('th-TH'),
+  currency: (n) => '฿' + (n||0).toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:0}),
+  date: (d) => d ? d.substring(0,10) : '-',
+  gp: (sales, cost) => sales > 0 ? (((sales-cost)/sales)*100).toFixed(1)+'%' : '-',
+};
+
+const DEPARTMENTS = ['Sales', 'Merchandise', 'Inbound Operations', 'Outbound Operations', 'Management'];
+const TEAMS = {
+  'Sales': ['Sales Coordinator', 'Key Accounts/Sales', 'Credit Control', 'Customer Experience'],
+  'Merchandise': ['Purchaser', 'Merchandise Management'],
+  'Inbound Operations': ['QC Team', 'Inbound Team'],
+  'Outbound Operations': ['Outbound Team', 'Logistics'],
+  'Management': ['Manager', 'Executive'],
+};
+const TICKET_TYPES = ['quality', 'delivery', 'pricing', 'qc_spec', 'claim', 'general'];
+const TICKET_TYPE_LABELS = { quality:'คืนสินค้า/คุณภาพ', delivery:'ส่งผิด/ล่าช้า', pricing:'เจรจาราคา', qc_spec:'QC/ไม่ตรงสเปค', claim:'Claim', general:'ทั่วไป' };
+const PRIORITIES = ['urgent','high','medium','low'];
+const PRIORITY_LABELS = { urgent:'ด่วนมาก', high:'สูง', medium:'ปานกลาง', low:'ต่ำ' };
+const STATUSES = ['open','in_progress','resolved','closed'];
+const STATUS_LABELS = { open:'เปิด', in_progress:'กำลังดำเนินการ', resolved:'แก้ไขแล้ว', closed:'ปิด' };
+
+// ── TOAST ────────────────────────────────────
+function Toast({ msg, type, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, []);
+  return <div className={`toast ${type}`}>{type==='success'?'✓ ':type==='error'?'✗ ':''}{msg}</div>;
+}
+
+// ── MODAL ────────────────────────────────────
+function Modal({ title, onClose, children, wide }) {
+  return (
+    <div className="modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="modal" style={wide?{maxWidth:720}:{}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+          <h2 style={{fontSize:18,fontWeight:700,color:'#0f172a'}}>{title}</h2>
+          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94a3b8',lineHeight:1}}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── LOADING ──────────────────────────────────
+function Loading() {
+  return <div className="loading"><div className="spinner"/><span>กำลังโหลด...</span></div>;
+}
+
+// ── SIDEBAR ──────────────────────────────────
+function Sidebar({ nav, setNav }) {
+  const items = [
+    { key:'dashboard', icon:'📊', label:'Dashboard' },
+    { key:'customers', icon:'🏪', label:'ลูกค้า (Customer)' },
+    { key:'suppliers', icon:'🚛', label:'Supplier' },
+    { key:'tickets',   icon:'🎫', label:'Ticket / Case' },
+    { key:'employees', icon:'👥', label:'พนักงาน' },
+    { key:'import',    icon:'📥', label:'Import ERP' },
+  ];
+  return (
+    <div className="sidebar">
+      <div style={{padding:'20px 16px 16px'}}>
+        <div style={{color:'#fff',fontWeight:700,fontSize:16,lineHeight:1.3}}>Sourcing BU</div>
+        <div style={{color:'#99f6e4',fontSize:12,marginTop:2}}>CRM System</div>
+      </div>
+      <div style={{padding:'8px 0'}}>
+        {items.map(i => (
+          <div key={i.key} className={`nav-item${nav===i.key?' active':''}`} onClick={()=>setNav(i.key)}>
+            <span style={{fontSize:16}}>{i.icon}</span>
+            <span style={{fontSize:14}}>{i.label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{position:'absolute',bottom:16,left:0,right:0,padding:'0 16px'}}>
+        <div style={{color:'#5eead4',fontSize:11,textAlign:'center'}}>v1.0 © 2026 Sourcing BU</div>
+      </div>
+    </div>
+  );
+}
+
+// ── STARS ────────────────────────────────────
+function Stars({ value, onChange }) {
+  return (
+    <div style={{display:'flex',gap:2}}>
+      {[1,2,3,4,5].map(n => (
+        <span key={n} className={n<=value?'star':'star-empty'} style={onChange?{cursor:'pointer'}:{}}
+          onClick={()=>onChange&&onChange(n)}>{n<=value?'★':'☆'}</span>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────
+function Dashboard() {
+  const [data, setData] = useState(null);
+  useEffect(() => { api.get('/api/dashboard').then(setData); }, []);
+  if (!data) return <Loading/>;
+
+  const { summary, monthly, claims, ticket_status, ticket_dept, top_customers } = data;
+  const totalRevenue = monthly.reduce((a,m)=>a+(m.total_sales||0), 0);
+  const totalCost    = monthly.reduce((a,m)=>a+(m.total_cost||0), 0);
+  const gp = totalRevenue > 0 ? ((totalRevenue-totalCost)/totalRevenue*100).toFixed(1) : 0;
+
+  const tsByStatus = {};
+  (ticket_status||[]).forEach(t => tsByStatus[t.status] = t.cnt);
+
+  const maxSales = Math.max(...monthly.map(m=>m.total_sales||0), 1);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-title">📊 Dashboard</div>
+        <div style={{fontSize:13,color:'#64748b'}}>{new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})}</div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:16,marginBottom:24}}>
+        {[
+          { label:'ลูกค้าทั้งหมด', value:fmt.number(summary.customers), icon:'🏪', color:'#0F766E' },
+          { label:'Supplier', value:fmt.number(summary.suppliers), icon:'🚛', color:'#2563eb' },
+          { label:'Ticket เปิดอยู่', value:fmt.number(summary.open_tickets), icon:'🎫', color:'#d97706' },
+          { label:'กำลังดำเนินการ', value:fmt.number(summary.inprogress_tickets), icon:'⚙️', color:'#7c3aed' },
+          { label:'GP% รวม', value:gp+'%', icon:'💹', color:'#059669' },
+          { label:'พนักงาน', value:fmt.number(summary.employees), icon:'👥', color:'#0891b2' },
+        ].map((c,i) => (
+          <div key={i} className="stat-card">
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+              <div>
+                <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{c.label}</div>
+                <div style={{fontSize:24,fontWeight:700,color:c.color}}>{c.value}</div>
+              </div>
+              <span style={{fontSize:28}}>{c.icon}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:20}}>
+        {/* Monthly Sales Chart */}
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>ยอดขายรายเดือน</div>
+          {monthly.length === 0 ? (
+            <div className="empty-state"><div className="icon">📈</div><div>ยังไม่มีข้อมูล — กรุณา Import ERP ก่อน</div></div>
+          ) : (
+            <div>
+              {monthly.map((m,i) => {
+                const gpm = m.total_sales>0 ? ((m.total_sales-m.total_cost)/m.total_sales*100).toFixed(1) : 0;
+                return (
+                  <div key={i} style={{marginBottom:12}}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4}}>
+                      <span style={{fontWeight:500}}>{m.month_source}</span>
+                      <span>{fmt.currency(m.total_sales)} <span className="gp-positive">GP {gpm}%</span></span>
+                    </div>
+                    <div className="bar-container">
+                      <div className="bar-fill" style={{width:`${(m.total_sales/maxSales*100).toFixed(0)}%`}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Tickets */}
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>สถานะ Ticket</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+            {['open','in_progress','resolved','closed'].map(s => (
+              <div key={s} style={{background:'#f8fafc',borderRadius:8,padding:12,textAlign:'center'}}>
+                <div style={{fontSize:20,fontWeight:700,color:'#0f172a'}}>{tsByStatus[s]||0}</div>
+                <div style={{fontSize:12,color:'#64748b'}}><span className={`badge badge-${s}`}>{STATUS_LABELS[s]}</span></div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontWeight:600,marginBottom:10,fontSize:14,color:'#374151'}}>Ticket by ทีม</div>
+          {(ticket_dept||[]).length===0 ? <div style={{color:'#94a3b8',fontSize:13}}>ไม่มี ticket ที่ยังเปิดอยู่</div> :
+            (ticket_dept||[]).map((d,i) => (
+              <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'4px 0',borderBottom:'1px solid #f1f5f9'}}>
+                <span>{d.assigned_department||'ไม่ระบุ'}</span>
+                <span style={{fontWeight:600,color:'#0F766E'}}>{d.cnt} เคส</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+        {/* Top Customers */}
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:12,color:'#0f172a'}}>Top ลูกค้า (ยอดซื้อสูงสุด)</div>
+          {top_customers.length===0 ? <div style={{color:'#94a3b8',fontSize:13}}>ยังไม่มีข้อมูล</div> :
+            top_customers.slice(0,8).map((c,i) => (
+              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid #f1f5f9',fontSize:13}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:'50%',width:22,height:22,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:600}}>{i+1}</span>
+                  <span style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.customer_name}</span>
+                </div>
+                <span style={{fontWeight:600,color:'#0F766E'}}>{fmt.currency(c.revenue)}</span>
+              </div>
+            ))
+          }
+        </div>
+
+        {/* Claims */}
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:16,color:'#0f172a'}}>ภาพรวม Claim</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            {[
+              { label:'Claim ตัด', value:claims.cut_count||0, color:'#f59e0b', icon:'✂️' },
+              { label:'Claim จัดส่ง', value:claims.delivery_count||0, color:'#ef4444', icon:'🚚' },
+              { label:'สายรายการทั้งหมด', value:fmt.number(claims.total_lines||0), color:'#6366f1', icon:'📋' },
+              { label:'Claim Rate', value:claims.total_lines>0?((((claims.cut_count||0)+(claims.delivery_count||0))/claims.total_lines)*100).toFixed(1)+'%':'0%', color:'#0F766E', icon:'📊' },
+            ].map((c,i) => (
+              <div key={i} style={{background:'#f8fafc',borderRadius:10,padding:14,textAlign:'center'}}>
+                <div style={{fontSize:22,marginBottom:4}}>{c.icon}</div>
+                <div style={{fontSize:22,fontWeight:700,color:c.color}}>{typeof c.value==='number'?fmt.number(c.value):c.value}</div>
+                <div style={{fontSize:12,color:'#64748b'}}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER LIST
+// ─────────────────────────────────────────────
+function CustomerList({ onSelect }) {
+  const [customers, setCustomers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name:'', customer_type:'', phone:'', contact_person:'', credit_days:0, status:'active' });
+  const [toast, setToast] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get(`/api/customers?search=${encodeURIComponent(search)}`).then(d => { setCustomers(d); setLoading(false); });
+  }, [search]);
+
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const save = () => {
+    if (!form.name) return setToast({msg:'กรุณากรอกชื่อลูกค้า', type:'error'});
+    api.post('/api/customers', form).then(r => {
+      if (r.error) return setToast({msg:r.error, type:'error'});
+      setToast({msg:'เพิ่มลูกค้าสำเร็จ', type:'success'});
+      setShowAdd(false);
+      setForm({ name:'', customer_type:'', phone:'', contact_person:'', credit_days:0, status:'active' });
+      load();
+    });
+  };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="page-header">
+        <div className="page-title">🏪 ลูกค้า (Customer)</div>
+        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่มลูกค้า</button>
+      </div>
+      <div className="card">
+        <div style={{marginBottom:16}}>
+          <div className="search-box">
+            <span className="search-icon">🔍</span>
+            <input className="input" style={{paddingLeft:36}} placeholder="ค้นหาชื่อลูกค้า..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          </div>
+        </div>
+        {loading ? <Loading/> : customers.length===0 ? (
+          <div className="empty-state"><div className="icon">🏪</div><div>ไม่พบลูกค้า</div></div>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead><tr>
+                <th>ชื่อลูกค้า</th><th>ประเภท</th><th>ผู้ติดต่อ</th><th>เบอร์โทร</th><th>Credit (วัน)</th><th>สถานะ</th><th>Order ล่าสุด</th>
+              </tr></thead>
+              <tbody>
+                {customers.map(c => (
+                  <tr key={c.id} onClick={()=>onSelect(c.id)}>
+                    <td style={{fontWeight:600,color:'#0F766E'}}>{c.name}</td>
+                    <td>{c.customer_type||'-'}</td>
+                    <td>{c.contact_person||'-'}</td>
+                    <td>{c.phone||'-'}</td>
+                    <td>{c.credit_days||0}</td>
+                    <td><span className={`badge badge-${c.status}`}>{c.status==='active'?'Active':'Inactive'}</span></td>
+                    <td style={{color:'#64748b'}}>{fmt.date(c.last_order)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <Modal title="เพิ่มลูกค้าใหม่" onClose={()=>setShowAdd(false)}>
+          <div style={{display:'grid',gap:14}}>
+            <div><label className="label">ชื่อลูกค้า *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น ไชโยหมูจุ่ม บรรทัดทอง"/></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">ประเภท</label><input className="input" value={form.customer_type} onChange={e=>setForm({...form,customer_type:e.target.value})} placeholder="เช่น ร้านอาหาร, โรงแรม"/></div>
+              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">ผู้ติดต่อ</label><input className="input" value={form.contact_person} onChange={e=>setForm({...form,contact_person:e.target.value})}/></div>
+              <div><label className="label">Credit (วัน)</label><input className="input" type="number" value={form.credit_days} onChange={e=>setForm({...form,credit_days:parseInt(e.target.value)||0})}/></div>
+            </div>
+            <div><label className="label">ที่อยู่</label><input className="input" value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})}/></div>
+            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
+              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
+              <button className="btn btn-primary" onClick={save}>บันทึก</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER DETAIL
+// ─────────────────────────────────────────────
+function CustomerDetail({ id, onBack, onNewTicket }) {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('info');
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState({});
+  const [noteText, setNoteText] = useState('');
+  const [noteBy, setNoteBy] = useState('');
+  const [toast, setToast] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => api.get(`/api/customers/${id}`).then(d => { setData(d); setForm(d); });
+  useEffect(() => { load(); }, [id]);
+
+  if (!data) return <Loading/>;
+
+  const { stats } = data;
+  const gp = stats.total_revenue > 0 ? ((stats.total_revenue - stats.total_cost)/stats.total_revenue*100).toFixed(1) : 0;
+
+  const saveInfo = () => {
+    setSaving(true);
+    api.put(`/api/customers/${id}`, form).then(r => {
+      setSaving(false);
+      if (r.error) return setToast({msg:r.error, type:'error'});
+      setData({...data,...r}); setEditMode(false);
+      setToast({msg:'บันทึกสำเร็จ', type:'success'});
+    });
+  };
+
+  const addNote = () => {
+    if (!noteText.trim()) return;
+    api.post(`/api/customers/${id}/notes`, { note:noteText, created_by:noteBy }).then(() => {
+      setNoteText(''); load();
+      setToast({msg:'เพิ่ม Note สำเร็จ', type:'success'});
+    });
+  };
+
+  const claims = (data.orders||[]).filter(o=>o.claim_cut_check||o.claim_delivery_check);
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="breadcrumb" onClick={onBack}>← กลับ รายการลูกค้า</div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:700,color:'#0f172a'}}>{data.name}</h1>
+            <div style={{color:'#64748b',fontSize:14,marginTop:4}}>{data.customer_type||'ไม่ระบุประเภท'} • {data.contact_person||'-'} • {data.phone||'-'}</div>
+          </div>
+          <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+            {[
+              { label:'ยอดขายรวม', value:fmt.currency(stats.total_revenue), color:'#0F766E' },
+              { label:'GP%', value:gp+'%', color: parseFloat(gp)>=20?'#059669':'#dc2626' },
+              { label:'Orders', value:fmt.number(stats.total_orders), color:'#2563eb' },
+              { label:'Claim', value:fmt.number((stats.claim_cut_count||0)+(stats.claim_delivery_count||0)), color:'#d97706' },
+            ].map((s,i) => (
+              <div key={i} style={{background:'#f8fafc',borderRadius:8,padding:'10px 16px',textAlign:'center',minWidth:90}}>
+                <div style={{fontSize:18,fontWeight:700,color:s.color}}>{s.value}</div>
+                <div style={{fontSize:11,color:'#64748b'}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        {[['info','📋 ข้อมูล'],['orders','🛒 คำสั่งซื้อ'],['claims','⚠️ Claim'],['notes','📝 Note']].map(([k,l])=>(
+          <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{l}</button>
+        ))}
+        <button className="btn btn-secondary btn-sm" style={{marginLeft:'auto'}} onClick={()=>onNewTicket({related_type:'customer',related_id:id,related_name:data.name})}>🎫 สร้าง Ticket</button>
+      </div>
+
+      <div className="card">
+        {/* INFO TAB */}
+        {tab==='info' && (
+          <div>
+            <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}>
+              {editMode
+                ? <><button className="btn btn-secondary btn-sm" style={{marginRight:8}} onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={saveInfo}>{saving?'กำลังบันทึก...':'บันทึก'}</button></>
+                : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
+              }
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+              {[
+                ['ชื่อลูกค้า','name'],['ประเภท','customer_type'],['ผู้ติดต่อ','contact_person'],
+                ['เบอร์โทร','phone'],['Email','email'],['Credit (วัน)','credit_days'],
+              ].map(([l,k])=>(
+                <div key={k}>
+                  <label className="label">{l}</label>
+                  {editMode ? <input className="input" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/>
+                    : <div style={{padding:'8px 0',color:'#1e293b'}}>{data[k]||'-'}</div>}
+                </div>
+              ))}
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="label">ที่อยู่</label>
+                {editMode ? <input className="input" value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})}/>
+                  : <div style={{padding:'8px 0',color:'#1e293b'}}>{data.address||'-'}</div>}
+              </div>
+              <div>
+                <label className="label">สถานะ</label>
+                {editMode ? (
+                  <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                    <option value="active">Active</option><option value="inactive">Inactive</option>
+                  </select>
+                ) : <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ORDERS TAB */}
+        {tab==='orders' && (
+          <div>
+            <div style={{marginBottom:12,color:'#64748b',fontSize:13}}>{fmt.number(data.orders.length)} รายการ</div>
+            {data.orders.length===0 ? <div className="empty-state"><div className="icon">🛒</div><div>ยังไม่มีข้อมูล</div></div> : (
+              <div className="table-container">
+                <table>
+                  <thead><tr><th>วันที่</th><th>เลขที่</th><th>สินค้า</th><th>ราคา</th><th>จำนวน</th><th>ยอดขาย</th><th>ต้นทุน</th><th>GP%</th><th>แหล่ง</th></tr></thead>
+                  <tbody>
+                    {data.orders.map((o,i) => {
+                      const gp = o.total_sales>0?((o.total_sales-o.product_cost)/o.total_sales*100).toFixed(1):'-';
+                      return (
+                        <tr key={i}>
+                          <td>{fmt.date(o.doc_date)}</td>
+                          <td style={{fontSize:12,color:'#64748b'}}>{o.document_no}</td>
+                          <td>{o.product_name}</td>
+                          <td>{fmt.number(o.price)}</td>
+                          <td>{o.qty}</td>
+                          <td>{fmt.currency(o.total_sales)}</td>
+                          <td>{fmt.currency(o.product_cost)}</td>
+                          <td className={parseFloat(gp)>=20?'gp-positive':'gp-negative'}>{gp}%</td>
+                          <td><span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:4,padding:'2px 6px',fontSize:11}}>{o.assign_name||'-'}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CLAIMS TAB */}
+        {tab==='claims' && (
+          <div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+              <div style={{background:'#fffbeb',borderRadius:8,padding:14,textAlign:'center'}}>
+                <div style={{fontSize:24,fontWeight:700,color:'#d97706'}}>{stats.claim_cut_count||0}</div>
+                <div style={{fontSize:13,color:'#64748b'}}>✂️ Claim ตัด</div>
+              </div>
+              <div style={{background:'#fef2f2',borderRadius:8,padding:14,textAlign:'center'}}>
+                <div style={{fontSize:24,fontWeight:700,color:'#dc2626'}}>{stats.claim_delivery_count||0}</div>
+                <div style={{fontSize:13,color:'#64748b'}}>🚚 Claim จัดส่ง</div>
+              </div>
+            </div>
+            {claims.length===0 ? <div className="empty-state"><div className="icon">✅</div><div>ไม่มี Claim</div></div> : (
+              <div className="table-container">
+                <table>
+                  <thead><tr><th>วันที่</th><th>สินค้า</th><th>Claim ตัด</th><th>Claim จัดส่ง</th></tr></thead>
+                  <tbody>
+                    {claims.map((o,i) => (
+                      <tr key={i}>
+                        <td>{fmt.date(o.doc_date)}</td>
+                        <td>{o.product_name}</td>
+                        <td>{o.claim_cut_check ? <span style={{color:'#d97706'}}>✂️ {o.claim_cut_qty}</span> : '-'}</td>
+                        <td>{o.claim_delivery_check ? <span style={{color:'#dc2626'}}>🚚 {o.claim_delivery_qty}</span> : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* NOTES TAB */}
+        {tab==='notes' && (
+          <div>
+            <div style={{background:'#f0fdf4',borderRadius:10,padding:16,marginBottom:16}}>
+              <div style={{fontWeight:600,marginBottom:10,fontSize:14}}>📝 เพิ่ม Note ใหม่</div>
+              <textarea className="input" placeholder="บันทึกข้อมูล เช่น พฤติกรรมการสั่ง, ความพึงพอใจ, ข้อมูลสำคัญ..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
+              <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center'}}>
+                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={noteBy} onChange={e=>setNoteBy(e.target.value)}/>
+                <button className="btn btn-primary" onClick={addNote}>บันทึก</button>
+              </div>
+            </div>
+            {(data.notes||[]).length===0 ? <div className="empty-state"><div className="icon">📝</div><div>ยังไม่มี Note</div></div> :
+              (data.notes||[]).map(n => (
+                <div key={n.id} className="note-item">
+                  <div style={{whiteSpace:'pre-wrap'}}>{n.note}</div>
+                  <div style={{fontSize:12,color:'#94a3b8',marginTop:6}}>{n.created_by||'ไม่ระบุ'} • {n.created_at}</div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SUPPLIER LIST
+// ─────────────────────────────────────────────
+function SupplierList({ onSelect }) {
+  const [suppliers, setSuppliers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name:'', supplier_type:'', contact_person:'', phone:'', line_id:'', payment_method:'', credit_days:0, rating:3 });
+  const [toast, setToast] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get(`/api/suppliers?search=${encodeURIComponent(search)}`).then(d => { setSuppliers(d); setLoading(false); });
+  }, [search]);
+
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const save = () => {
+    if (!form.name) return setToast({msg:'กรุณากรอกชื่อ Supplier', type:'error'});
+    api.post('/api/suppliers', form).then(r => {
+      if (r.error) return setToast({msg:r.error, type:'error'});
+      setToast({msg:'เพิ่ม Supplier สำเร็จ', type:'success'});
+      setShowAdd(false);
+      setForm({ name:'', supplier_type:'', contact_person:'', phone:'', line_id:'', payment_method:'', credit_days:0, rating:3 });
+      load();
+    });
+  };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="page-header">
+        <div className="page-title">🚛 Supplier</div>
+        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่ม Supplier</button>
+      </div>
+      <div className="card">
+        <div style={{marginBottom:16}}>
+          <div className="search-box">
+            <span className="search-icon">🔍</span>
+            <input className="input" style={{paddingLeft:36}} placeholder="ค้นหา Supplier..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          </div>
+        </div>
+        {loading ? <Loading/> : suppliers.length===0 ? (
+          <div className="empty-state"><div className="icon">🚛</div><div>ไม่พบ Supplier</div></div>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>ชื่อ Supplier</th><th>ประเภท</th><th>ผู้ติดต่อ</th><th>เบอร์โทร</th><th>LINE</th><th>Credit</th><th>Rating</th><th>สถานะ</th></tr></thead>
+              <tbody>
+                {suppliers.map(s => (
+                  <tr key={s.id} onClick={()=>onSelect(s.id)}>
+                    <td style={{fontWeight:600,color:'#0F766E'}}>{s.name}</td>
+                    <td>{s.supplier_type||'-'}</td>
+                    <td>{s.contact_person||'-'}</td>
+                    <td>{s.phone||'-'}</td>
+                    <td>{s.line_id||'-'}</td>
+                    <td>{s.credit_days||0} วัน</td>
+                    <td><Stars value={s.rating||3}/></td>
+                    <td><span className={`badge badge-${s.status}`}>{s.status==='active'?'Active':'Inactive'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <Modal title="เพิ่ม Supplier ใหม่" onClose={()=>setShowAdd(false)} wide>
+          <div style={{display:'grid',gap:14}}>
+            <div><label className="label">ชื่อ Supplier *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">ประเภทสินค้า</label><input className="input" value={form.supplier_type} onChange={e=>setForm({...form,supplier_type:e.target.value})} placeholder="เช่น ผัก, ผลไม้, แห้ง"/></div>
+              <div><label className="label">ผู้ติดต่อ</label><input className="input" value={form.contact_person} onChange={e=>setForm({...form,contact_person:e.target.value})}/></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+              <div><label className="label">LINE ID</label><input className="input" value={form.line_id} onChange={e=>setForm({...form,line_id:e.target.value})}/></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">วิธีชำระ</label><input className="input" value={form.payment_method} onChange={e=>setForm({...form,payment_method:e.target.value})} placeholder="เช่น โอน, เงินสด, เครดิต"/></div>
+              <div><label className="label">Credit (วัน)</label><input className="input" type="number" value={form.credit_days} onChange={e=>setForm({...form,credit_days:parseInt(e.target.value)||0})}/></div>
+            </div>
+            <div><label className="label">Rating เริ่มต้น</label><Stars value={form.rating} onChange={v=>setForm({...form,rating:v})}/></div>
+            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
+              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
+              <button className="btn btn-primary" onClick={save}>บันทึก</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SUPPLIER DETAIL
+// ─────────────────────────────────────────────
+function SupplierDetail({ id, onBack, onNewTicket }) {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('info');
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState({});
+  const [noteText, setNoteText] = useState('');
+  const [noteType, setNoteType] = useState('general');
+  const [noteBy, setNoteBy] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const load = () => api.get(`/api/suppliers/${id}`).then(d => { setData(d); setForm(d); });
+  useEffect(() => { load(); }, [id]);
+  if (!data) return <Loading/>;
+
+  const saveInfo = () => {
+    api.put(`/api/suppliers/${id}`, form).then(r => {
+      if (r.error) return setToast({msg:r.error,type:'error'});
+      setData({...data,...r}); setEditMode(false);
+      setToast({msg:'บันทึกสำเร็จ', type:'success'});
+    });
+  };
+
+  const addNote = () => {
+    if (!noteText.trim()) return;
+    api.post(`/api/suppliers/${id}/notes`, { note:noteText, note_type:noteType, created_by:noteBy }).then(() => {
+      setNoteText(''); load();
+      setToast({msg:'เพิ่ม Note สำเร็จ', type:'success'});
+    });
+  };
+
+  const NOTE_TYPE_LABELS = { general:'ทั่วไป', negotiation:'การเจรจา', trade_term:'Trade Term', quality:'คุณภาพ' };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Supplier</div>
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:700,color:'#0f172a'}}>{data.name}</h1>
+            <div style={{color:'#64748b',fontSize:14,marginTop:4}}>{data.supplier_type||'-'}</div>
+            <div style={{marginTop:8}}><Stars value={data.rating||3}/></div>
+          </div>
+          <div>
+            <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>
+            <button className="btn btn-secondary btn-sm" style={{marginLeft:12}} onClick={()=>onNewTicket({related_type:'supplier',related_id:id,related_name:data.name})}>🎫 สร้าง Ticket</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:'flex',gap:8,marginBottom:16}}>
+        {[['info','📋 ข้อมูล'],['notes','📝 การเจรจา/Note'],['tickets','🎫 Ticket']].map(([k,l])=>(
+          <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{l}</button>
+        ))}
+      </div>
+
+      <div className="card">
+        {tab==='info' && (
+          <div>
+            <div style={{display:'flex',justifyContent:'flex-end',marginBottom:16}}>
+              {editMode
+                ? <><button className="btn btn-secondary btn-sm" style={{marginRight:8}} onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={saveInfo}>บันทึก</button></>
+                : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
+              }
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+              {[['ชื่อ Supplier','name'],['ประเภทสินค้า','supplier_type'],['ผู้ติดต่อ','contact_person'],['เบอร์โทร','phone'],['LINE ID','line_id'],['Email','email'],['วิธีชำระ','payment_method'],['Credit (วัน)','credit_days']].map(([l,k])=>(
+                <div key={k}>
+                  <label className="label">{l}</label>
+                  {editMode ? <input className="input" value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/>
+                    : <div style={{padding:'8px 0',color:'#1e293b'}}>{data[k]||'-'}</div>}
+                </div>
+              ))}
+              <div>
+                <label className="label">Rating</label>
+                {editMode ? <Stars value={form.rating||3} onChange={v=>setForm({...form,rating:v})}/> : <Stars value={data.rating||3}/>}
+              </div>
+              <div>
+                <label className="label">สถานะ</label>
+                {editMode ? (
+                  <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                    <option value="active">Active</option><option value="inactive">Inactive</option>
+                  </select>
+                ) : <span className={`badge badge-${data.status}`}>{data.status==='active'?'Active':'Inactive'}</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab==='notes' && (
+          <div>
+            <div style={{background:'#f0fdf4',borderRadius:10,padding:16,marginBottom:16}}>
+              <div style={{fontWeight:600,marginBottom:10,fontSize:14}}>📝 บันทึกการเจรจา / Note</div>
+              <textarea className="input" placeholder="บันทึกผลการเจรจา, trade term, ข้อตกลง..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
+              <div style={{display:'flex',gap:10,marginTop:10,flexWrap:'wrap',alignItems:'center'}}>
+                <select className="input" style={{flex:'0 0 160px'}} value={noteType} onChange={e=>setNoteType(e.target.value)}>
+                  {Object.entries(NOTE_TYPE_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                </select>
+                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={noteBy} onChange={e=>setNoteBy(e.target.value)}/>
+                <button className="btn btn-primary" onClick={addNote}>บันทึก</button>
+              </div>
+            </div>
+            {(data.notes||[]).length===0 ? <div className="empty-state"><div className="icon">📝</div><div>ยังไม่มี Note</div></div> :
+              (data.notes||[]).map(n => (
+                <div key={n.id} className="note-item">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                    <span style={{background:'#e0f2fe',color:'#0369a1',borderRadius:4,padding:'2px 8px',fontSize:11}}>{NOTE_TYPE_LABELS[n.note_type]||n.note_type}</span>
+                    <span style={{fontSize:12,color:'#94a3b8'}}>{n.created_by||'ไม่ระบุ'} • {n.created_at}</span>
+                  </div>
+                  <div style={{whiteSpace:'pre-wrap'}}>{n.note}</div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {tab==='tickets' && (
+          <div>
+            {(data.tickets||[]).length===0 ? <div className="empty-state"><div className="icon">🎫</div><div>ไม่มี Ticket</div></div> :
+              (data.tickets||[]).map(t => (
+                <div key={t.id} className={`note-item priority-${t.priority}`} style={{cursor:'pointer'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                    <span style={{fontWeight:600}}>{t.ticket_no} — {t.title}</span>
+                    <span className={`badge badge-${t.status}`}>{STATUS_LABELS[t.status]}</span>
+                  </div>
+                  <div style={{fontSize:12,color:'#64748b'}}>{t.assigned_department||'-'} • {t.assigned_employee_name||'-'} • {t.created_at}</div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TICKET LIST
+// ─────────────────────────────────────────────
+function TicketList({ onSelect, onNew }) {
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterDept, setFilterDept] = useState('');
+  const [search, setSearch] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (filterStatus) params.set('status', filterStatus);
+    if (filterDept) params.set('department', filterDept);
+    if (search) params.set('search', search);
+    api.get(`/api/tickets?${params}`).then(d => { setTickets(d); setLoading(false); });
+  }, [filterStatus, filterDept, search]);
+
+  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="page-header">
+        <div className="page-title">🎫 Ticket / Case</div>
+        <button className="btn btn-primary" onClick={onNew}>+ สร้าง Ticket</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
+        <div className="search-box" style={{flex:'1 1 200px'}}>
+          <span className="search-icon">🔍</span>
+          <input className="input" style={{paddingLeft:36}} placeholder="ค้นหา Ticket..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <select className="input" style={{flex:'0 0 160px'}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+          <option value="">ทุกสถานะ</option>
+          {STATUSES.map(s=><option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+        </select>
+        <select className="input" style={{flex:'0 0 200px'}} value={filterDept} onChange={e=>setFilterDept(e.target.value)}>
+          <option value="">ทุกทีม</option>
+          {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      <div className="card">
+        {loading ? <Loading/> : tickets.length===0 ? (
+          <div className="empty-state"><div className="icon">🎫</div><div>ไม่พบ Ticket</div></div>
+        ) : (
+          <div className="table-container">
+            <table>
+              <thead><tr><th>Ticket No.</th><th>หัวข้อ</th><th>ประเภท</th><th>เกี่ยวกับ</th><th>ทีม</th><th>ผู้รับผิดชอบ</th><th>ความเร่งด่วน</th><th>สถานะ</th><th>วันที่</th></tr></thead>
+              <tbody>
+                {tickets.map(t => (
+                  <tr key={t.id} onClick={()=>onSelect(t.id)} className={`priority-${t.priority}`}>
+                    <td style={{fontWeight:600,color:'#0F766E',whiteSpace:'nowrap'}}>{t.ticket_no}</td>
+                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title}</td>
+                    <td style={{fontSize:12}}>{TICKET_TYPE_LABELS[t.ticket_type]||t.ticket_type}</td>
+                    <td style={{fontSize:12}}>{t.related_name||'-'}</td>
+                    <td style={{fontSize:12}}>{t.assigned_department||'-'}</td>
+                    <td style={{fontSize:12}}>{t.assigned_employee_name||'-'}</td>
+                    <td><span className={`badge badge-${t.priority}`}>{PRIORITY_LABELS[t.priority]}</span></td>
+                    <td><span className={`badge badge-${t.status}`}>{STATUS_LABELS[t.status]}</span></td>
+                    <td style={{fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>{fmt.date(t.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// TICKET DETAIL
+// ─────────────────────────────────────────────
+function TicketDetail({ id, onBack }) {
+  const [data, setData] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState({});
+  const [comment, setComment] = useState('');
+  const [commentBy, setCommentBy] = useState('');
+  const [employees, setEmployees] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const load = () => api.get(`/api/tickets/${id}`).then(d => { setData(d); setForm(d); });
+  useEffect(() => { load(); api.get('/api/employees').then(setEmployees); }, [id]);
+  if (!data) return <Loading/>;
+
+  const deptEmps = employees.filter(e => !form.assigned_department || e.department === form.assigned_department);
+
+  const save = () => {
+    api.put(`/api/tickets/${id}`, form).then(r => {
+      if (r.error) return setToast({msg:r.error,type:'error'});
+      setData({...data,...r,comments:data.comments}); setEditMode(false);
+      setToast({msg:'อัปเดตสำเร็จ',type:'success'});
+    });
+  };
+
+  const addComment = () => {
+    if (!comment.trim()) return;
+    api.post(`/api/tickets/${id}/comments`, { comment, created_by:commentBy }).then(() => {
+      setComment(''); load();
+    });
+  };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Ticket</div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+          <div>
+            <div style={{fontSize:13,color:'#64748b',marginBottom:4}}>{data.ticket_no}</div>
+            {editMode
+              ? <input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} style={{fontSize:18,fontWeight:600}}/>
+              : <h1 style={{fontSize:20,fontWeight:700,color:'#0f172a'}}>{data.title}</h1>
+            }
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <span className={`badge badge-${data.priority}`}>{PRIORITY_LABELS[data.priority]}</span>
+            <span className={`badge badge-${data.status}`}>{STATUS_LABELS[data.status]}</span>
+            {editMode
+              ? <><button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(false)}>ยกเลิก</button><button className="btn btn-primary btn-sm" onClick={save}>บันทึก</button></>
+              : <button className="btn btn-secondary btn-sm" onClick={()=>setEditMode(true)}>✏️ แก้ไข</button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
+        <div>
+          <div className="card" style={{marginBottom:16}}>
+            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>รายละเอียด</div>
+            {editMode
+              ? <textarea className="input" style={{minHeight:100}} value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/>
+              : <div style={{whiteSpace:'pre-wrap',color:'#374151',lineHeight:1.7}}>{data.description||'ไม่มีรายละเอียด'}</div>
+            }
+          </div>
+
+          <div className="card">
+            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>💬 ความคืบหน้า / Comments ({(data.comments||[]).length})</div>
+            {(data.comments||[]).length===0 ? <div style={{color:'#94a3b8',fontSize:13,marginBottom:16}}>ยังไม่มี comment</div> :
+              (data.comments||[]).map(c => (
+                <div key={c.id} className="comment-item">
+                  <div style={{whiteSpace:'pre-wrap'}}>{c.comment}</div>
+                  <div style={{fontSize:12,color:'#94a3b8',marginTop:6}}>{c.created_by||'ไม่ระบุ'} • {c.created_at}</div>
+                </div>
+              ))
+            }
+            <div style={{background:'#f8fafc',borderRadius:10,padding:14,marginTop:12}}>
+              <textarea className="input" placeholder="เพิ่มความคืบหน้า หรือ comment..." value={comment} onChange={e=>setComment(e.target.value)}/>
+              <div style={{display:'flex',gap:10,marginTop:8,alignItems:'center'}}>
+                <input className="input" style={{flex:1}} placeholder="ชื่อผู้บันทึก" value={commentBy} onChange={e=>setCommentBy(e.target.value)}/>
+                <button className="btn btn-primary" onClick={addComment}>ส่ง</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{alignSelf:'start'}}>
+          <div style={{fontWeight:600,marginBottom:14,fontSize:15}}>📌 ข้อมูล Ticket</div>
+          <div style={{display:'grid',gap:14}}>
+            <div>
+              <label className="label">สถานะ</label>
+              {editMode ? (
+                <select className="input" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                  {STATUSES.map(s=><option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+              ) : <span className={`badge badge-${data.status}`}>{STATUS_LABELS[data.status]}</span>}
+            </div>
+            <div>
+              <label className="label">ความเร่งด่วน</label>
+              {editMode ? (
+                <select className="input" value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>
+                  {PRIORITIES.map(p=><option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+                </select>
+              ) : <span className={`badge badge-${data.priority}`}>{PRIORITY_LABELS[data.priority]}</span>}
+            </div>
+            <div>
+              <label className="label">ประเภท</label>
+              {editMode ? (
+                <select className="input" value={form.ticket_type} onChange={e=>setForm({...form,ticket_type:e.target.value})}>
+                  {TICKET_TYPES.map(t=><option key={t} value={t}>{TICKET_TYPE_LABELS[t]}</option>)}
+                </select>
+              ) : <div style={{color:'#374151'}}>{TICKET_TYPE_LABELS[data.ticket_type]||data.ticket_type}</div>}
+            </div>
+            <div>
+              <label className="label">เกี่ยวกับ</label>
+              <div style={{color:'#374151'}}>{data.related_type==='customer'?'🏪':'🚛'} {data.related_name||'-'}</div>
+            </div>
+            <div>
+              <label className="label">ทีมรับผิดชอบ</label>
+              {editMode ? (
+                <select className="input" value={form.assigned_department||''} onChange={e=>setForm({...form,assigned_department:e.target.value,assigned_employee_id:null,assigned_employee_name:''})}>
+                  <option value="">เลือกทีม</option>
+                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              ) : <div style={{color:'#374151'}}>{data.assigned_department||'-'}</div>}
+            </div>
+            <div>
+              <label className="label">ผู้รับผิดชอบ</label>
+              {editMode ? (
+                <select className="input" value={form.assigned_employee_id||''} onChange={e=>{
+                  const emp = employees.find(x=>x.id==e.target.value);
+                  setForm({...form,assigned_employee_id:e.target.value,assigned_employee_name:emp?emp.name:''});
+                }}>
+                  <option value="">เลือกพนักงาน</option>
+                  {deptEmps.map(e=><option key={e.id} value={e.id}>{e.name} ({e.team||e.department})</option>)}
+                </select>
+              ) : <div style={{color:'#374151'}}>{data.assigned_employee_name||'-'}</div>}
+            </div>
+            <div>
+              <label className="label">สร้างโดย</label>
+              <div style={{color:'#374151'}}>{data.created_by||'-'}</div>
+            </div>
+            <div>
+              <label className="label">วันที่สร้าง</label>
+              <div style={{color:'#374151'}}>{fmt.date(data.created_at)}</div>
+            </div>
+            {data.resolved_at && <div>
+              <label className="label">วันที่แก้ไขแล้ว</label>
+              <div style={{color:'#059669'}}>{fmt.date(data.resolved_at)}</div>
+            </div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// NEW TICKET
+// ─────────────────────────────────────────────
+function NewTicket({ onBack, prefill }) {
+  const [form, setForm] = useState({
+    title:'', description:'', ticket_type:'general', priority:'medium',
+    related_type: prefill?.related_type||'', related_id: prefill?.related_id||'',
+    related_name: prefill?.related_name||'', assigned_department:'',
+    assigned_employee_id:'', assigned_employee_name:'', created_by:''
+  });
+  const [employees, setEmployees] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    api.get('/api/employees').then(setEmployees);
+    api.get('/api/customers').then(setCustomers);
+    api.get('/api/suppliers').then(setSuppliers);
+  }, []);
+
+  const deptEmps = employees.filter(e => !form.assigned_department || e.department === form.assigned_department);
+
+  const submit = () => {
+    if (!form.title.trim()) return setToast({msg:'กรุณากรอกหัวข้อ',type:'error'});
+    api.post('/api/tickets', form).then(r => {
+      if (r.error) return setToast({msg:r.error,type:'error'});
+      setToast({msg:`สร้าง Ticket ${r.ticket_no} สำเร็จ`,type:'success'});
+      setTimeout(onBack, 1200);
+    });
+  };
+
+  const relatedList = form.related_type==='customer' ? customers : form.related_type==='supplier' ? suppliers : [];
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="breadcrumb" onClick={onBack}>← กลับ รายการ Ticket</div>
+      <div className="page-title" style={{marginBottom:16}}>🎫 สร้าง Ticket ใหม่</div>
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
+        <div className="card">
+          <div style={{display:'grid',gap:14}}>
+            <div><label className="label">หัวข้อ Ticket *</label><input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="อธิบายปัญหาหรือเรื่องที่ต้องดำเนินการ"/></div>
+            <div>
+              <label className="label">รายละเอียด</label>
+              <textarea className="input" style={{minHeight:120}} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="อธิบายรายละเอียดเพิ่มเติม เช่น สินค้าที่มีปัญหา, จำนวน, สาเหตุ..."/>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label className="label">ประเภท Ticket</label>
+                <select className="input" value={form.ticket_type} onChange={e=>setForm({...form,ticket_type:e.target.value})}>
+                  {TICKET_TYPES.map(t=><option key={t} value={t}>{TICKET_TYPE_LABELS[t]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">ความเร่งด่วน</label>
+                <select className="input" value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>
+                  {PRIORITIES.map(p=><option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+                </select>
+              </div>
+            </div>
+            <div><label className="label">สร้างโดย</label><input className="input" value={form.created_by} onChange={e=>setForm({...form,created_by:e.target.value})} placeholder="ชื่อผู้สร้าง ticket"/></div>
+          </div>
+        </div>
+
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div className="card">
+            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>🔗 เชื่อมโยงกับ</div>
+            <div style={{display:'grid',gap:12}}>
+              <div>
+                <label className="label">ประเภท</label>
+                <select className="input" value={form.related_type} onChange={e=>setForm({...form,related_type:e.target.value,related_id:'',related_name:''})}>
+                  <option value="">ไม่ระบุ</option>
+                  <option value="customer">ลูกค้า</option>
+                  <option value="supplier">Supplier</option>
+                </select>
+              </div>
+              {form.related_type && (
+                <div>
+                  <label className="label">{form.related_type==='customer'?'ลูกค้า':'Supplier'}</label>
+                  <select className="input" value={form.related_id} onChange={e=>{
+                    const item = relatedList.find(x=>x.id==e.target.value);
+                    setForm({...form,related_id:e.target.value,related_name:item?item.name:''});
+                  }}>
+                    <option value="">เลือก...</option>
+                    {relatedList.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div style={{fontWeight:600,marginBottom:12,fontSize:15}}>👥 มอบหมาย</div>
+            <div style={{display:'grid',gap:12}}>
+              <div>
+                <label className="label">ทีมรับผิดชอบ</label>
+                <select className="input" value={form.assigned_department} onChange={e=>setForm({...form,assigned_department:e.target.value,assigned_employee_id:'',assigned_employee_name:''})}>
+                  <option value="">เลือกทีม</option>
+                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">ผู้รับผิดชอบ</label>
+                <select className="input" value={form.assigned_employee_id} onChange={e=>{
+                  const emp = employees.find(x=>x.id==e.target.value);
+                  setForm({...form,assigned_employee_id:e.target.value,assigned_employee_name:emp?emp.name:''});
+                }}>
+                  <option value="">เลือกพนักงาน</option>
+                  {deptEmps.map(e=><option key={e.id} value={e.id}>{e.name} ({e.team||e.department})</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button className="btn btn-primary" style={{padding:'12px'}} onClick={submit}>🎫 สร้าง Ticket</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// EMPLOYEES
+// ─────────────────────────────────────────────
+function EmployeeList() {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterDept, setFilterDept] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name:'', employee_code:'', department:'', team:'', role:'', phone:'', email:'' });
+  const [toast, setToast] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get(`/api/employees?department=${encodeURIComponent(filterDept)}`).then(d => { setEmployees(d); setLoading(false); });
+  }, [filterDept]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = () => {
+    if (!form.name) return setToast({msg:'กรุณากรอกชื่อ',type:'error'});
+    api.post('/api/employees', form).then(r => {
+      if (r.error) return setToast({msg:r.error,type:'error'});
+      setToast({msg:'เพิ่มพนักงานสำเร็จ',type:'success'});
+      setShowAdd(false);
+      setForm({ name:'', employee_code:'', department:'', team:'', role:'', phone:'', email:'' });
+      load();
+    });
+  };
+
+  const grouped = {};
+  employees.forEach(e => { const d=e.department||'ไม่ระบุ'; if(!grouped[d]) grouped[d]=[]; grouped[d].push(e); });
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <div className="page-header">
+        <div className="page-title">👥 พนักงาน</div>
+        <button className="btn btn-primary" onClick={()=>setShowAdd(true)}>+ เพิ่มพนักงาน</button>
+      </div>
+      <div style={{marginBottom:16}}>
+        <select className="input" style={{maxWidth:220}} value={filterDept} onChange={e=>setFilterDept(e.target.value)}>
+          <option value="">ทุกแผนก</option>
+          {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      {loading ? <Loading/> : employees.length===0 ? (
+        <div className="card"><div className="empty-state"><div className="icon">👥</div><div>ยังไม่มีข้อมูลพนักงาน</div></div></div>
+      ) : (
+        Object.entries(grouped).map(([dept, emps]) => (
+          <div key={dept} className="card" style={{marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:16,color:'#0f172a',marginBottom:12,paddingBottom:8,borderBottom:'2px solid #f0fdf4'}}>
+              🏢 {dept} <span style={{fontSize:13,fontWeight:400,color:'#64748b'}}>({emps.length} คน)</span>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
+              {emps.map(e => (
+                <div key={e.id} style={{background:'#f8fafc',borderRadius:10,padding:14,border:'1px solid #e2e8f0'}}>
+                  <div style={{fontWeight:600,color:'#0f172a'}}>{e.name}</div>
+                  <div style={{fontSize:12,color:'#64748b',marginTop:2}}>{e.team||e.role||'-'}</div>
+                  {e.phone && <div style={{fontSize:13,marginTop:4}}>📞 {e.phone}</div>}
+                  {e.email && <div style={{fontSize:12,color:'#64748b'}}>{e.email}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {showAdd && (
+        <Modal title="เพิ่มพนักงาน" onClose={()=>setShowAdd(false)} wide>
+          <div style={{display:'grid',gap:14}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">ชื่อ-นามสกุล *</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+              <div><label className="label">รหัสพนักงาน</label><input className="input" value={form.employee_code} onChange={e=>setForm({...form,employee_code:e.target.value})}/></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label className="label">แผนก</label>
+                <select className="input" value={form.department} onChange={e=>setForm({...form,department:e.target.value,team:''})}>
+                  <option value="">เลือกแผนก</option>
+                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">ทีม</label>
+                <select className="input" value={form.team} onChange={e=>setForm({...form,team:e.target.value})}>
+                  <option value="">เลือกทีม</option>
+                  {(TEAMS[form.department]||[]).map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div><label className="label">ตำแหน่ง</label><input className="input" value={form.role} onChange={e=>setForm({...form,role:e.target.value})}/></div>
+              <div><label className="label">เบอร์โทร</label><input className="input" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></div>
+            </div>
+            <div><label className="label">Email</label><input className="input" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
+            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}>
+              <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>ยกเลิก</button>
+              <button className="btn btn-primary" onClick={save}>บันทึก</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// IMPORT PAGE
+// ─────────────────────────────────────────────
+function ImportPage() {
+  const [file, setFile] = useState(null);
+  const [month, setMonth] = useState('JAN');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const fileRef = useRef();
+
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+  const doImport = () => {
+    if (!file) return;
+    setLoading(true); setResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('month', month);
+    api.upload('/api/import/erp', fd).then(r => {
+      setLoading(false);
+      setResult(r);
+    }).catch(e => { setLoading(false); setResult({error: e.toString()}); });
+  };
+
+  return (
+    <div>
+      <div className="page-title" style={{marginBottom:20}}>📥 Import ข้อมูลจาก ERP</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:16,fontSize:16}}>อัปโหลดไฟล์ ERP (.xlsx)</div>
+          <div style={{marginBottom:14}}>
+            <label className="label">เดือนของข้อมูล</label>
+            <select className="input" value={month} onChange={e=>setMonth(e.target.value)}>
+              {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div
+            style={{border:'2px dashed #cbd5e1',borderRadius:12,padding:40,textAlign:'center',cursor:'pointer',marginBottom:16,background:file?'#f0fdf4':'#fafafa'}}
+            onClick={()=>fileRef.current.click()}
+          >
+            <div style={{fontSize:40,marginBottom:8}}>{file?'✅':'📂'}</div>
+            <div style={{color:'#64748b',fontSize:14}}>
+              {file ? file.name : 'คลิกเพื่อเลือกไฟล์ .xlsx จาก ERP'}
+            </div>
+            {file && <div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{(file.size/1024).toFixed(0)} KB</div>}
+          </div>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{display:'none'}} onChange={e=>setFile(e.target.files[0])}/>
+          <button className="btn btn-primary" style={{width:'100%',padding:12}} onClick={doImport} disabled={!file||loading}>
+            {loading ? '⏳ กำลัง Import...' : '📥 Import ข้อมูล'}
+          </button>
+        </div>
+
+        <div className="card">
+          <div style={{fontWeight:600,marginBottom:16,fontSize:16}}>📋 รายละเอียดการ Import</div>
+          <div style={{fontSize:14,color:'#475569',lineHeight:2,marginBottom:16}}>
+            <div>✅ รองรับไฟล์: .xlsx จาก ERP รายเดือน</div>
+            <div>✅ Sheet ที่ค้นหา: Table_Invoice_Archive</div>
+            <div>✅ ข้อมูลที่ Import: คำสั่งซื้อ, ลูกค้า, สินค้า, claim</div>
+            <div>✅ ป้องกันข้อมูลซ้ำ: ตรวจสอบด้วย ERP ID + เดือน</div>
+            <div>✅ สร้างลูกค้าใหม่อัตโนมัติ: ถ้าชื่อยังไม่มีในระบบ</div>
+          </div>
+          {result && (
+            <div style={{borderRadius:10,padding:16,background:result.error?'#fef2f2':'#f0fdf4',border:`1px solid ${result.error?'#fecaca':'#bbf7d0'}`}}>
+              {result.error
+                ? <div style={{color:'#dc2626'}}>❌ เกิดข้อผิดพลาด: {result.error}</div>
+                : <div>
+                    <div style={{color:'#059669',fontWeight:600,fontSize:15,marginBottom:8}}>✅ Import สำเร็จ!</div>
+                    <div>นำเข้า: <strong>{result.imported}</strong> รายการ</div>
+                    <div style={{color:'#64748b',fontSize:13}}>ข้ามซ้ำ: {result.skipped} รายการ</div>
+                  </div>
+              }
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// APP ROOT
+// ─────────────────────────────────────────────
+function App() {
+  const [nav, setNav] = useState('dashboard');
+  const [view, setView] = useState('list'); // list | detail | new
+  const [selectedId, setSelectedId] = useState(null);
+  const [ticketPrefill, setTicketPrefill] = useState(null);
+
+  const goto = (page, v='list', id=null, prefill=null) => {
+    setNav(page); setView(v); setSelectedId(id); setTicketPrefill(prefill);
+    window.scrollTo(0,0);
+  };
+
+  const handleNewTicket = (prefill) => { goto('tickets','new',null,prefill); };
+
+  return (
+    <div>
+      <Sidebar nav={nav} setNav={(p) => goto(p)} />
+      <div className="main-content">
+        {nav==='dashboard' && <Dashboard/>}
+
+        {nav==='customers' && view==='list' && <CustomerList onSelect={id=>goto('customers','detail',id)}/>}
+        {nav==='customers' && view==='detail' && (
+          <CustomerDetail id={selectedId} onBack={()=>goto('customers')} onNewTicket={handleNewTicket}/>
+        )}
+
+        {nav==='suppliers' && view==='list' && <SupplierList onSelect={id=>goto('suppliers','detail',id)}/>}
+        {nav==='suppliers' && view==='detail' && (
+          <SupplierDetail id={selectedId} onBack={()=>goto('suppliers')} onNewTicket={handleNewTicket}/>
+        )}
+
+        {nav==='tickets' && view==='list' && (
+          <TicketList onSelect={id=>goto('tickets','detail',id)} onNew={()=>goto('tickets','new')}/>
+        )}
+        {nav==='tickets' && view==='detail' && (
+          <TicketDetail id={selectedId} onBack={()=>goto('tickets')}/>
+        )}
+        {nav==='tickets' && view==='new' && (
+          <NewTicket onBack={()=>goto('tickets')} prefill={ticketPrefill}/>
+        )}
+
+        {nav==='employees' && <EmployeeList/>}
+        {nav==='import' && <ImportPage/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
