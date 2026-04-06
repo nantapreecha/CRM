@@ -953,7 +953,7 @@ function Users({ currentUser }) {
   const doResetPw = async (uid) => {
     const pw = resetPw[uid];
     if (!pw) return;
-    const res = await api(`/api/users/${uid}/reset-password`, { method:'POST', body: JSON.stringify({password:pw}) });
+    const res = await api(`/api/users/${uid}/password`, { method:'PUT', body: JSON.stringify({new_password:pw}) });
     if (res && res.success) { setResetPw(r=>({...r,[uid]:''})); alert('รีเซ็ตสำเร็จ'); }
     else alert(res?.error || 'เกิดข้อผิดพลาด');
   };
