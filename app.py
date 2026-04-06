@@ -708,7 +708,10 @@ def get_tickets():
     wheres = []
 
     base = """
-        SELECT DISTINCT t.*, o.name AS outlet_name, a.name AS account_name
+        SELECT DISTINCT t.*, o.name AS outlet_name, a.name AS account_name,
+               (SELECT image_url FROM ticket_workflow_log
+                WHERE ticket_id = t.id AND image_url IS NOT NULL AND image_url != ''
+                ORDER BY created_at DESC LIMIT 1) AS latest_image_url
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id
