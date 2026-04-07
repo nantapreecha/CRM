@@ -443,7 +443,6 @@ function Combobox({ items, value, onChange, placeholder, labelKey='name' }) {
 function CreateTicket({ user, onCreated }) {
   const [accounts, setAccounts] = useState([]);
   const [allOutlets, setAllOutlets] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [form, setForm] = useState({
     case_type: 'Complain', case_subtype: '', root_cause: '', priority: 'Medium',
@@ -455,7 +454,6 @@ function CreateTicket({ user, onCreated }) {
 
   useEffect(() => {
     api('/api/accounts').then(d => setAccounts(d || []));
-    api('/api/employees').then(d => setEmployees(d || []));
   }, []);
 
   useEffect(() => {
@@ -552,14 +550,6 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Employee */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">พนักงานที่รับผิดชอบ</label>
-            <select value={form.employee_id} onChange={e=>set('employee_id',e.target.value)}>
-              <option value="">-- ไม่ระบุ --</option>
-              {employees.filter(e => e.team === user.team).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-          </div>
 
           {/* Description */}
           <div>
