@@ -1073,12 +1073,20 @@ def dashboard_overview():
     by_case = query(f"SELECT case_type, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY case_type ORDER BY cnt DESC", params)
     by_root = query(f"SELECT root_cause, COUNT(*) AS cnt FROM tickets t WHERE root_cause IS NOT NULL AND root_cause!='' {extra} GROUP BY root_cause ORDER BY cnt DESC", params)
     by_priority = query(f"SELECT priority, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY priority", params)
+    by_opener = query(f"SELECT opener_team, COUNT(*) AS count FROM tickets t WHERE opener_team IS NOT NULL {extra} GROUP BY opener_team ORDER BY count DESC", params)
+    status_map = {r['status']: r['cnt'] for r in by_status}
     return jsonify({
         'total': total['cnt'] if total else 0,
+        'open': status_map.get('open', 0),
+        'in_progress': status_map.get('in_progress', 0),
+        'pending_ack': status_map.get('pending_ack', 0),
+        'pending_fault': status_map.get('pending_fault', 0),
+        'closed': status_map.get('closed', 0),
         'by_status': by_status,
         'by_case_type': by_case,
         'by_root_cause': by_root,
         'by_priority': by_priority,
+        'by_opener_team': by_opener,
     })
 
 @app.route('/api/dashboard/sku-problems', methods=['GET'])

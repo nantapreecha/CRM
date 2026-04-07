@@ -186,8 +186,56 @@ function ImageUploader({ onUploaded }) {
   );
 }
 
+// ── DateRangeFilter ───────────────────────────────────────────────────────────
+function DateRangeFilter({ value, onChange }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const d7 = new Date(Date.now() - 6*86400000).toISOString().slice(0, 10);
+  const d30 = new Date(Date.now() - 29*86400000).toISOString().slice(0, 10);
+  return (
+    <div className="flex items-center gap-2 flex-wrap mb-5">
+      <span className="text-sm text-gray-500 shrink-0">Date range:</span>
+      <input type="date" value={value.start} onChange={e=>onChange({...value,start:e.target.value})}
+        style={{fontSize:13,border:'1px solid #d1d5db',borderRadius:6,padding:'4px 8px'}}/>
+      <span className="text-xs text-gray-400">—</span>
+      <input type="date" value={value.end} onChange={e=>onChange({...value,end:e.target.value})}
+        style={{fontSize:13,border:'1px solid #d1d5db',borderRadius:6,padding:'4px 8px'}}/>
+      <button className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
+        onClick={()=>onChange({start:d7,end:today})}>7 days</button>
+      <button className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
+        onClick={()=>onChange({start:d30,end:today})}>30 days</button>
+      <button className="text-xs text-gray-400 hover:underline"
+        onClick={()=>onChange({start:'',end:''})}>All time</button>
+    </div>
+  );
+}
+
+// ── BarChart ──────────────────────────────────────────────────────────────────
+function BarChart({ data, labelKey, valueKey, color='var(--primary)' }) {
+  if (!data || data.length === 0) return <p className="text-gray-400 text-sm">No data yet</p>;
+  const max = Math.max(...data.map(d => d[valueKey] || 0)) || 1;
+  return (
+    <div className="space-y-2">
+      {data.map((d, i) => {
+        const pct = Math.round((d[valueKey]||0) / max * 100);
+        return (
+          <div key={i} className="flex items-center gap-3">
+            <div className="w-32 text-sm text-gray-600 truncate shrink-0">{d[labelKey] || '—'}</div>
+            <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{width:pct+'%', background:color}}/>
+            </div>
+            <div className="text-sm text-gray-600 w-8 text-right shrink-0">{d[valueKey]||0}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function Dashboard() {
+  const today = new Date().toISOString().slice(0, 10);
+  const d7 = new Date(Date.now() - 6*86400000).toISOString().slice(0, 10);
+  const [dateRange, setDateRange] = useState({ start: d7, end: today });
   const [tab, setTab] = useState('overview');
   const [overview, setOverview] = useState(null);
   const [bottleneck, setBottleneck] = useState([]);
@@ -195,46 +243,64 @@ function Dashboard() {
   const [faultEmp, setFaultEmp] = useState([]);
   const [skuProblems, setSkuProblems] = useState([]);
   const [byCust, setByCust] = useState([]);
+  const [byEmp, setByEmp] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const qs = dateRange.start ? `?start=${dateRange.start}&end=${dateRange.end}` : '';
+
   useEffect(() => {
+    setLoading(true);
     Promise.all([
-      api('/api/dashboard/overview'),
-      api('/api/dashboard/bottleneck'),
-      api('/api/dashboard/fault-by-team'),
-      api('/api/dashboard/fault-by-employee'),
-      api('/api/dashboard/sku-problems'),
-      api('/api/dashboard/by-customer')
-    ]).then(([ov, bn, ft, fe, sk, bc]) => {
+      api(`/api/dashboard/overview${qs}`),
+      api(`/api/dashboard/bottleneck`),
+      api(`/api/dashboard/fault-by-team`),
+      api(`/api/dashboard/fault-by-employee`),
+      api(`/api/dashboard/sku-problems${qs}`),
+      api(`/api/dashboard/by-customer${qs}`),
+      api(`/api/dashboard/by-employee${qs}`),
+    ]).then(([ov, bn, ft, fe, sk, bc, be]) => {
       setOverview(ov);
       setBottleneck(bn || []);
       setFaultTeam(ft || []);
       setFaultEmp(fe || []);
       setSkuProblems(sk || []);
       setByCust(bc || []);
+      setByEmp(be || []);
       setLoading(false);
     });
-  }, []);
+  }, [qs]);
 
   if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/> Loading...</div>;
 
   const tabs = [
     {id:'overview', label:'Overview'},
-    {id:'bottleneck', label:'Bottleneck'},
-    {id:'fault-team', label:'Fault by Team'},
-    {id:'fault-emp', label:'Fault by Employee'},
-    {id:'sku', label:'Problem SKUs'},
-    {id:'customer', label:'By Account'},
+    {id:'bottleneck', label:'⏱ Bottleneck'},
+    {id:'fault-team', label:'⚠️ Fault by Team'},
+    {id:'fault-emp', label:'👤 Fault by Employee'},
+    {id:'sku', label:'📦 Problem SKUs'},
+    {id:'customer', label:'🏪 By Account'},
+    {id:'employee', label:'👥 By Employee'},
   ];
 
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4" style={{color:'var(--primary)'}}>📊 Dashboard</h2>
 
-      {/* overview cards */}
-      {overview && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <DateRangeFilter value={dateRange} onChange={setDateRange}/>
+
+      {/* tabs */}
+      <div className="flex border-b mb-5 overflow-x-auto">
+        {tabs.map(t => (
+          <div key={t.id} className={`tab ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)}>{t.label}</div>
+        ))}
+      </div>
+
+      {/* ── Overview tab ── */}
+      {tab === 'overview' && overview && (<div className="space-y-5">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
+            {label:'Total', val:overview.total, color:'#374151'},
             {label:'Open', val:overview.open, color:'#2563eb'},
             {label:'In Progress', val:overview.in_progress, color:'#d97706'},
             {label:'Pending', val:(overview.pending_ack||0)+(overview.pending_fault||0), color:'#7c3aed'},
@@ -246,39 +312,56 @@ function Dashboard() {
             </div>
           ))}
         </div>
-      )}
 
-      {/* contribution ratio */}
-      {overview && overview.by_opener_team && (
-        <div className="card p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">Case Contribution by Team</h3>
-          <div className="space-y-2">
-            {overview.by_opener_team.map(r => {
-              const pct = overview.total ? Math.round(r.count/overview.total*100) : 0;
-              return (
-                <div key={r.opener_team} className="flex items-center gap-3">
-                  <div className="w-28 text-sm text-gray-600 shrink-0">{TEAM_ICONS[r.opener_team]||'👥'} {r.opener_team}</div>
-                  <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{width:pct+'%', background:'var(--primary)'}}/>
-                  </div>
-                  <div className="text-sm text-gray-600 w-16 text-right">{r.count} ({pct}%)</div>
-                </div>
-              );
-            })}
+        {/* Bar charts row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Case Type</h3>
+            <BarChart data={overview.by_case_type} labelKey="case_type" valueKey="cnt" color="#0d9488"/>
+          </div>
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Fault Team</h3>
+            <BarChart data={faultTeam} labelKey="fault_team" valueKey="cnt" color="#ef4444"/>
+          </div>
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Priority</h3>
+            <BarChart data={overview.by_priority} labelKey="priority" valueKey="cnt" color="#f59e0b"/>
           </div>
         </div>
-      )}
 
-      {/* tabs */}
-      <div className="flex border-b mb-4 overflow-x-auto">
-        {tabs.slice(1).map(t => (
-          <div key={t.id} className={`tab ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)}>{t.label}</div>
-        ))}
-      </div>
+        {/* Case contribution by team */}
+        {overview.by_opener_team && overview.by_opener_team.length > 0 && (
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Case Contribution by Team</h3>
+            <div className="space-y-2">
+              {overview.by_opener_team.map(r => {
+                const pct = overview.total ? Math.round(r.count/overview.total*100) : 0;
+                return (
+                  <div key={r.opener_team} className="flex items-center gap-3">
+                    <div className="w-32 text-sm text-gray-600 shrink-0">{TEAM_ICONS[r.opener_team]||'👥'} {r.opener_team}</div>
+                    <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{width:pct+'%', background:'var(--primary)'}}/>
+                    </div>
+                    <div className="text-sm text-gray-600 w-20 text-right">{r.count} ({pct}%)</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Root cause */}
+        {overview.by_root_cause && overview.by_root_cause.length > 0 && (
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Root Cause</h3>
+            <BarChart data={overview.by_root_cause} labelKey="root_cause" valueKey="cnt" color="#8b5cf6"/>
+          </div>
+        )}
+      </div>)}
 
       {tab === 'bottleneck' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Average time per team</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">Average time per team (all time)</h3>
           {bottleneck.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
@@ -286,9 +369,9 @@ function Dashboard() {
               </tr></thead>
               <tbody>
                 {bottleneck.map((r,i) => (
-                  <tr key={i} className="border-b last:border-0">
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
                     <td className="py-2">{TEAM_ICONS[r.team]||'👥'} {r.team}</td>
-                    <td className="py-2">{r.count}</td>
+                    <td className="py-2">{r.ticket_count}</td>
                     <td className="py-2 font-medium" style={{color:'var(--primary)'}}>{fmtDuration(r.avg_seconds)}</td>
                   </tr>
                 ))}
@@ -300,7 +383,7 @@ function Dashboard() {
 
       {tab === 'fault-team' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Fault by Team</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">Fault by Team (all time)</h3>
           {faultTeam.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
@@ -308,9 +391,9 @@ function Dashboard() {
               </tr></thead>
               <tbody>
                 {faultTeam.map((r,i) => (
-                  <tr key={i} className="border-b last:border-0">
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
                     <td className="py-2">{TEAM_ICONS[r.fault_team]||'👥'} {r.fault_team}</td>
-                    <td className="py-2 font-semibold text-red-600">{r.count}</td>
+                    <td className="py-2 font-semibold text-red-600">{r.cnt}</td>
                   </tr>
                 ))}
               </tbody>
@@ -321,7 +404,7 @@ function Dashboard() {
 
       {tab === 'fault-emp' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Fault by Employee</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">Fault by Employee (all time)</h3>
           {faultEmp.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
@@ -329,10 +412,10 @@ function Dashboard() {
               </tr></thead>
               <tbody>
                 {faultEmp.map((r,i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-2">{r.employee_name}</td>
-                    <td className="py-2 text-gray-500">{r.fault_team}</td>
-                    <td className="py-2 font-semibold text-red-600">{r.count}</td>
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
+                    <td className="py-2 font-medium">{r.name}</td>
+                    <td className="py-2 text-gray-500">{r.team}</td>
+                    <td className="py-2 font-semibold text-red-600">{r.cnt}</td>
                   </tr>
                 ))}
               </tbody>
@@ -347,14 +430,15 @@ function Dashboard() {
           {skuProblems.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">SKU</th><th className="pb-2">Root Cause</th><th className="pb-2">Count</th>
+                <th className="pb-2">SKU</th><th className="pb-2">Product Name</th><th className="pb-2">Cases</th><th className="pb-2">Case Types</th>
               </tr></thead>
               <tbody>
                 {skuProblems.map((r,i) => (
-                  <tr key={i} className="border-b last:border-0">
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
                     <td className="py-2 font-mono text-xs">{r.sku_code}</td>
-                    <td className="py-2">{r.root_cause}</td>
-                    <td className="py-2 font-semibold">{r.count}</td>
+                    <td className="py-2">{r.product_name}</td>
+                    <td className="py-2 font-semibold text-red-600">{r.cnt}</td>
+                    <td className="py-2 text-xs text-gray-400">{r.case_types}</td>
                   </tr>
                 ))}
               </tbody>
@@ -365,17 +449,42 @@ function Dashboard() {
 
       {tab === 'customer' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Cases by Account</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">Cases by Account / Outlet</h3>
           {byCust.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">Account</th><th className="pb-2">Count</th>
+                <th className="pb-2">Outlet</th><th className="pb-2">Account</th><th className="pb-2">Cases</th><th className="pb-2">Case Types</th>
               </tr></thead>
               <tbody>
                 {byCust.map((r,i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-2">{r.account_name}</td>
-                    <td className="py-2 font-semibold">{r.count}</td>
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
+                    <td className="py-2 font-medium">{r.outlet_name}</td>
+                    <td className="py-2 text-gray-500">{r.account_name}</td>
+                    <td className="py-2 font-semibold">{r.cnt}</td>
+                    <td className="py-2 text-xs text-gray-400">{r.case_types}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'employee' && (
+        <div className="card p-4">
+          <h3 className="font-semibold text-gray-700 mb-3">Cases by Employee (fault attribution)</h3>
+          {byEmp.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-gray-500 border-b">
+                <th className="pb-2">Employee</th><th className="pb-2">Team</th><th className="pb-2">Cases</th><th className="pb-2">% of Total</th>
+              </tr></thead>
+              <tbody>
+                {byEmp.map((r,i) => (
+                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
+                    <td className="py-2 font-medium">{r.name}</td>
+                    <td className="py-2 text-gray-500">{r.team}</td>
+                    <td className="py-2 font-semibold">{r.cnt}</td>
+                    <td className="py-2 text-gray-500">{r.pct}%</td>
                   </tr>
                 ))}
               </tbody>
