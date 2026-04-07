@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS outlets (
     account_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     erp_customer_id TEXT,
-    erp_outlet_id TEXT,
+    erp_outlet_id TEXT UNIQUE,
     csc_code TEXT,
     status TEXT DEFAULT 'active',
     FOREIGN KEY (account_id) REFERENCES accounts(id)
@@ -319,6 +319,7 @@ def init_db():
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fault_attributed_at TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS image_url TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        "CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_idx ON outlets(erp_outlet_id) WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != ''",
     ]
     for m in migrations:
         try:
@@ -1315,15 +1316,26 @@ def import_erp():
             acc_id = account_map.get(acc_name)
             if acc_id is None:
                 continue
-            cur.execute("""
-                INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (account_id, name) DO UPDATE
-                    SET erp_customer_id=EXCLUDED.erp_customer_id,
-                        erp_outlet_id=EXCLUDED.erp_outlet_id,
-                        csc_code=EXCLUDED.csc_code
-                RETURNING id, name, account_id
-            """, (acc_id, out_name, erp_cid, erp_oid, csc))
+            if erp_oid:
+                cur.execute("""
+                    INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (erp_outlet_id) DO UPDATE
+                        SET name=EXCLUDED.name,
+                            account_id=EXCLUDED.account_id,
+                            erp_customer_id=EXCLUDED.erp_customer_id,
+                            csc_code=EXCLUDED.csc_code
+                    RETURNING id, name, account_id
+                """, (acc_id, out_name, erp_cid, erp_oid, csc))
+            else:
+                cur.execute("""
+                    INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (account_id, name) DO UPDATE
+                        SET erp_customer_id=EXCLUDED.erp_customer_id,
+                            csc_code=EXCLUDED.csc_code
+                    RETURNING id, name, account_id
+                """, (acc_id, out_name, erp_cid, erp_oid, csc))
             r = cur.fetchone()
             outlet_map[(acc_id, r['name'])] = r['id']
 
