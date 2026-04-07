@@ -713,10 +713,13 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Claim items — shows after invoice selected */}
-          {isClaim && selectedInvoice && invoiceSkus.length > 0 && (
+          {/* Claim items — shows after invoice selected (all case types) */}
+          {selectedInvoice && invoiceSkus.length > 0 && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">Claim Items * <span className="text-xs text-gray-400 font-normal">— tick items with issues and fill claim qty</span></label>
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                {isClaim ? <>Claim Items <span className="text-red-500">*</span></> : 'Related Items'}
+                <span className="text-xs text-gray-400 font-normal ml-1">— tick items with issues{isClaim && ' and fill claim qty'}</span>
+              </label>
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
