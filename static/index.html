@@ -495,10 +495,10 @@ function CreateTicket({ user, onCreated }) {
 
           {/* Employee */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">พนักงานที่เกี่ยวข้อง</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">พนักงานที่รับผิดชอบ</label>
             <select value={form.employee_id} onChange={e=>set('employee_id',e.target.value)}>
               <option value="">-- ไม่ระบุ --</option>
-              {employees.map(e => <option key={e.id} value={e.id}>{e.name} ({e.team})</option>)}
+              {employees.filter(e => e.team === user.team).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
           </div>
 
