@@ -320,8 +320,9 @@ def init_db():
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS image_url TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS user_id INTEGER",
         "CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_idx ON outlets(erp_outlet_id) WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != ''",
-        # Fix old Complain tickets created before status=pending_ack fix
         "UPDATE tickets SET status='pending_ack' WHERE case_type='Complain' AND current_team='pending_ack' AND status='open'",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claim_items TEXT",
+        "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
     ]
     for m in migrations:
         try:
@@ -754,17 +755,33 @@ def create_ticket():
         current_team = initial_teams[0]
         status = 'open'
 
+    claim_items = d.get('claim_items')  # JSON string of [{sku_code,product_name,qty,unit,claimed_qty}]
+    # Use first claim item as primary sku for dashboard
+    primary_sku, primary_name = d.get('sku_code'), d.get('product_name')
+    if claim_items:
+        import json as _json
+        try:
+            items = _json.loads(claim_items) if isinstance(claim_items, str) else claim_items
+            if items:
+                primary_sku = items[0].get('sku_code', primary_sku)
+                primary_name = items[0].get('product_name', primary_name)
+            claim_items = _json.dumps(items) if not isinstance(claim_items, str) else claim_items
+        except Exception:
+            pass
+
     id_ = mutate("""INSERT INTO tickets
         (ticket_no, outlet_id, invoice_number, sku_code, product_name,
          case_type, case_subtype, root_cause, priority, status,
-         current_team, opener_team, opener_user_id, description, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+         current_team, opener_team, opener_user_id, description, created_by,
+         claim_items, resolution_type)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
         (ticket_no, d.get('outlet_id'), d.get('invoice_number'),
-         d.get('sku_code'), d.get('product_name'),
+         primary_sku, primary_name,
          case_type, d.get('case_subtype',''), d.get('root_cause',''),
          d.get('priority','Medium'), status,
          current_team, opener_team, opener_user_id,
-         d.get('description',''), g.user['display_name']))
+         d.get('description',''), g.user['display_name'],
+         claim_items, d.get('resolution_type','')))
 
     # For Complain: create assignments for each team
     if case_type == 'Complain':
