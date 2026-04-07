@@ -320,6 +320,8 @@ def init_db():
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS image_url TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS user_id INTEGER",
         "CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_idx ON outlets(erp_outlet_id) WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != ''",
+        # Fix old Complain tickets created before status=pending_ack fix
+        "UPDATE tickets SET status='pending_ack' WHERE case_type='Complain' AND current_team='pending_ack' AND status='open'",
     ]
     for m in migrations:
         try:

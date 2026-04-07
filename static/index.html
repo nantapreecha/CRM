@@ -804,7 +804,7 @@ function TicketDetail({ ticketId, user, onBack }) {
   const isMyTeam = user.team === ticket.current_team;
   const isCX = user.team === 'CX';
   const isOpenerTeam = user.team === ticket.opener_team;
-  const isPendingAck = ticket.status === 'pending_ack';
+  const isPendingAck = ticket.status === 'pending_ack' || ticket.current_team === 'pending_ack';
   const isPendingFault = ticket.status === 'pending_fault';
   // For Complain: check if this user's team has an unacknowledged assignment
   const myAssignment = assignments.find(a => a.team === user.team && !a.acknowledged_at);
