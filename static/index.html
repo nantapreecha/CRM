@@ -389,20 +389,27 @@ function Dashboard() {
 
 // ── CreateTicket ──────────────────────────────────────────────────────────────
 function CreateTicket({ user, onCreated }) {
-  const [accounts, setAccounts] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState({
     case_type: 'Complain', case_subtype: '', root_cause: '', priority: 'Medium',
-    account_id: '', employee_id: '', description: '', initial_teams: []
+    outlet_id: '', employee_id: '', description: '', initial_teams: []
   });
   const [imageUrl, setImageUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    api('/api/accounts').then(d => setAccounts(d || []));
     api('/api/employees').then(d => setEmployees(d || []));
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api('/api/outlets' + (search ? `?q=${encodeURIComponent(search)}` : '')).then(d => setOutlets(d || []));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -476,12 +483,13 @@ function CreateTicket({ user, onCreated }) {
             </select>
           </div>
 
-          {/* Account */}
+          {/* Outlet */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ลูกค้า</label>
-            <select value={form.account_id} onChange={e=>set('account_id',e.target.value)}>
-              <option value="">-- เลือกลูกค้า --</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <label className="text-sm font-medium text-gray-700 block mb-1">Outlet</label>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="พิมพ์ค้นหา outlet..." className="mb-1"/>
+            <select value={form.outlet_id} onChange={e=>set('outlet_id',e.target.value)}>
+              <option value="">-- เลือก Outlet --</option>
+              {outlets.map(o => <option key={o.id} value={o.id}>{o.name}{o.account_name ? ` (${o.account_name})` : ''}</option>)}
             </select>
           </div>
 
