@@ -387,14 +387,64 @@ function Dashboard() {
   );
 }
 
+// ── Combobox ──────────────────────────────────────────────────────────────────
+function Combobox({ items, value, onChange, placeholder, labelKey='name' }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = items.find(i => i.id == value);
+  const filtered = items.filter(i => i[labelKey].toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const select = item => { onChange(item.id); setQuery(''); setOpen(false); };
+  const clear = () => { onChange(''); setQuery(''); setOpen(false); };
+
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <div style={{display:'flex', alignItems:'center', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', padding:'7px 10px'}}
+        onClick={()=>setOpen(true)}>
+        {selected && !open
+          ? <span style={{flex:1, fontSize:14, color:'#111'}}>{selected[labelKey]}</span>
+          : <input autoFocus={open} value={query} onChange={e=>setQuery(e.target.value)}
+              onFocus={()=>setOpen(true)} placeholder={selected ? selected[labelKey] : placeholder}
+              style={{flex:1, border:'none', outline:'none', fontSize:14, background:'transparent', padding:0}}/>
+        }
+        {selected
+          ? <span onClick={e=>{e.stopPropagation();clear();}} style={{cursor:'pointer',color:'#9ca3af',marginLeft:4}}>✕</span>
+          : <span style={{color:'#9ca3af',marginLeft:4}}>▾</span>
+        }
+      </div>
+      {open && (
+        <div style={{position:'absolute',zIndex:50,width:'100%',background:'#fff',border:'1px solid #d1d5db',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,.1)',maxHeight:220,overflowY:'auto',marginTop:2}}>
+          {filtered.length === 0
+            ? <div style={{padding:'10px 14px',color:'#9ca3af',fontSize:13}}>ไม่พบผลลัพธ์</div>
+            : filtered.map(i => (
+                <div key={i.id} onClick={()=>select(i)}
+                  style={{padding:'8px 14px',cursor:'pointer',fontSize:14,background: i.id==value?'var(--primary-bg)':'#fff', color: i.id==value?'var(--primary)':'#111'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#f3f4f6'}
+                  onMouseLeave={e=>e.currentTarget.style.background=i.id==value?'var(--primary-bg)':'#fff'}>
+                  {i[labelKey]}
+                </div>
+              ))
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CreateTicket ──────────────────────────────────────────────────────────────
 function CreateTicket({ user, onCreated }) {
   const [accounts, setAccounts] = useState([]);
   const [allOutlets, setAllOutlets] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [accountSearch, setAccountSearch] = useState('');
   const [selectedAccount, setSelectedAccount] = useState(null);
-  const [outletSearch, setOutletSearch] = useState('');
   const [form, setForm] = useState({
     case_type: 'Complain', case_subtype: '', root_cause: '', priority: 'Medium',
     outlet_id: '', employee_id: '', description: '', initial_teams: []
@@ -413,13 +463,6 @@ function CreateTicket({ user, onCreated }) {
     api(`/api/accounts/${selectedAccount.id}/outlets`).then(d => setAllOutlets(d || []));
   }, [selectedAccount]);
 
-  const filteredAccounts = accounts.filter(a =>
-    a.name.toLowerCase().includes(accountSearch.toLowerCase())
-  );
-
-  const filteredOutlets = allOutlets.filter(o =>
-    o.name.toLowerCase().includes(outletSearch.toLowerCase())
-  );
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -493,29 +536,19 @@ function CreateTicket({ user, onCreated }) {
             </select>
           </div>
 
-          {/* Account + Outlet */}
+          {/* Account */}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Account</label>
-            <input value={accountSearch} onChange={e=>{ setAccountSearch(e.target.value); setSelectedAccount(null); set('outlet_id',''); }}
-              placeholder="พิมพ์ค้นหา Account..." className="mb-1"/>
-            <select value={selectedAccount?.id||''} onChange={e=>{
-              const acc = accounts.find(a=>a.id==e.target.value);
-              setSelectedAccount(acc||null); setOutletSearch(''); set('outlet_id','');
-            }}>
-              <option value="">-- เลือก Account --</option>
-              {filteredAccounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            <Combobox items={accounts} value={selectedAccount?.id||''} placeholder="พิมพ์ค้นหา Account..."
+              onChange={id=>{ const acc=accounts.find(a=>a.id==id)||null; setSelectedAccount(acc); set('outlet_id',''); }}/>
           </div>
 
+          {/* Outlet — shows after account selected */}
           {selectedAccount && (
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Outlet</label>
-              <input value={outletSearch} onChange={e=>setOutletSearch(e.target.value)}
-                placeholder="พิมพ์ค้นหา Outlet..." className="mb-1"/>
-              <select value={form.outlet_id} onChange={e=>set('outlet_id',e.target.value)}>
-                <option value="">-- เลือก Outlet --</option>
-                {filteredOutlets.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
+              <Combobox items={allOutlets} value={form.outlet_id} placeholder="พิมพ์ค้นหา Outlet..."
+                onChange={id=>set('outlet_id', id)}/>
             </div>
           )}
 
