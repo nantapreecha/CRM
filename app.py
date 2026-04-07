@@ -771,10 +771,11 @@ def create_ticket():
 
     # Log creation
     mutate("""INSERT INTO ticket_workflow_log
-        (ticket_id, from_team, to_team, action, note, user_id, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (ticket_id, from_team, to_team, action, note, image_url, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
         (id_, opener_team, ', '.join(initial_teams), 'สร้างเคส',
-         d.get('description',''), opener_user_id, g.user['display_name']))
+         d.get('description',''), d.get('image_url',''),
+         opener_user_id, g.user['display_name']))
 
     return jsonify({'id': id_, 'ticket_no': ticket_no}), 201
 

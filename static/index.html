@@ -395,6 +395,7 @@ function CreateTicket({ user, onCreated }) {
     case_type: 'Complain', case_subtype: '', root_cause: '', priority: 'Medium',
     account_id: '', employee_id: '', description: '', initial_teams: []
   });
+  const [imageUrl, setImageUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -418,7 +419,7 @@ function CreateTicket({ user, onCreated }) {
     if (form.case_type === 'Complain' && form.initial_teams.length === 0) return setMsg('กรุณาเลือกทีมที่เกี่ยวข้องอย่างน้อย 1 ทีม');
     if (form.case_type !== 'Complain' && form.initial_teams.length === 0) return setMsg('กรุณาเลือกทีมที่จะส่งให้');
     setSaving(true); setMsg('');
-    const res = await api('/api/tickets', { method: 'POST', body: JSON.stringify(form) });
+    const res = await api('/api/tickets', { method: 'POST', body: JSON.stringify({...form, image_url: imageUrl}) });
     setSaving(false);
     if (res && res.id) { onCreated(res.id); }
     else setMsg(res?.error || 'เกิดข้อผิดพลาด');
@@ -497,6 +498,18 @@ function CreateTicket({ user, onCreated }) {
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">รายละเอียด *</label>
             <textarea rows={3} value={form.description} onChange={e=>set('description',e.target.value)} required placeholder="อธิบายปัญหาหรือรายละเอียดเคส..."/>
+          </div>
+
+          {/* Image */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">แนบรูป</label>
+            {imageUrl
+              ? <div className="flex items-center gap-3">
+                  <img src={imageUrl} alt="preview" className="w-20 h-20 object-cover rounded-lg border"/>
+                  <button type="button" className="btn btn-secondary text-xs" onClick={()=>setImageUrl('')}>ลบ</button>
+                </div>
+              : <ImageUploader onUploaded={url=>setImageUrl(url)}/>
+            }
           </div>
         </div>
 
