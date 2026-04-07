@@ -747,7 +747,7 @@ def create_ticket():
 
     if case_type == 'Complain':
         current_team = 'pending_ack'
-        status = 'open'
+        status = 'pending_ack'
     else:
         current_team = initial_teams[0]
         status = 'open'

@@ -760,6 +760,7 @@ function Timeline({ ticketId }) {
 function TicketDetail({ ticketId, user, onBack }) {
   const [ticket, setTicket] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [tab, setTab] = useState('detail');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -777,10 +778,12 @@ function TicketDetail({ ticketId, user, onBack }) {
     setLoading(true);
     Promise.all([
       api(`/api/tickets/${ticketId}`),
-      api('/api/employees')
-    ]).then(([t, e]) => {
+      api('/api/employees'),
+      api(`/api/tickets/${ticketId}/assignments`)
+    ]).then(([t, e, a]) => {
       setTicket(t);
       setEmployees(e || []);
+      setAssignments(a || []);
       setLoading(false);
     });
   };
@@ -791,7 +794,7 @@ function TicketDetail({ ticketId, user, onBack }) {
     setSaving(true); setMsg('');
     const res = await api(`/api/tickets/${ticketId}/${endpoint}`, { method:'POST', body: JSON.stringify(body) });
     setSaving(false);
-    if (res && res.success) { setNote(''); setImageUrl(''); setFaultTeam(''); setFaultEmployee(''); load(); }
+    if (res && res.ok) { setNote(''); setImageUrl(''); setFaultTeam(''); setFaultEmployee(''); setAckEmployee(''); load(); }
     else setMsg(res?.error || 'An error occurred');
   };
 
@@ -803,6 +806,9 @@ function TicketDetail({ ticketId, user, onBack }) {
   const isOpenerTeam = user.team === ticket.opener_team;
   const isPendingAck = ticket.status === 'pending_ack';
   const isPendingFault = ticket.status === 'pending_fault';
+  // For Complain: check if this user's team has an unacknowledged assignment
+  const myAssignment = assignments.find(a => a.team === user.team && !a.acknowledged_at);
+  const hasMyAssignment = !!myAssignment;
 
   const teamEmployees = employees.filter(e => e.team === user.team);
   const faultTeamEmployees = employees.filter(e => e.team === ticket.fault_team);
@@ -872,11 +878,11 @@ function TicketDetail({ ticketId, user, onBack }) {
         <div className="space-y-4">
 
           {/* 1. Acknowledge (Complain, pending_ack) */}
-          {isPendingAck && isMyTeam && (
+          {isPendingAck && hasMyAssignment && (
             <div className="card p-4 border-l-4 border-purple-500">
               <h4 className="font-semibold text-gray-700 mb-3">👍 Acknowledge</h4>
               <p className="text-sm text-gray-500 mb-3">
-                This Complain case has been sent to team <strong>{ticket.current_team}</strong> for parallel acknowledgement
+                This Complain case has been assigned to team <strong>{user.team}</strong> for acknowledgement
               </p>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Acknowledgement note *" className="mb-2"/>
               {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
@@ -959,7 +965,7 @@ function TicketDetail({ ticketId, user, onBack }) {
           )}
 
           {/* 4. Attribute fault (fault team, pending_fault) */}
-          {isPendingFault && isMyTeam && ticket.fault_team === user.team && (
+          {isPendingFault && ticket.fault_team === user.team && (
             <div className="card p-4 border-l-4 border-pink-500">
               <h4 className="font-semibold text-gray-700 mb-3">⚠️ Attribute Fault</h4>
               <p className="text-sm text-gray-500 mb-3">
