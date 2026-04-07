@@ -1366,6 +1366,17 @@ def import_erp():
             r = cur.fetchone()
             outlet_map[(acc_id, r['name'])] = r['id']
 
+        # Fallback: look up outlets from DB if not found in outlet_map (e.g. existed from prev import)
+        missing = {(p['account_name'], p['outlet_name']) for p in new_rows
+                   if account_map.get(p['account_name']) and
+                   (account_map[p['account_name']], p['outlet_name']) not in outlet_map}
+        for acc_name, out_name in missing:
+            acc_id = account_map[acc_name]
+            cur.execute("SELECT id FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
+            r = cur.fetchone()
+            if r:
+                outlet_map[(acc_id, out_name)] = r['id']
+
         order_tuples = []
         for p in new_rows:
             acc_id = account_map.get(p['account_name'])

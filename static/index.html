@@ -695,10 +695,10 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Invoice — shows after outlet selected, for Claim and Update Invoice */}
-          {(isClaim || form.case_type === 'Update Invoice') && form.outlet_id && (
+          {/* Invoice — shows after outlet selected, for all case types */}
+          {form.outlet_id && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Invoice Number {isClaim && '*'}</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Invoice Number {isClaim && <span className="text-red-500">*</span>}</label>
               {invoices.length === 0
                 ? <p className="text-xs text-gray-400">No invoices found for this outlet</p>
                 : <select value={selectedInvoice} onChange={e=>setSelectedInvoice(e.target.value)}>
