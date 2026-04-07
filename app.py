@@ -979,7 +979,7 @@ def attribute_fault(tid):
 @require_auth
 def get_ticket_log(tid):
     rows = query("""
-        SELECT l.*, u.display_name AS user_display_name
+        SELECT l.*, u.display_name AS user_display_name, u.team AS user_team
         FROM ticket_workflow_log l
         LEFT JOIN users u ON u.id = l.user_id
         WHERE l.ticket_id=%s ORDER BY l.created_at

@@ -725,9 +725,14 @@ function Timeline({ ticketId }) {
           <div className="flex-1 pb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm text-gray-800">
-                {log.user_name || log.team}
+                {log.user_display_name || log.created_by || '—'}
               </span>
-              {log.team && <span className="text-xs text-gray-400">({TEAM_ICONS[log.team]||'👥'} {log.team})</span>}
+              {(log.user_team || log.from_team) && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{background:'#f0fdfa', color:'#0f766e', border:'1px solid #99f6e4'}}>
+                  {TEAM_ICONS[log.user_team || log.from_team]||'👥'} {log.user_team || log.from_team}
+                </span>
+              )}
               <span className="text-xs text-gray-400">{fmtDt(log.created_at)}</span>
               {log.duration_seconds != null && (
                 <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
