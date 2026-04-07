@@ -90,8 +90,8 @@ const TEAM_ICONS = {
 };
 
 const STATUS_LABELS = {
-  open: 'เปิด', in_progress: 'กำลังดำเนินการ',
-  pending_ack: 'รอรับทราบ', pending_fault: 'รอระบุผู้รับผิดชอบ', closed: 'ปิดแล้ว'
+  open: 'Open', in_progress: 'In Progress',
+  pending_ack: 'Pending Acknowledge', pending_fault: 'Pending Fault Attribution', closed: 'Closed'
 };
 
 function fmtDuration(sec) {
@@ -130,7 +130,7 @@ function Login({ onLogin }) {
     const data = await res.json();
     setLoading(false);
     if (data.token) { setToken(data.token); onLogin(data.user); }
-    else setErr(data.error || 'เข้าสู่ระบบไม่ได้');
+    else setErr(data.error || 'Login failed');
   };
 
   return (
@@ -143,16 +143,16 @@ function Login({ onLogin }) {
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ใช้</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Username</label>
             <input value={username} onChange={e=>setUsername(e.target.value)} required autoFocus/>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">รหัสผ่าน</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Password</label>
             <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
           </div>
           {err && <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{err}</div>}
           <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-            {loading ? <Spinner/> : 'เข้าสู่ระบบ'}
+            {loading ? <Spinner/> : 'Sign In'}
           </button>
         </form>
       </div>
@@ -180,7 +180,7 @@ function ImageUploader({ onUploaded }) {
   return (
     <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-500 hover:text-gray-700">
       {uploading ? <Spinner/> : '📎'}
-      <span>{uploading ? 'กำลังอัปโหลด...' : 'แนบรูป'}</span>
+      <span>{uploading ? 'Uploading...' : 'Attach image'}</span>
       <input ref={ref} type="file" accept="image/*" className="hidden" onChange={handle} style={{display:'none'}}/>
     </label>
   );
@@ -216,15 +216,15 @@ function Dashboard() {
     });
   }, []);
 
-  if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/> กำลังโหลด...</div>;
+  if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/> Loading...</div>;
 
   const tabs = [
-    {id:'overview', label:'ภาพรวม'},
+    {id:'overview', label:'Overview'},
     {id:'bottleneck', label:'Bottleneck'},
-    {id:'fault-team', label:'ความผิดพลาดรายทีม'},
-    {id:'fault-emp', label:'ความผิดพลาดรายคน'},
-    {id:'sku', label:'SKU ปัญหา'},
-    {id:'customer', label:'รายลูกค้า'},
+    {id:'fault-team', label:'Fault by Team'},
+    {id:'fault-emp', label:'Fault by Employee'},
+    {id:'sku', label:'Problem SKUs'},
+    {id:'customer', label:'By Account'},
   ];
 
   return (
@@ -235,10 +235,10 @@ function Dashboard() {
       {overview && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            {label:'เปิดอยู่', val:overview.open, color:'#2563eb'},
-            {label:'กำลังดำเนินการ', val:overview.in_progress, color:'#d97706'},
-            {label:'รอรับทราบ/ระบุ', val:(overview.pending_ack||0)+(overview.pending_fault||0), color:'#7c3aed'},
-            {label:'ปิดแล้ว', val:overview.closed, color:'#16a34a'},
+            {label:'Open', val:overview.open, color:'#2563eb'},
+            {label:'In Progress', val:overview.in_progress, color:'#d97706'},
+            {label:'Pending', val:(overview.pending_ack||0)+(overview.pending_fault||0), color:'#7c3aed'},
+            {label:'Closed', val:overview.closed, color:'#16a34a'},
           ].map(c => (
             <div key={c.label} className="card p-4 text-center">
               <div className="text-3xl font-bold" style={{color:c.color}}>{c.val ?? 0}</div>
@@ -251,7 +251,7 @@ function Dashboard() {
       {/* contribution ratio */}
       {overview && overview.by_opener_team && (
         <div className="card p-4 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-3">สัดส่วนการสร้างเคส (Contribution)</h3>
+          <h3 className="font-semibold text-gray-700 mb-3">Case Contribution by Team</h3>
           <div className="space-y-2">
             {overview.by_opener_team.map(r => {
               const pct = overview.total ? Math.round(r.count/overview.total*100) : 0;
@@ -278,11 +278,11 @@ function Dashboard() {
 
       {tab === 'bottleneck' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">ทีมที่ใช้เวลาเฉลี่ยนานที่สุด</h3>
-          {bottleneck.length === 0 ? <p className="text-gray-400 text-sm">ยังไม่มีข้อมูล</p> : (
+          <h3 className="font-semibold text-gray-700 mb-3">Average time per team</h3>
+          {bottleneck.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">ทีม</th><th className="pb-2">จำนวนเคส</th><th className="pb-2">เวลาเฉลี่ย</th>
+                <th className="pb-2">Team</th><th className="pb-2">Cases</th><th className="pb-2">Avg. Time</th>
               </tr></thead>
               <tbody>
                 {bottleneck.map((r,i) => (
@@ -300,11 +300,11 @@ function Dashboard() {
 
       {tab === 'fault-team' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">ความผิดพลาดแยกตามทีม</h3>
-          {faultTeam.length === 0 ? <p className="text-gray-400 text-sm">ยังไม่มีข้อมูล</p> : (
+          <h3 className="font-semibold text-gray-700 mb-3">Fault by Team</h3>
+          {faultTeam.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">ทีม</th><th className="pb-2">จำนวนเคส</th>
+                <th className="pb-2">Team</th><th className="pb-2">Cases</th>
               </tr></thead>
               <tbody>
                 {faultTeam.map((r,i) => (
@@ -321,11 +321,11 @@ function Dashboard() {
 
       {tab === 'fault-emp' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">ความผิดพลาดแยกตามพนักงาน</h3>
-          {faultEmp.length === 0 ? <p className="text-gray-400 text-sm">ยังไม่มีข้อมูล</p> : (
+          <h3 className="font-semibold text-gray-700 mb-3">Fault by Employee</h3>
+          {faultEmp.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">พนักงาน</th><th className="pb-2">ทีม</th><th className="pb-2">จำนวนเคส</th>
+                <th className="pb-2">Employee</th><th className="pb-2">Team</th><th className="pb-2">Cases</th>
               </tr></thead>
               <tbody>
                 {faultEmp.map((r,i) => (
@@ -343,11 +343,11 @@ function Dashboard() {
 
       {tab === 'sku' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">SKU ที่มีปัญหาบ่อย</h3>
-          {skuProblems.length === 0 ? <p className="text-gray-400 text-sm">ยังไม่มีข้อมูล</p> : (
+          <h3 className="font-semibold text-gray-700 mb-3">Frequently Problematic SKUs</h3>
+          {skuProblems.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">SKU</th><th className="pb-2">สาเหตุหลัก</th><th className="pb-2">จำนวน</th>
+                <th className="pb-2">SKU</th><th className="pb-2">Root Cause</th><th className="pb-2">Count</th>
               </tr></thead>
               <tbody>
                 {skuProblems.map((r,i) => (
@@ -365,11 +365,11 @@ function Dashboard() {
 
       {tab === 'customer' && (
         <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">เคสแยกตามลูกค้า</h3>
-          {byCust.length === 0 ? <p className="text-gray-400 text-sm">ยังไม่มีข้อมูล</p> : (
+          <h3 className="font-semibold text-gray-700 mb-3">Cases by Account</h3>
+          {byCust.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
             <table className="w-full text-sm">
               <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">ลูกค้า</th><th className="pb-2">จำนวน</th>
+                <th className="pb-2">Account</th><th className="pb-2">Count</th>
               </tr></thead>
               <tbody>
                 {byCust.map((r,i) => (
@@ -423,7 +423,7 @@ function Combobox({ items, value, onChange, placeholder, labelKey='name' }) {
       {open && (
         <div style={{position:'absolute',zIndex:50,width:'100%',background:'#fff',border:'1px solid #d1d5db',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,.1)',maxHeight:220,overflowY:'auto',marginTop:2}}>
           {filtered.length === 0
-            ? <div style={{padding:'10px 14px',color:'#9ca3af',fontSize:13}}>ไม่พบผลลัพธ์</div>
+            ? <div style={{padding:'10px 14px',color:'#9ca3af',fontSize:13}}>No results</div>
             : filtered.map(i => (
                 <div key={i.id} onClick={()=>select(i)}
                   style={{padding:'8px 14px',cursor:'pointer',fontSize:14,background: i.id==value?'var(--primary-bg)':'#fff', color: i.id==value?'var(--primary)':'#111'}}
@@ -473,28 +473,28 @@ function CreateTicket({ user, onCreated }) {
 
   const submit = async e => {
     e.preventDefault();
-    if (!form.case_type) return setMsg('กรุณาเลือกประเภทเคส');
-    if (form.case_type === 'Complain' && form.initial_teams.length === 0) return setMsg('กรุณาเลือกทีมที่เกี่ยวข้องอย่างน้อย 1 ทีม');
-    if (form.case_type !== 'Complain' && form.initial_teams.length === 0) return setMsg('กรุณาเลือกทีมที่จะส่งให้');
+    if (!form.case_type) return setMsg('Please select a case type');
+    if (form.case_type === 'Complain' && form.initial_teams.length === 0) return setMsg('Please select at least 1 team');
+    if (form.case_type !== 'Complain' && form.initial_teams.length === 0) return setMsg('Please select a team');
     setSaving(true); setMsg('');
     const res = await api('/api/tickets', { method: 'POST', body: JSON.stringify({...form, image_url: imageUrl}) });
     setSaving(false);
     if (res && res.id) { onCreated(res.id); }
-    else setMsg(res?.error || 'เกิดข้อผิดพลาด');
+    else setMsg(res?.error || 'An error occurred');
   };
 
   const isComplain = form.case_type === 'Complain';
 
   return (
     <div className="p-6 max-w-2xl">
-      <h2 className="text-xl font-bold mb-5" style={{color:'var(--primary)'}}>🎫 เปิดเคสใหม่</h2>
+      <h2 className="text-xl font-bold mb-5" style={{color:'var(--primary)'}}>🎫 New Case</h2>
       <form onSubmit={submit} className="space-y-5">
         <div className="card p-5 space-y-4">
-          <h3 className="font-semibold text-gray-700">รายละเอียดเคส</h3>
+          <h3 className="font-semibold text-gray-700">Case Details</h3>
 
           {/* Case type */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">ประเภทเคส *</label>
+            <label className="text-sm font-medium text-gray-700 block mb-2">Case Type *</label>
             <div className="flex gap-3">
               {CASE_TYPES.map(t => (
                 <label key={t} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${form.case_type===t?'border-teal-600 bg-teal-50 text-teal-700 font-semibold':'border-gray-200'}`}>
@@ -509,9 +509,9 @@ function CreateTicket({ user, onCreated }) {
           {/* Claim subtype */}
           {form.case_type === 'Claim' && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ประเภทการ Claim *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Claim Type *</label>
               <select value={form.case_subtype} onChange={e=>set('case_subtype',e.target.value)} required>
-                <option value="">-- เลือกประเภท --</option>
+                <option value="">-- Select type --</option>
                 {CLAIM_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -519,16 +519,16 @@ function CreateTicket({ user, onCreated }) {
 
           {/* Root cause */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">สาเหตุ</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Root Cause</label>
             <select value={form.root_cause} onChange={e=>set('root_cause',e.target.value)}>
-              <option value="">-- ไม่ระบุ --</option>
+              <option value="">-- None --</option>
               {ROOT_CAUSES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 
           {/* Priority */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ความเร่งด่วน</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Priority</label>
             <select value={form.priority} onChange={e=>set('priority',e.target.value)}>
               {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -537,7 +537,7 @@ function CreateTicket({ user, onCreated }) {
           {/* Account */}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Account</label>
-            <Combobox items={accounts} value={selectedAccount?.id||''} placeholder="พิมพ์ค้นหา Account..."
+            <Combobox items={accounts} value={selectedAccount?.id||''} placeholder="Search Account..."
               onChange={id=>{ const acc=accounts.find(a=>a.id==id)||null; setSelectedAccount(acc); set('outlet_id',''); }}/>
           </div>
 
@@ -545,7 +545,7 @@ function CreateTicket({ user, onCreated }) {
           {selectedAccount && (
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Outlet</label>
-              <Combobox items={allOutlets} value={form.outlet_id} placeholder="พิมพ์ค้นหา Outlet..."
+              <Combobox items={allOutlets} value={form.outlet_id} placeholder="Search Outlet..."
                 onChange={id=>set('outlet_id', id)}/>
             </div>
           )}
@@ -553,17 +553,17 @@ function CreateTicket({ user, onCreated }) {
 
           {/* Description */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">รายละเอียด *</label>
-            <textarea rows={3} value={form.description} onChange={e=>set('description',e.target.value)} required placeholder="อธิบายปัญหาหรือรายละเอียดเคส..."/>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Description *</label>
+            <textarea rows={3} value={form.description} onChange={e=>set('description',e.target.value)} required placeholder="Describe the issue..."/>
           </div>
 
           {/* Image */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">แนบรูป</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Attach image</label>
             {imageUrl
               ? <div className="flex items-center gap-3">
                   <img src={imageUrl} alt="preview" className="w-20 h-20 object-cover rounded-lg border"/>
-                  <button type="button" className="btn btn-secondary text-xs" onClick={()=>setImageUrl('')}>ลบ</button>
+                  <button type="button" className="btn btn-secondary text-xs" onClick={()=>setImageUrl('')}>Remove</button>
                 </div>
               : <ImageUploader onUploaded={url=>setImageUrl(url)}/>
             }
@@ -573,7 +573,7 @@ function CreateTicket({ user, onCreated }) {
         {/* Team selection */}
         <div className="card p-5">
           <h3 className="font-semibold text-gray-700 mb-3">
-            {isComplain ? '🔀 เลือกทีมที่เกี่ยวข้อง (Complain — แจ้งได้หลายทีม) *' : '➡️ ส่งต่อไปยังทีม *'}
+            {isComplain ? '🔀 Select involved teams (Complain — multi-select) *' : '➡️ Forward to team *'}
           </h3>
           {isComplain ? (
             <div className="grid grid-cols-2 gap-2">
@@ -601,13 +601,13 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
           {form.case_type === 'Update Invoice' && (
-            <p className="text-xs text-gray-400 mt-2">* Update Invoice มักส่งให้ Sales Co หรือ KAM</p>
+            <p className="text-xs text-gray-400 mt-2">* Update Invoice is usually sent to Sales Co or KAM</p>
           )}
         </div>
 
         {msg && <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{msg}</div>}
         <button type="submit" className="btn btn-primary w-full" disabled={saving}>
-          {saving ? <Spinner/> : '✅ เปิดเคส'}
+          {saving ? <Spinner/> : '✅ Submit'}
         </button>
       </form>
     </div>
@@ -636,18 +636,18 @@ function TicketList({ user, onSelect }) {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h2 className="text-xl font-bold" style={{color:'var(--primary)'}}>🎫 เคสทั้งหมด</h2>
+        <h2 className="text-xl font-bold" style={{color:'var(--primary)'}}>🎫 All Cases</h2>
         <div className="flex items-center gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={myTeamOnly} onChange={e=>setMyTeamOnly(e.target.checked)}/>
-            เฉพาะทีมฉัน ({user.team})
+            My team only ({user.team})
           </label>
           <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{width:'auto'}}>
-            <option value="">สถานะทั้งหมด</option>
+            <option value="">All statuses</option>
             {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto'}}>
-            <option value="">ประเภททั้งหมด</option>
+            <option value="">All types</option>
             {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <button className="btn btn-secondary text-sm" onClick={load}>🔄</button>
@@ -655,7 +655,7 @@ function TicketList({ user, onSelect }) {
       </div>
 
       {loading ? <div className="text-center py-10 text-gray-400"><Spinner/></div> : (
-        tickets.length === 0 ? <div className="text-center py-10 text-gray-400">ไม่มีเคส</div> : (
+        tickets.length === 0 ? <div className="text-center py-10 text-gray-400">No cases</div> : (
           <div className="space-y-3">
             {tickets.map(t => (
               <div key={t.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={()=>onSelect(t.id)}>
@@ -677,7 +677,7 @@ function TicketList({ user, onSelect }) {
                     </div>
                   </div>
                   {t.latest_image_url && (
-                    <img src={t.latest_image_url} alt="รูปล่าสุด"
+                    <img src={t.latest_image_url} alt="latest image"
                       className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0"
                       onClick={e=>{ e.stopPropagation(); window.open(t.latest_image_url,'_blank'); }}/>
                   )}
@@ -712,7 +712,7 @@ function Timeline({ ticketId }) {
   };
 
   if (loading) return <div className="text-center py-6 text-gray-400"><Spinner/></div>;
-  if (logs.length === 0) return <div className="text-center py-6 text-gray-400">ยังไม่มีประวัติ</div>;
+  if (logs.length === 0) return <div className="text-center py-6 text-gray-400">No history yet</div>;
 
   return (
     <div className="space-y-1">
@@ -787,11 +787,11 @@ function TicketDetail({ ticketId, user, onBack }) {
     const res = await api(`/api/tickets/${ticketId}/${endpoint}`, { method:'POST', body: JSON.stringify(body) });
     setSaving(false);
     if (res && res.success) { setNote(''); setImageUrl(''); setFaultTeam(''); setFaultEmployee(''); load(); }
-    else setMsg(res?.error || 'เกิดข้อผิดพลาด');
+    else setMsg(res?.error || 'An error occurred');
   };
 
   if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/></div>;
-  if (!ticket) return <div className="p-8 text-center text-gray-400">ไม่พบเคส</div>;
+  if (!ticket) return <div className="p-8 text-center text-gray-400">Case not found</div>;
 
   const isMyTeam = user.team === ticket.current_team;
   const isCX = user.team === 'CX';
@@ -805,8 +805,8 @@ function TicketDetail({ ticketId, user, onBack }) {
   return (
     <div className="p-6 max-w-3xl">
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={onBack} className="btn btn-secondary text-sm">← กลับ</button>
-        <h2 className="text-lg font-bold" style={{color:'var(--primary)'}}>เคส #{ticket.id}</h2>
+        <button onClick={onBack} className="btn btn-secondary text-sm">← Back</button>
+        <h2 className="text-lg font-bold" style={{color:'var(--primary)'}}>Case #{ticket.id}</h2>
       </div>
 
       {/* Header card */}
@@ -820,18 +820,18 @@ function TicketDetail({ ticketId, user, onBack }) {
               {ticket.case_subtype && <span className="text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full">{ticket.case_subtype}</span>}
             </div>
             {ticket.account_name && <p className="text-gray-600 text-sm mb-1">👤 {ticket.account_name}</p>}
-            {ticket.root_cause && <p className="text-gray-500 text-xs">สาเหตุ: {ticket.root_cause}</p>}
+            {ticket.root_cause && <p className="text-gray-500 text-xs">Root cause: {ticket.root_cause}</p>}
           </div>
           <div className="text-right text-sm text-gray-500">
-            <div>เปิดโดย: {TEAM_ICONS[ticket.opener_team]||'👥'} {ticket.opener_team}</div>
-            <div>อยู่ที่: {TEAM_ICONS[ticket.current_team]||'👥'} <strong>{ticket.current_team}</strong></div>
+            <div>Opened by: {TEAM_ICONS[ticket.opener_team]||'👥'} {ticket.opener_team}</div>
+            <div>Current team: {TEAM_ICONS[ticket.current_team]||'👥'} <strong>{ticket.current_team}</strong></div>
             <div className="text-xs mt-1">{fmtDt(ticket.created_at)}</div>
           </div>
         </div>
         <p className="mt-3 text-gray-800">{ticket.description}</p>
         {ticket.fault_team && (
           <div className="mt-3 text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-            ⚠️ ระบุว่าเป็นความผิดพลาดของ: <strong>{ticket.fault_team}</strong>
+            ⚠️ Fault attributed to: <strong>{ticket.fault_team}</strong>
             {ticket.fault_employee_name && <> → {ticket.fault_employee_name}</>}
           </div>
         )}
@@ -839,7 +839,7 @@ function TicketDetail({ ticketId, user, onBack }) {
 
       {/* Tabs */}
       <div className="flex border-b mb-4">
-        {[{id:'detail',label:'การดำเนินการ'},{id:'timeline',label:'⏱ Timeline'},{id:'comments',label:'💬 บันทึก'}].map(t=>(
+        {[{id:'detail',label:'Actions'},{id:'timeline',label:'⏱ Timeline'},{id:'comments',label:'💬 Notes'}].map(t=>(
           <div key={t.id} className={`tab ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)}>{t.label}</div>
         ))}
       </div>
@@ -849,14 +849,14 @@ function TicketDetail({ ticketId, user, onBack }) {
       {tab === 'comments' && (
         <div className="space-y-3">
           <div className="card p-4">
-            <h4 className="font-semibold text-gray-700 mb-3">เพิ่มบันทึก</h4>
-            <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="พิมพ์บันทึก..." className="mb-2"/>
+            <h4 className="font-semibold text-gray-700 mb-3">Add note</h4>
+            <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="Type a note..." className="mb-2"/>
             {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
             <div className="flex items-center justify-between">
               <ImageUploader onUploaded={url=>setImageUrl(url)}/>
               <button className="btn btn-primary text-sm" disabled={saving||!note}
                 onClick={()=>act('note',{note,image_url:imageUrl})}>
-                {saving?<Spinner/>:'บันทึก'}
+                {saving?<Spinner/>:'Save'}
               </button>
             </div>
           </div>
@@ -869,16 +869,16 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 1. Acknowledge (Complain, pending_ack) */}
           {isPendingAck && isMyTeam && (
             <div className="card p-4 border-l-4 border-purple-500">
-              <h4 className="font-semibold text-gray-700 mb-3">👍 รับทราบเคส (Acknowledge)</h4>
+              <h4 className="font-semibold text-gray-700 mb-3">👍 Acknowledge</h4>
               <p className="text-sm text-gray-500 mb-3">
-                เคส Complain นี้ถูกส่งมาให้ทีม <strong>{ticket.current_team}</strong> รับทราบพร้อมกัน
+                This Complain case has been sent to team <strong>{ticket.current_team}</strong> for parallel acknowledgement
               </p>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกการรับทราบ *" className="mb-2"/>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Acknowledgement note *" className="mb-2"/>
               {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
               <div className="mb-3">
-                <label className="text-sm font-medium text-gray-700 block mb-1">พนักงานผู้รับทราบ *</label>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Acknowledging employee *</label>
                 <select value={ackEmployee} onChange={e=>setAckEmployee(e.target.value)}>
-                  <option value="">-- เลือกพนักงาน --</option>
+                  <option value="">-- Select employee --</option>
                   {teamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
               </div>
@@ -886,7 +886,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
                 <button className="btn btn-primary ml-auto" disabled={saving||!note||!ackEmployee}
                   onClick={()=>act('acknowledge',{note,image_url:imageUrl,employee_id:ackEmployee})}>
-                  {saving?<Spinner/>:'✅ รับทราบ'}
+                  {saving?<Spinner/>:'✅ Acknowledge'}
                 </button>
               </div>
             </div>
@@ -895,8 +895,8 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 2. Forward / Complete (sequential, in_progress/open) */}
           {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isMyTeam && (
             <div className="card p-4 border-l-4 border-blue-400">
-              <h4 className="font-semibold text-gray-700 mb-3">📤 ดำเนินการ</h4>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึก *" className="mb-2"/>
+              <h4 className="font-semibold text-gray-700 mb-3">📤 Actions</h4>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Note *" className="mb-2"/>
               {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
               <div className="flex items-center gap-2 mb-3">
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
@@ -906,20 +906,20 @@ function TicketDetail({ ticketId, user, onBack }) {
                 {ticket.opener_team !== ticket.current_team && (
                   <button className="btn btn-secondary flex-1" disabled={saving||!note}
                     onClick={()=>act('complete',{note,image_url:imageUrl})}>
-                    {saving?<Spinner/>:`✅ ส่งกลับ ${ticket.opener_team}`}
+                    {saving?<Spinner/>:`✅ Return to ${ticket.opener_team}`}
                   </button>
                 )}
                 {/* Forward to another team */}
                 <div className="flex gap-2 flex-1">
                   <select value={forwardTeam} onChange={e=>setForwardTeam(e.target.value)} style={{flex:1}}>
-                    <option value="">-- ส่งต่อไปทีม --</option>
+                    <option value="">-- Forward to team --</option>
                     {TEAMS.filter(t=>t!==ticket.current_team).map(t=>(
                       <option key={t} value={t}>{TEAM_ICONS[t]} {t}</option>
                     ))}
                   </select>
                   <button className="btn btn-primary" disabled={saving||!note||!forwardTeam}
                     onClick={()=>act('forward',{note,image_url:imageUrl,to_team:forwardTeam})}>
-                    {saving?<Spinner/>:'ส่งต่อ →'}
+                    {saving?<Spinner/>:'Forward →'}
                   </button>
                 </div>
               </div>
@@ -929,10 +929,10 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 3. Close with fault attribution (opener team only) */}
           {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isOpenerTeam && (
             <div className="card p-4 border-l-4 border-red-400">
-              <h4 className="font-semibold text-gray-700 mb-3">🔒 ปิดเคส</h4>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกการปิดเคส *" className="mb-3"/>
+              <h4 className="font-semibold text-gray-700 mb-3">🔒 Close Case</h4>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Closing note *" className="mb-3"/>
               <div className="mb-3">
-                <label className="text-sm font-medium text-gray-700 block mb-2">ทีมที่รับผิดชอบ *</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Responsible team *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {FAULT_TEAMS.map(t => (
                     <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
@@ -947,7 +947,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
                 <button className="btn btn-danger ml-auto" disabled={saving||!note||!faultTeam}
                   onClick={()=>act('close',{note,image_url:imageUrl,fault_team:faultTeam})}>
-                  {saving?<Spinner/>:'🔒 ปิดเคส'}
+                  {saving?<Spinner/>:'🔒 Close Case'}
                 </button>
               </div>
             </div>
@@ -956,18 +956,18 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 4. Attribute fault (fault team, pending_fault) */}
           {isPendingFault && isMyTeam && ticket.fault_team === user.team && (
             <div className="card p-4 border-l-4 border-pink-500">
-              <h4 className="font-semibold text-gray-700 mb-3">⚠️ ระบุผู้รับผิดชอบ</h4>
+              <h4 className="font-semibold text-gray-700 mb-3">⚠️ Attribute Fault</h4>
               <p className="text-sm text-gray-500 mb-3">
-                ทีม <strong>{ticket.fault_team}</strong> ถูกระบุว่าเป็นผู้รับผิดชอบ กรุณาเลือกพนักงานที่เกี่ยวข้อง
+                Team <strong>{ticket.fault_team}</strong> has been identified as responsible. Please select the employee involved.
               </p>
               <select value={faultEmployee} onChange={e=>setFaultEmployee(e.target.value)} className="mb-3">
-                <option value="">-- เลือกพนักงาน --</option>
+                <option value="">-- Select employee --</option>
                 {faultTeamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกเพิ่มเติม" className="mb-3"/>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Additional note" className="mb-3"/>
               <button className="btn btn-primary w-full" disabled={saving||!faultEmployee}
                 onClick={()=>act('attribute-fault',{employee_id:faultEmployee,note})}>
-                {saving?<Spinner/>:'✅ ยืนยัน'}
+                {saving?<Spinner/>:'✅ Confirm'}
               </button>
             </div>
           )}
@@ -976,8 +976,8 @@ function TicketDetail({ ticketId, user, onBack }) {
           {ticket.status === 'closed' && (
             <div className="card p-4 text-center text-gray-400">
               <div className="text-3xl mb-2">🔒</div>
-              <p>เคสนี้ปิดแล้ว</p>
-              {ticket.closed_at && <p className="text-xs mt-1">ปิดเมื่อ {fmtDt(ticket.closed_at)}</p>}
+              <p>This case is closed</p>
+              {ticket.closed_at && <p className="text-xs mt-1">Closed on {fmtDt(ticket.closed_at)}</p>}
             </div>
           )}
 
@@ -1017,7 +1017,7 @@ function Users({ currentUser }) {
     if (res && (res.id || res.success)) {
       setForm({ username:'', display_name:'', password:'', team:'CX', role:'user' });
       setEditId(null); load();
-    } else setMsg(res?.error || 'เกิดข้อผิดพลาด');
+    } else setMsg(res?.error || 'An error occurred');
   };
 
   const startEdit = u => {
@@ -1029,42 +1029,42 @@ function Users({ currentUser }) {
     const pw = resetPw[uid];
     if (!pw) return;
     const res = await api(`/api/users/${uid}/password`, { method:'PUT', body: JSON.stringify({new_password:pw}) });
-    if (res && res.success) { setResetPw(r=>({...r,[uid]:''})); alert('รีเซ็ตสำเร็จ'); }
-    else alert(res?.error || 'เกิดข้อผิดพลาด');
+    if (res && res.success) { setResetPw(r=>({...r,[uid]:''})); alert('Password reset successful'); }
+    else alert(res?.error || 'An error occurred');
   };
 
-  if (currentUser.role !== 'admin') return <div className="p-8 text-center text-gray-400">ไม่มีสิทธิ์เข้าถึง</div>;
+  if (currentUser.role !== 'admin') return <div className="p-8 text-center text-gray-400">Access denied</div>;
 
   return (
     <div className="p-6 max-w-4xl">
-      <h2 className="text-xl font-bold mb-5" style={{color:'var(--primary)'}}>👥 จัดการผู้ใช้</h2>
+      <h2 className="text-xl font-bold mb-5" style={{color:'var(--primary)'}}>👥 User Management</h2>
 
       {/* Form */}
       <div className="card p-5 mb-5">
-        <h3 className="font-semibold text-gray-700 mb-3">{editId ? '✏️ แก้ไขผู้ใช้' : '➕ เพิ่มผู้ใช้ใหม่'}</h3>
+        <h3 className="font-semibold text-gray-700 mb-3">{editId ? '✏️ Edit User' : '➕ Add New User'}</h3>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ใช้ (username)</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Username</label>
             <input value={form.username} onChange={e=>set('username',e.target.value)} required disabled={!!editId}/>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อแสดง</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Display Name</label>
             <input value={form.display_name} onChange={e=>set('display_name',e.target.value)} required/>
           </div>
           {!editId && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">รหัสผ่านเริ่มต้น</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Initial Password</label>
               <input type="password" value={form.password} onChange={e=>set('password',e.target.value)} required={!editId}/>
             </div>
           )}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">ทีม</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Team</label>
             <select value={form.team} onChange={e=>set('team',e.target.value)}>
               {TEAMS.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">สิทธิ์</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Role</label>
             <select value={form.role} onChange={e=>set('role',e.target.value)}>
               <option value="user">user</option>
               <option value="admin">admin</option>
@@ -1072,8 +1072,8 @@ function Users({ currentUser }) {
           </div>
           {msg && <div className="col-span-2 text-red-600 text-sm">{msg}</div>}
           <div className="col-span-2 flex gap-2">
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving?<Spinner/>:(editId?'บันทึก':'เพิ่ม')}</button>
-            {editId && <button type="button" className="btn btn-secondary" onClick={()=>{setEditId(null);setForm({username:'',display_name:'',password:'',team:'CX',role:'user'});}}>ยกเลิก</button>}
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving?<Spinner/>:(editId?'Save':'Add')}</button>
+            {editId && <button type="button" className="btn btn-secondary" onClick={()=>{setEditId(null);setForm({username:'',display_name:'',password:'',team:'CX',role:'user'});}}>Cancel</button>}
           </div>
         </form>
       </div>
@@ -1084,10 +1084,10 @@ function Users({ currentUser }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-600 text-left">
               <tr>
-                <th className="p-3">ชื่อผู้ใช้</th>
-                <th className="p-3">ชื่อแสดง</th>
-                <th className="p-3">ทีม</th>
-                <th className="p-3">สิทธิ์</th>
+                <th className="p-3">Username</th>
+                <th className="p-3">Display Name</th>
+                <th className="p-3">Team</th>
+                <th className="p-3">Role</th>
                 <th className="p-3">Reset PW</th>
                 <th className="p-3"></th>
               </tr>
@@ -1101,13 +1101,13 @@ function Users({ currentUser }) {
                   <td className="p-3"><span className={`px-2 py-0.5 rounded-full text-xs ${u.role==='admin'?'bg-purple-100 text-purple-700':'bg-gray-100 text-gray-600'}`}>{u.role}</span></td>
                   <td className="p-3">
                     <div className="flex gap-1">
-                      <input type="password" placeholder="รหัสใหม่" style={{width:100}} value={resetPw[u.id]||''}
+                      <input type="password" placeholder="New password" style={{width:100}} value={resetPw[u.id]||''}
                         onChange={e=>setResetPw(r=>({...r,[u.id]:e.target.value}))}/>
                       <button className="btn btn-secondary text-xs px-2" onClick={()=>doResetPw(u.id)}>Reset</button>
                     </div>
                   </td>
                   <td className="p-3">
-                    <button className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>แก้ไข</button>
+                    <button className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>Edit</button>
                   </td>
                 </tr>
               ))}
@@ -1170,7 +1170,7 @@ function Accounts({ onSelectTicket }) {
 
       {loadingTickets ? <div className="text-center py-6 text-gray-400"><Spinner/></div> : (
         outletTickets.length === 0
-          ? <div className="text-center py-10 text-gray-400">ไม่มีเคสใน Outlet นี้</div>
+          ? <div className="text-center py-10 text-gray-400">No cases for this outlet</div>
           : <div className="space-y-3">
               {outletTickets.map(t => (
                 <div key={t.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow"
@@ -1203,7 +1203,7 @@ function Accounts({ onSelectTicket }) {
 
       {loadingOutlets ? <div className="text-center py-6 text-gray-400"><Spinner/></div> : (
         outlets.length === 0
-          ? <div className="text-center py-10 text-gray-400">ไม่มี Outlet</div>
+          ? <div className="text-center py-10 text-gray-400">No outlets</div>
           : <div className="space-y-2">
               {outlets.map(o => (
                 <div key={o.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
@@ -1217,8 +1217,8 @@ function Accounts({ onSelectTicket }) {
                   </div>
                   <div className="flex items-center gap-3">
                     {(o.open_tickets > 0)
-                      ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {o.open_tickets} เคสเปิด</span>
-                      : <span className="text-xs text-gray-300">ไม่มีเคสเปิด</span>
+                      ? <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {o.open_tickets} open cases</span>
+                      : <span className="text-xs text-gray-300">No open cases</span>
                     }
                     <span className="text-gray-300">›</span>
                   </div>
@@ -1234,7 +1234,7 @@ function Accounts({ onSelectTicket }) {
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4" style={{color:'var(--primary)'}}>👤 Account</h2>
       {accounts.length === 0
-        ? <div className="text-center py-10 text-gray-400">ยังไม่มีข้อมูล — import ERP ก่อน</div>
+        ? <div className="text-center py-10 text-gray-400">No data yet — import ERP first</div>
         : <div className="space-y-2">
             {accounts.map(a => (
               <div key={a.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center justify-between"
@@ -1246,7 +1246,7 @@ function Accounts({ onSelectTicket }) {
                 <div className="flex items-center gap-3 text-sm">
                   <span className="text-gray-400">{a.outlet_count || 0} outlet</span>
                   {(a.open_tickets > 0) &&
-                    <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {a.open_tickets} เคส</span>
+                    <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold">🎫 {a.open_tickets} cases</span>
                   }
                   <span className="text-gray-300">›</span>
                 </div>
@@ -1275,7 +1275,7 @@ function ImportERP() {
     const res = await apiUpload('/api/import/erp', fd);
     setUploading(false);
     if (res && res.inserted !== undefined) setResult(res);
-    else setErr(res?.error || 'เกิดข้อผิดพลาด');
+    else setErr(res?.error || 'An error occurred');
   };
 
   return (
@@ -1284,27 +1284,27 @@ function ImportERP() {
       <div className="card p-5">
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">เลือกไฟล์ Excel (.xlsx)</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Select Excel file (.xlsx)</label>
             <input ref={ref} type="file" accept=".xlsx,.xls"
               onChange={e=>{ setFile(e.target.files[0]); setResult(null); setErr(''); }}/>
           </div>
           {err && <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{err}</div>}
           {result && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm space-y-1">
-              <p className="font-semibold text-green-700">✅ Import สำเร็จ</p>
-              <p>แถวทั้งหมด: <strong>{result.total_rows}</strong></p>
-              <p>เพิ่มใหม่: <strong>{result.inserted}</strong></p>
-              <p>ซ้ำ (ข้าม): <strong>{result.skipped}</strong></p>
-              {result.errors > 0 && <p className="text-orange-600">มีข้อผิดพลาด: {result.errors} แถว</p>}
+              <p className="font-semibold text-green-700">✅ Import successful</p>
+              <p>Total rows: <strong>{result.total_rows}</strong></p>
+              <p>Inserted: <strong>{result.inserted}</strong></p>
+              <p>Duplicates (skipped): <strong>{result.skipped}</strong></p>
+              {result.errors > 0 && <p className="text-orange-600">Errors: {result.errors} rows</p>}
             </div>
           )}
           <button type="submit" className="btn btn-primary w-full" disabled={uploading || !file}>
-            {uploading ? <><Spinner/> กำลัง import...</> : '📤 Import'}
+            {uploading ? <><Spinner/> Importing...</> : '📤 Import'}
           </button>
         </form>
       </div>
       <div className="card p-4 mt-4 text-sm text-gray-500">
-        <p className="font-medium text-gray-700 mb-2">คอลัมน์ที่ต้องมีในไฟล์:</p>
+        <p className="font-medium text-gray-700 mb-2">Required columns:</p>
         <ul className="space-y-1 list-disc list-inside">
           <li>order_item_id, order_id, invoice_number</li>
           <li>doc_date, account_name, outlet_name</li>
@@ -1328,7 +1328,7 @@ function SimpleList({ title, endpoint, columns }) {
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4" style={{color:'var(--primary)'}}>{title}</h2>
       {loading ? <Spinner/> : (
-        data.length === 0 ? <p className="text-gray-400">ไม่มีข้อมูล</p> : (
+        data.length === 0 ? <p className="text-gray-400">No data</p> : (
           <div className="card overflow-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
@@ -1374,12 +1374,12 @@ function App() {
 
   const navItems = [
     { id:'dashboard', label:'Dashboard', icon:'📊' },
-    { id:'tickets', label:'เคส', icon:'🎫' },
+    { id:'tickets', label:'Cases', icon:'🎫' },
     { id:'accounts', label:'Account', icon:'👤' },
     { id:'suppliers', label:'Supplier', icon:'🏭' },
-    { id:'employees', label:'พนักงาน', icon:'👷' },
+    { id:'employees', label:'Employees', icon:'👷' },
     { id:'import', label:'Import ERP', icon:'📥' },
-    ...(user.role === 'admin' ? [{ id:'users', label:'จัดการผู้ใช้', icon:'👥' }] : []),
+    ...(user.role === 'admin' ? [{ id:'users', label:'Users', icon:'👥' }] : []),
   ];
 
   const renderPage = () => {
@@ -1389,8 +1389,8 @@ function App() {
       case 'dashboard': return <Dashboard/>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
-      case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'ชื่อ'},{key:'supplier_type',label:'ประเภท'},{key:'contact_person',label:'ผู้ติดต่อ'},{key:'phone',label:'โทร'}]}/>;
-      case 'employees': return <SimpleList title="👷 พนักงาน" endpoint="/api/employees" columns={[{key:'name',label:'ชื่อ'},{key:'team',label:'ทีม'},{key:'role',label:'ตำแหน่ง'},{key:'phone',label:'โทร'}]}/>;
+      case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'Name'},{key:'supplier_type',label:'Type'},{key:'contact_person',label:'Contact'},{key:'phone',label:'Phone'}]}/>;
+      case 'employees': return <SimpleList title="👷 Employees" endpoint="/api/employees" columns={[{key:'name',label:'Name'},{key:'team',label:'Team'},{key:'role',label:'Position'},{key:'phone',label:'Phone'}]}/>;
       case 'import': return <ImportERP/>;
       case 'users': return <Users currentUser={user}/>;
       default: return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
@@ -1416,9 +1416,9 @@ function App() {
 
         <div className="mt-4 px-1 space-y-1">
           <a onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }} className="cursor-pointer" style={{background:'rgba(255,255,255,0.1)'}}>
-            ➕ เปิดเคสใหม่
+            ➕ New Case
           </a>
-          <a onClick={logout} style={{color:'#f87171'}}>🚪 ออกจากระบบ</a>
+          <a onClick={logout} style={{color:'#f87171'}}>🚪 Sign Out</a>
         </div>
       </div>
 
