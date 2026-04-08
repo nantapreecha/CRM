@@ -1104,13 +1104,17 @@ function TicketDetail({ ticketId, user, onBack }) {
           </div>
         </div>
       </div>`;
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;background:#fff;z-index:-1';
+    container.innerHTML = html;
+    document.body.appendChild(container);
     html2pdf().set({
       margin: [10, 10, 10, 10],
       filename: `claim-${ticket.ticket_no || ticketId}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).from(html).save();
+    }).from(container).save().then(() => document.body.removeChild(container));
   };
 
   return (
