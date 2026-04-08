@@ -8,6 +8,7 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root { --primary: #0F4C45; --primary-light: #1a6b62; --primary-bg: #e8f5f3; }
   body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; }
@@ -1041,11 +1042,103 @@ function TicketDetail({ ticketId, user, onBack }) {
   const teamEmployees = employees.filter(e => e.team === user.team);
   const faultTeamEmployees = employees.filter(e => e.team === ticket.fault_team);
 
+  const claimItemsParsed = (() => {
+    try { return ticket.claim_items ? JSON.parse(ticket.claim_items) : []; }
+    catch(e) { return []; }
+  })();
+
+  const downloadPDF = () => {
+    const el = document.getElementById(`pdf-tpl-${ticketId}`);
+    if (!el) return;
+    el.style.display = 'block';
+    html2pdf().set({
+      margin: [10, 10, 10, 10],
+      filename: `claim-${ticket.ticket_no || ticketId}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(el).save().then(() => { el.style.display = 'none'; });
+  };
+
   return (
     <div className="p-6 max-w-3xl">
       <div className="flex items-center gap-3 mb-5">
         <button onClick={onBack} className="btn btn-secondary text-sm">← Back</button>
         <h2 className="text-lg font-bold" style={{color:'var(--primary)'}}>Case #{ticket.id}</h2>
+        {ticket.case_type === 'Claim' && claimItemsParsed.length > 0 && (
+          <button onClick={downloadPDF} className="btn btn-primary text-sm ml-auto">
+            📄 Download PDF
+          </button>
+        )}
+      </div>
+
+      {/* Hidden PDF Template */}
+      <div id={`pdf-tpl-${ticketId}`} style={{display:'none', position:'fixed', left:'-9999px', top:0}}>
+        <div style={{fontFamily:'Arial,sans-serif', padding:'20px', width:'190mm', fontSize:'11px', color:'#000', background:'#fff'}}>
+          {/* Header */}
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'6px'}}>
+            <div style={{fontSize:'8px', lineHeight:'1.4', maxWidth:'65%'}}>
+              บริษัท ดอนเมืองพัฒนา จำกัด<br/>
+              355/115-116 หมู่ที่ 15 ถนน พหลโยธิน ตำบล คูคต อำเภอ ลำลูกกา จังหวัดปทุมธานี 12130
+            </div>
+            <div style={{fontSize:'11px'}}>สำหรับลูกค้า</div>
+          </div>
+          <div style={{textAlign:'center', fontSize:'16px', fontWeight:'bold', margin:'10px 0'}}>
+            Product Testing
+          </div>
+          <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #000', paddingBottom:'6px', marginBottom:'10px'}}>
+            <div>ชื่อร้าน: <strong>{ticket.outlet_name || '—'}</strong></div>
+            <div>{ticket.invoice_number && <>Invoice: <strong>{ticket.invoice_number}</strong> &nbsp;</>}
+              {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('th-TH') : ''}
+            </div>
+          </div>
+          {ticket.resolution_type && (
+            <div style={{marginBottom:'8px', fontSize:'10px'}}>วิธีจัดส่ง: <strong>{ticket.resolution_type}</strong></div>
+          )}
+          {/* Table */}
+          <table style={{width:'100%', borderCollapse:'collapse', fontSize:'10px'}}>
+            <thead>
+              <tr style={{background:'#D9D9D9'}}>
+                <th style={{border:'1px solid #000', padding:'4px 6px', width:'7%', textAlign:'center'}}>ลำดับ</th>
+                <th style={{border:'1px solid #000', padding:'4px 6px', width:'55%', textAlign:'center'}}>รายละเอียดสินค้า</th>
+                <th style={{border:'1px solid #000', padding:'4px 6px', width:'12%', textAlign:'center'}}>จำนวน</th>
+                <th style={{border:'1px solid #000', padding:'4px 6px', width:'12%', textAlign:'center'}}>หน่วย</th>
+                <th style={{border:'1px solid #000', padding:'4px 6px', width:'14%', textAlign:'center'}}>หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {claimItemsParsed.map((item, i) => (
+                <tr key={i}>
+                  <td style={{border:'1px solid #000', padding:'4px 6px', textAlign:'center'}}>{i+1}</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>{item.product_name}</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px', textAlign:'center'}}>{item.claimed_qty}</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px', textAlign:'center'}}>{item.unit}</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>&nbsp;</td>
+                </tr>
+              ))}
+              {Array.from({length: Math.max(0, 15 - claimItemsParsed.length)}).map((_, i) => (
+                <tr key={`e${i}`}>
+                  <td style={{border:'1px solid #000', padding:'4px 6px', height:'20px'}}>&nbsp;</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>&nbsp;</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>&nbsp;</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>&nbsp;</td>
+                  <td style={{border:'1px solid #000', padding:'4px 6px'}}>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Footer */}
+          <div style={{marginTop:'50px', display:'flex', justifyContent:'space-around'}}>
+            <div style={{textAlign:'center'}}>
+              <div>…………………………………………</div>
+              <div style={{marginTop:'6px'}}>ผู้รับสินค้า</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div>…………………………………………</div>
+              <div style={{marginTop:'6px'}}>ผู้ส่งสินค้า</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Header card */}
