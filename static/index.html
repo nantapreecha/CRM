@@ -1051,70 +1051,75 @@ function TicketDetail({ ticketId, user, onBack }) {
     const items = claimItemsParsed;
     const itemRows = items.map((item, i) => `
       <tr>
-        <td style="border:1px solid #000;padding:4px 6px;text-align:center">${i+1}</td>
-        <td style="border:1px solid #000;padding:4px 6px">${item.product_name || ''}</td>
-        <td style="border:1px solid #000;padding:4px 6px;text-align:center">${item.claimed_qty || ''}</td>
-        <td style="border:1px solid #000;padding:4px 6px;text-align:center">${item.unit || ''}</td>
-        <td style="border:1px solid #000;padding:4px 6px"></td>
+        <td style="border:1px solid #000;padding:5px 8px;text-align:center">${i+1}</td>
+        <td style="border:1px solid #000;padding:5px 8px">${item.product_name || ''}</td>
+        <td style="border:1px solid #000;padding:5px 8px;text-align:center">${item.claimed_qty || ''}</td>
+        <td style="border:1px solid #000;padding:5px 8px;text-align:center">${item.unit || ''}</td>
+        <td style="border:1px solid #000;padding:5px 8px"></td>
       </tr>`).join('');
     const emptyRows = Array.from({length: Math.max(0, 15 - items.length)}).map(() => `
       <tr>
-        <td style="border:1px solid #000;padding:4px 6px;height:22px"></td>
-        <td style="border:1px solid #000;padding:4px 6px"></td>
-        <td style="border:1px solid #000;padding:4px 6px"></td>
-        <td style="border:1px solid #000;padding:4px 6px"></td>
-        <td style="border:1px solid #000;padding:4px 6px"></td>
+        <td style="border:1px solid #000;padding:5px 8px;height:24px"></td>
+        <td style="border:1px solid #000;padding:5px 8px"></td>
+        <td style="border:1px solid #000;padding:5px 8px"></td>
+        <td style="border:1px solid #000;padding:5px 8px"></td>
+        <td style="border:1px solid #000;padding:5px 8px"></td>
       </tr>`).join('');
     const dateStr = ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('th-TH') : '';
-    const html = `
-      <div style="font-family:Arial,sans-serif;padding:20px;width:190mm;font-size:11px;color:#000;background:#fff">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-          <div style="font-size:8px;line-height:1.5;max-width:65%">
-            บริษัท ดอนเมืองพัฒนา จำกัด<br>
-            355/115-116 หมู่ที่ 15 ถนน พหลโยธิน ตำบล คูคต อำเภอ ลำลูกกา จังหวัดปทุมธานี 12130
-          </div>
-          <div style="font-size:11px">สำหรับลูกค้า</div>
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>claim-${ticket.ticket_no || ticketId}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #000; padding: 20px; }
+        @media print {
+          body { padding: 10mm; }
+          @page { size: A4 portrait; margin: 10mm; }
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .company-addr { font-size: 8px; line-height: 1.5; }
+        .title { text-align: center; font-size: 16px; font-weight: bold; margin: 10px 0; }
+        .shop-row { display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
+        .resolution { margin-bottom: 8px; font-size: 10px; }
+        .footer { margin-top: 60px; display: flex; justify-content: space-around; }
+        .sig { text-align: center; }
+        .sig-line { margin-bottom: 6px; }
+      </style>
+    </head><body>
+      <div class="header-row">
+        <div class="company-addr">
+          บริษัท ดอนเมืองพัฒนา จำกัด<br>
+          355/115-116 หมู่ที่ 15 ถนน พหลโยธิน ตำบล คูคต อำเภอ ลำลูกกา จังหวัดปทุมธานี 12130
         </div>
-        <div style="text-align:center;font-size:16px;font-weight:bold;margin:10px 0">Product Testing</div>
-        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #000;padding-bottom:6px;margin-bottom:10px">
-          <div>ชื่อร้าน: <strong>${ticket.outlet_name || '—'}</strong></div>
-          <div>${ticket.invoice_number ? 'Invoice: <strong>' + ticket.invoice_number + '</strong> &nbsp;' : ''}${dateStr}</div>
-        </div>
-        ${ticket.resolution_type ? `<div style="margin-bottom:8px;font-size:10px">วิธีจัดส่ง: <strong>${ticket.resolution_type}</strong></div>` : ''}
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead>
-            <tr style="background:#D9D9D9">
-              <th style="border:1px solid #000;padding:4px 6px;width:7%;text-align:center">ลำดับ</th>
-              <th style="border:1px solid #000;padding:4px 6px;width:55%;text-align:center">รายละเอียดสินค้า</th>
-              <th style="border:1px solid #000;padding:4px 6px;width:12%;text-align:center">จำนวน</th>
-              <th style="border:1px solid #000;padding:4px 6px;width:12%;text-align:center">หน่วย</th>
-              <th style="border:1px solid #000;padding:4px 6px;width:14%;text-align:center">หมายเหตุ</th>
-            </tr>
-          </thead>
-          <tbody>${itemRows}${emptyRows}</tbody>
-        </table>
-        <div style="margin-top:50px;display:flex;justify-content:space-around">
-          <div style="text-align:center">
-            <div>…………………………………………</div>
-            <div style="margin-top:6px">ผู้รับสินค้า</div>
-          </div>
-          <div style="text-align:center">
-            <div>…………………………………………</div>
-            <div style="margin-top:6px">ผู้ส่งสินค้า</div>
-          </div>
-        </div>
-      </div>`;
-    const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;background:#fff;z-index:-1';
-    container.innerHTML = html;
-    document.body.appendChild(container);
-    html2pdf().set({
-      margin: [10, 10, 10, 10],
-      filename: `claim-${ticket.ticket_no || ticketId}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).from(container).save().then(() => document.body.removeChild(container));
+        <div>สำหรับลูกค้า</div>
+      </div>
+      <div class="title">Product Testing</div>
+      <div class="shop-row">
+        <div>ชื่อร้าน: <strong>${ticket.outlet_name || '—'}</strong></div>
+        <div>${ticket.invoice_number ? 'Invoice: <strong>' + ticket.invoice_number + '</strong> &nbsp;' : ''}${dateStr}</div>
+      </div>
+      ${ticket.resolution_type ? `<div class="resolution">วิธีจัดส่ง: <strong>${ticket.resolution_type}</strong></div>` : ''}
+      <table>
+        <thead>
+          <tr style="background:#D9D9D9">
+            <th style="border:1px solid #000;padding:5px 8px;width:7%;text-align:center">ลำดับ</th>
+            <th style="border:1px solid #000;padding:5px 8px;width:55%;text-align:center">รายละเอียดสินค้า</th>
+            <th style="border:1px solid #000;padding:5px 8px;width:12%;text-align:center">จำนวน</th>
+            <th style="border:1px solid #000;padding:5px 8px;width:12%;text-align:center">หน่วย</th>
+            <th style="border:1px solid #000;padding:5px 8px;width:14%;text-align:center">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}${emptyRows}</tbody>
+      </table>
+      <div class="footer">
+        <div class="sig"><div class="sig-line">…………………………………………</div>ผู้รับสินค้า</div>
+        <div class="sig"><div class="sig-line">…………………………………………</div>ผู้ส่งสินค้า</div>
+      </div>
+      <script>window.onload = function(){ window.print(); window.onafterprint = function(){ window.close(); }; }<\/script>
+    </body></html>`);
+    win.document.close();
   };
 
   return (
