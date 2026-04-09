@@ -1067,6 +1067,7 @@ function TicketDetail({ ticketId, user, onBack }) {
       </tr>`).join('');
     const dateStr = ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('th-TH') : '';
     const win = window.open('', '_blank');
+    if (!win) { alert('กรุณาอนุญาต popup ในเบราว์เซอร์ก่อน แล้วลองใหม่อีกครั้ง'); return; }
     win.document.write(`<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
       <title>claim-${ticket.ticket_no || ticketId}</title>
