@@ -931,13 +931,32 @@ function TicketList({ user, onSelect }) {
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────────
-function Timeline({ ticketId }) {
+function Timeline({ ticketId, user, isClosed }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [noteText, setNoteText] = useState('');
+  const [noteImage, setNoteImage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [noteMsg, setNoteMsg] = useState('');
 
-  useEffect(() => {
+  const loadLogs = () => {
     api(`/api/tickets/${ticketId}/log`).then(d => { setLogs(d || []); setLoading(false); });
-  }, [ticketId]);
+  };
+
+  useEffect(() => { loadLogs(); }, [ticketId]);
+
+  const submitNote = async () => {
+    if (!noteText.trim()) return;
+    setSaving(true); setNoteMsg('');
+    try {
+      const res = await api(`/api/tickets/${ticketId}/note`, {
+        method: 'POST', body: JSON.stringify({ note: noteText, image_url: noteImage })
+      });
+      if (res && res.ok) { setNoteText(''); setNoteImage(''); loadLogs(); }
+      else setNoteMsg(res?.error || 'เกิดข้อผิดพลาด');
+    } catch(ex) { setNoteMsg('Error: ' + ex.message); }
+    finally { setSaving(false); }
+  };
 
   const ACTION_COLORS = {
     created: '#16a34a', forwarded: '#2563eb', completed: '#7c3aed',
@@ -951,46 +970,65 @@ function Timeline({ ticketId }) {
   };
 
   if (loading) return <div className="text-center py-6 text-gray-400"><Spinner/></div>;
-  if (logs.length === 0) return <div className="text-center py-6 text-gray-400">No history yet</div>;
 
   return (
-    <div className="space-y-1">
-      {logs.map((log, i) => (
-        <div key={log.id} className="flex gap-3 relative">
-          {i < logs.length - 1 && <div className="timeline-line"/>}
-          <div className="tl-dot" style={{background: (ACTION_COLORS[log.action]||'#9ca3af')+'22', border:`2px solid ${ACTION_COLORS[log.action]||'#9ca3af'}`}}>
-            <span style={{fontSize:13}}>{ACTION_ICONS[log.action]||'📌'}</span>
-          </div>
-          <div className="flex-1 pb-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm text-gray-800">
-                {log.user_display_name || log.created_by || '—'}
-              </span>
-              {(log.user_team || log.from_team) && (
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{background:'#f0fdfa', color:'#0f766e', border:'1px solid #99f6e4'}}>
-                  {TEAM_ICONS[log.user_team || log.from_team]||'👥'} {log.user_team || log.from_team}
-                </span>
-              )}
-              <span className="text-xs text-gray-400">{fmtDt(log.created_at)}</span>
-              {log.duration_seconds != null && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                  ⏱ {fmtDuration(log.duration_seconds)}
-                </span>
-              )}
-            </div>
-            {log.note && (
-              <div className="mt-1.5 text-sm text-gray-700 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                {log.note}
+    <div>
+      <div className="space-y-1">
+        {logs.length === 0
+          ? <div className="text-center py-6 text-gray-400">No history yet</div>
+          : logs.map((log, i) => (
+            <div key={log.id} className="flex gap-3 relative">
+              {i < logs.length - 1 && <div className="timeline-line"/>}
+              <div className="tl-dot" style={{background: (ACTION_COLORS[log.action]||'#9ca3af')+'22', border:`2px solid ${ACTION_COLORS[log.action]||'#9ca3af'}`}}>
+                <span style={{fontSize:13}}>{ACTION_ICONS[log.action]||'📌'}</span>
               </div>
-            )}
-            {log.image_url && (
-              <img src={log.image_url} alt="attachment" className="mt-2 max-w-xs rounded-lg border border-gray-200 cursor-pointer"
-                onClick={()=>window.open(log.image_url,'_blank')}/>
-            )}
+              <div className="flex-1 pb-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-sm text-gray-800">
+                    {log.user_display_name || log.created_by || '—'}
+                  </span>
+                  {(log.user_team || log.from_team) && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{background:'#f0fdfa', color:'#0f766e', border:'1px solid #99f6e4'}}>
+                      {TEAM_ICONS[log.user_team || log.from_team]||'👥'} {log.user_team || log.from_team}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-400">{fmtDt(log.created_at)}</span>
+                  {log.duration_seconds != null && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                      ⏱ {fmtDuration(log.duration_seconds)}
+                    </span>
+                  )}
+                </div>
+                {log.note && (
+                  <div className="mt-1.5 text-sm text-gray-700 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                    {log.note}
+                  </div>
+                )}
+                {log.image_url && (
+                  <img src={log.image_url} alt="attachment" className="mt-2 max-w-xs rounded-lg border border-gray-200 cursor-pointer"
+                    onClick={()=>window.open(log.image_url,'_blank')}/>
+                )}
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      {!isClosed && (
+        <div className="card p-4 mt-4 border-l-4 border-amber-400">
+          <h4 className="font-semibold text-sm text-gray-700 mb-2">💬 Add note</h4>
+          <textarea rows={2} value={noteText} onChange={e=>setNoteText(e.target.value)}
+            placeholder="พิมข้อความ..." className="mb-2 text-sm"/>
+          {noteImage && <img src={noteImage} alt="preview" className="max-w-xs rounded mb-2 border"/>}
+          <div className="flex items-center justify-between">
+            <ImageUploader onUploaded={url=>setNoteImage(url)}/>
+            <button className="btn btn-primary text-sm" disabled={saving||!noteText.trim()}
+              onClick={submitNote}>{saving?<Spinner/>:'Add note'}</button>
           </div>
+          {noteMsg && <p className="text-xs text-red-500 mt-1">{noteMsg}</p>}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -1013,20 +1051,16 @@ function TicketDetail({ ticketId, user, onBack }) {
   const [faultTeam, setFaultTeam] = useState('');
   const [faultEmployee, setFaultEmployee] = useState('');
 
-  const [comments, setComments] = useState([]);
-
   const load = () => {
     setLoading(true);
     Promise.all([
       api(`/api/tickets/${ticketId}`),
       api('/api/employees'),
       api(`/api/tickets/${ticketId}/assignments`),
-      api(`/api/tickets/${ticketId}/comments`),
-    ]).then(([t, e, a, c]) => {
+    ]).then(([t, e, a]) => {
       setTicket(t);
       setEmployees(e || []);
       setAssignments(a || []);
-      setComments(c || []);
       setLoading(false);
     });
   };
@@ -1219,46 +1253,12 @@ function TicketDetail({ ticketId, user, onBack }) {
 
       {/* Tabs */}
       <div className="flex border-b mb-4">
-        {[{id:'detail',label:'Actions'},{id:'timeline',label:'⏱ Timeline'},{id:'comments',label:'💬 Notes'}].map(t=>(
+        {[{id:'detail',label:'Actions'},{id:'timeline',label:'⏱ Timeline'}].map(t=>(
           <div key={t.id} className={`tab ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)}>{t.label}</div>
         ))}
       </div>
 
-      {tab === 'timeline' && <Timeline ticketId={ticketId}/>}
-
-      {tab === 'comments' && (
-        <div className="space-y-3">
-          <div className="card p-4">
-            <h4 className="font-semibold text-gray-700 mb-3">Add note</h4>
-            <textarea rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="Type a note..." className="mb-2"/>
-            {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
-            <div className="flex items-center justify-between">
-              <ImageUploader onUploaded={url=>setImageUrl(url)}/>
-              <button className="btn btn-primary text-sm" disabled={saving||!note}
-                onClick={()=>act('comments',{note,image_url:imageUrl})}>
-                {saving?<Spinner/>:'Save'}
-              </button>
-            </div>
-            {msg && <p className="text-sm text-red-500 mt-2">{msg}</p>}
-          </div>
-
-          {comments.length === 0
-            ? <p className="text-sm text-gray-400 text-center py-4">No notes yet</p>
-            : comments.slice().reverse().map(c => (
-              <div key={c.id} className="card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm text-gray-700">{c.created_by}</span>
-                  <span className="text-xs text-gray-400">{fmtDt(c.created_at)}</span>
-                </div>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.comment}</p>
-                {c.image_url && (
-                  <img src={c.image_url} alt="attachment" className="mt-2 max-w-xs rounded-lg border cursor-pointer"
-                    onClick={()=>window.open(c.image_url,'_blank')}/>
-                )}
-              </div>
-            ))
-          }
-        </div>
+      {tab === 'timeline' && <Timeline ticketId={ticketId} user={user} isClosed={ticket.status==='closed'}/>
       )}
 
       {tab === 'detail' && (

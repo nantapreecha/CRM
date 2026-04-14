@@ -995,6 +995,24 @@ def attribute_fault(tid):
 
     return jsonify({'ok': True})
 
+@app.route('/api/tickets/<int:tid>/note', methods=['POST'])
+@require_auth
+def add_ticket_note(tid):
+    d = request.json
+    note = (d.get('note') or '').strip()
+    image_url = d.get('image_url', '')
+    if not note:
+        return jsonify({'error': 'กรุณาใส่ข้อความก่อน'}), 400
+    ticket = query("SELECT id FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, image_url, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, g.user['team'], '', 'note', note, image_url,
+         g.user['user_id'], g.user['display_name']))
+    return jsonify({'ok': True})
+
 @app.route('/api/tickets/<int:tid>/log', methods=['GET'])
 @require_auth
 def get_ticket_log(tid):
