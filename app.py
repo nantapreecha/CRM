@@ -323,6 +323,7 @@ def init_db():
         "UPDATE tickets SET status='pending_ack' WHERE case_type='Complain' AND current_team='pending_ack' AND status='open'",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claim_items TEXT",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
+        "ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS image_url TEXT",
     ]
     for m in migrations:
         try:
@@ -1024,9 +1025,11 @@ def get_ticket_comments(tid):
 @require_auth
 def add_ticket_comment(tid):
     d = request.json
-    id_ = mutate("INSERT INTO ticket_comments (ticket_id, comment, created_by) VALUES (%s,%s,%s) RETURNING id",
-                 (tid, d['comment'], g.user['display_name']))
-    return jsonify({'id': id_}), 201
+    text = d.get('note') or d.get('comment', '')
+    image_url = d.get('image_url', '')
+    id_ = mutate("INSERT INTO ticket_comments (ticket_id, comment, image_url, created_by) VALUES (%s,%s,%s,%s) RETURNING id",
+                 (tid, text, image_url, g.user['display_name']))
+    return jsonify({'ok': True, 'id': id_})
 
 @app.route('/api/tickets/<int:tid>/fault-attribution', methods=['GET'])
 @require_auth
