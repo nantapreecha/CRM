@@ -1258,8 +1258,7 @@ function TicketDetail({ ticketId, user, onBack }) {
         ))}
       </div>
 
-      {tab === 'timeline' && <Timeline ticketId={ticketId} user={user} isClosed={ticket.status==='closed'}/>
-      )}
+      {tab === 'timeline' && <Timeline ticketId={ticketId} user={user} isClosed={ticket.status==='closed'}/>}
 
       {tab === 'detail' && (
         <div className="space-y-4">
