@@ -164,26 +164,36 @@ function Login({ onLogin }) {
 // ── ImageUploader ─────────────────────────────────────────────────────────────
 function ImageUploader({ onUploaded }) {
   const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
   const ref = useRef();
 
   const handle = async e => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploading(true);
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await apiUpload('/api/upload/image', fd);
-    setUploading(false);
-    if (res.url) onUploaded(res.url);
-    ref.current.value = '';
+    setUploading(true); setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiUpload('/api/upload/image', fd);
+      if (res && res.url) { onUploaded(res.url); }
+      else { setErr(res?.error || 'Upload failed'); }
+    } catch(ex) {
+      setErr('Network error: ' + ex.message);
+    } finally {
+      setUploading(false);
+      if (ref.current) ref.current.value = '';
+    }
   };
 
   return (
-    <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-      {uploading ? <Spinner/> : '📎'}
-      <span>{uploading ? 'Uploading...' : 'Attach image'}</span>
-      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={handle} style={{display:'none'}}/>
-    </label>
+    <div className="flex flex-col gap-1">
+      <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-500 hover:text-gray-700">
+        {uploading ? <Spinner/> : '📎'}
+        <span>{uploading ? 'Uploading...' : 'Attach image'}</span>
+        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={handle} style={{display:'none'}}/>
+      </label>
+      {err && <p className="text-xs text-red-500">{err}</p>}
+    </div>
   );
 }
 
