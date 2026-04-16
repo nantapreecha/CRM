@@ -880,7 +880,21 @@ function TicketList({ user, onSelect }) {
     return true;
   });
 
-  const allCounts = allTickets.reduce((acc, t) => {
+  // counts respect date+search+type filter but NOT statusFilter (so all tabs show their own count)
+  const filteredForCount = allTickets.filter(t => {
+    if (dateFrom && t.created_at && t.created_at.slice(0,10) < dateFrom) return false;
+    if (dateTo && t.created_at && t.created_at.slice(0,10) > dateTo) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!(t.description||'').toLowerCase().includes(q)
+        && !(t.outlet_name||'').toLowerCase().includes(q)
+        && !(t.account_name||'').toLowerCase().includes(q)
+        && !(t.ticket_no||'').toLowerCase().includes(q)
+        && !String(t.id).includes(q)) return false;
+    }
+    return true;
+  });
+  const allCounts = filteredForCount.reduce((acc, t) => {
     acc[t.status] = (acc[t.status]||0)+1;
     acc[''] = (acc['']||0)+1;
     return acc;
