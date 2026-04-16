@@ -848,6 +848,8 @@ function TicketList({ user, onSelect }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -865,6 +867,8 @@ function TicketList({ user, onSelect }) {
   // filter in frontend
   const filtered = allTickets.filter(t => {
     if (statusFilter && t.status !== statusFilter) return false;
+    if (dateFrom && t.created_at && t.created_at.slice(0,10) < dateFrom) return false;
+    if (dateTo && t.created_at && t.created_at.slice(0,10) > dateTo) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!(t.description||'').toLowerCase().includes(q)
@@ -919,6 +923,17 @@ function TicketList({ user, onSelect }) {
           <option value="">All types</option>
           {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
+        <div className="flex items-center gap-1">
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            style={{width:140}} title="จากวันที่"/>
+          <span className="text-gray-400 text-sm">—</span>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            style={{width:140}} title="ถึงวันที่"/>
+          {(dateFrom||dateTo) && (
+            <button className="text-xs text-gray-400 hover:text-red-500 px-1" title="Clear dates"
+              onClick={()=>{setDateFrom('');setDateTo('');}}>✕</button>
+          )}
+        </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
           style={myTeamOnly?{borderColor:'var(--primary)',background:'var(--primary-bg)',color:'var(--primary)'}:{}}>
           <input type="checkbox" checked={myTeamOnly} onChange={e=>setMyTeamOnly(e.target.checked)} className="hidden"/>
