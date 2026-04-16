@@ -836,8 +836,6 @@ def forward_ticket(tid):
     image_url = d.get('image_url')
     if not to_team:
         return jsonify({'error': 'กรุณาเลือกทีมที่จะส่งต่อ'}), 400
-    if not note:
-        return jsonify({'error': 'กรุณาใส่ note ก่อนส่งต่อ'}), 400
     ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
     if not ticket:
         return jsonify({'error': 'Not found'}), 404
@@ -859,8 +857,6 @@ def complete_ticket(tid):
     d = request.json
     note = (d.get('note') or '').strip()
     image_url = d.get('image_url')
-    if not note:
-        return jsonify({'error': 'กรุณาใส่ note ก่อน Complete'}), 400
     ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
     if not ticket:
         return jsonify({'error': 'Not found'}), 404

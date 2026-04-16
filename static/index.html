@@ -1267,20 +1267,40 @@ function TicketDetail({ ticketId, user, onBack }) {
             </div>
           )}
 
-          {/* 2. Forward / Complete (sequential, in_progress/open) */}
+          {/* 2a. Quick note (any team, any open status) */}
+          {ticket.status !== 'closed' && (
+            <div className="card p-4 border-l-4 border-amber-400">
+              <h4 className="font-semibold text-gray-700 mb-2">💬 Save note</h4>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกข้อความ..." className="mb-2"/>
+              {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
+              <div className="flex items-center justify-between">
+                <ImageUploader onUploaded={url=>setImageUrl(url)}/>
+                <button className="btn btn-secondary text-sm" disabled={saving||(!note.trim()&&!imageUrl)}
+                  onClick={async()=>{
+                    setSaving(true); setMsg('');
+                    try {
+                      const res = await api(`/api/tickets/${ticketId}/note`, {method:'POST', body:JSON.stringify({note,image_url:imageUrl})});
+                      if(res&&res.ok){setNote('');setImageUrl('');}
+                      else setMsg(res?.error||'เกิดข้อผิดพลาด');
+                    } catch(ex){setMsg('Error: '+ex.message);}
+                    finally{setSaving(false);}
+                  }}>
+                  {saving?<Spinner/>:'💾 Save'}
+                </button>
+              </div>
+              {msg && <p className="text-xs text-red-500 mt-1">{msg}</p>}
+            </div>
+          )}
+
+          {/* 2b. Forward / Complete (sequential, in_progress/open) */}
           {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isMyTeam && (
             <div className="card p-4 border-l-4 border-blue-400">
               <h4 className="font-semibold text-gray-700 mb-3">📤 Actions</h4>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Note *" className="mb-2"/>
-              {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
-              <div className="flex items-center gap-2 mb-3">
-                <ImageUploader onUploaded={url=>setImageUrl(url)}/>
-              </div>
               <div className="flex gap-3 flex-wrap">
                 {/* Complete → back to opener */}
                 {ticket.opener_team !== ticket.current_team && (
-                  <button className="btn btn-secondary flex-1" disabled={saving||!note}
-                    onClick={()=>act('complete',{note,image_url:imageUrl})}>
+                  <button className="btn btn-secondary flex-1" disabled={saving}
+                    onClick={()=>act('complete',{note:'',image_url:''})}>
                     {saving?<Spinner/>:`✅ Return to ${ticket.opener_team}`}
                   </button>
                 )}
@@ -1292,8 +1312,8 @@ function TicketDetail({ ticketId, user, onBack }) {
                       <option key={t} value={t}>{TEAM_ICONS[t]} {t}</option>
                     ))}
                   </select>
-                  <button className="btn btn-primary" disabled={saving||!note||!forwardTeam}
-                    onClick={()=>act('forward',{note,image_url:imageUrl,to_team:forwardTeam})}>
+                  <button className="btn btn-primary" disabled={saving||!forwardTeam}
+                    onClick={()=>act('forward',{note:'',image_url:imageUrl,to_team:forwardTeam})}>
                     {saving?<Spinner/>:'Forward →'}
                   </button>
                 </div>
