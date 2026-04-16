@@ -843,11 +843,24 @@ const STATUS_TABS = [
 
 function TicketList({ user, onSelect }) {
   const [tickets, setTickets] = useState([]);
+  const [allCounts, setAllCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [myTeamOnly, setMyTeamOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
+
+  // load counts from all statuses (not affected by statusFilter)
+  const loadCounts = useCallback(() => {
+    const params = new URLSearchParams();
+    if (myTeamOnly && user.team) params.set('team', user.team);
+    if (typeFilter) params.set('case_type', typeFilter);
+    api('/api/tickets?' + params).then(d => {
+      const counts = (d || []).reduce((acc, t) => { acc[t.status] = (acc[t.status]||0)+1; return acc; }, {});
+      counts[''] = (d || []).length;
+      setAllCounts(counts);
+    });
+  }, [myTeamOnly, typeFilter, user.team]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -857,6 +870,8 @@ function TicketList({ user, onSelect }) {
     if (typeFilter) params.set('case_type', typeFilter);
     api('/api/tickets?' + params).then(d => { setTickets(d || []); setLoading(false); });
   }, [myTeamOnly, statusFilter, typeFilter, user.team]);
+
+  useEffect(() => { loadCounts(); }, [loadCounts]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -871,8 +886,6 @@ function TicketList({ user, onSelect }) {
       })
     : tickets;
 
-  // count per status for tab badges
-  const countByStatus = tickets.reduce((acc, t) => { acc[t.status] = (acc[t.status]||0)+1; return acc; }, {});
 
   return (
     <div className="p-6">
@@ -885,7 +898,7 @@ function TicketList({ user, onSelect }) {
       {/* Status tabs */}
       <div className="flex border-b mb-4 overflow-x-auto">
         {STATUS_TABS.map(tab => {
-          const cnt = tab.key ? (countByStatus[tab.key]||0) : tickets.length;
+          const cnt = allCounts[tab.key] || 0;
           return (
             <div key={tab.key}
               className={`tab whitespace-nowrap ${statusFilter===tab.key?'active':''}`}
