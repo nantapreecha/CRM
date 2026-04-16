@@ -832,12 +832,22 @@ function CreateTicket({ user, onCreated }) {
 }
 
 // ── TicketList ────────────────────────────────────────────────────────────────
+const STATUS_TABS = [
+  { key: '', label: 'All' },
+  { key: 'open', label: 'Open' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'pending_ack', label: 'Pending Ack' },
+  { key: 'pending_fault', label: 'Pending Fault' },
+  { key: 'closed', label: 'Closed' },
+];
+
 function TicketList({ user, onSelect }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myTeamOnly, setMyTeamOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [search, setSearch] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -850,60 +860,112 @@ function TicketList({ user, onSelect }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const filtered = search.trim()
+    ? tickets.filter(t => {
+        const q = search.toLowerCase();
+        return (t.description||'').toLowerCase().includes(q)
+          || (t.outlet_name||'').toLowerCase().includes(q)
+          || (t.account_name||'').toLowerCase().includes(q)
+          || (t.ticket_no||'').toLowerCase().includes(q)
+          || String(t.id).includes(q);
+      })
+    : tickets;
+
+  // count per status for tab badges
+  const countByStatus = tickets.reduce((acc, t) => { acc[t.status] = (acc[t.status]||0)+1; return acc; }, {});
+
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold" style={{color:'var(--primary)'}}>🎫 All Cases</h2>
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={myTeamOnly} onChange={e=>setMyTeamOnly(e.target.checked)}/>
-            My team only ({user.team})
-          </label>
-          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{width:'auto'}}>
-            <option value="">All statuses</option>
-            {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto'}}>
-            <option value="">All types</option>
-            {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <button className="btn btn-secondary text-sm" onClick={load}>🔄</button>
-        </div>
+        <button className="btn btn-secondary text-sm" onClick={load}>🔄 Refresh</button>
       </div>
 
-      {loading ? <div className="text-center py-10 text-gray-400"><Spinner/></div> : (
-        tickets.length === 0 ? <div className="text-center py-10 text-gray-400">No cases</div> : (
-          <div className="space-y-3">
-            {tickets.map(t => (
-              <div key={t.id} className="card p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={()=>onSelect(t.id)}>
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs text-gray-400">#{t.id}</span>
-                      <span className={`status-${t.status}`}>{STATUS_LABELS[t.status]||t.status}</span>
-                      <span className={`text-xs font-medium priority-${t.priority}`}>{t.priority}</span>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{t.case_type}</span>
-                      {t.case_subtype && <span className="text-xs text-gray-400">{t.case_subtype}</span>}
+      {/* Status tabs */}
+      <div className="flex border-b mb-4 overflow-x-auto">
+        {STATUS_TABS.map(tab => {
+          const cnt = tab.key ? (countByStatus[tab.key]||0) : tickets.length;
+          return (
+            <div key={tab.key}
+              className={`tab whitespace-nowrap ${statusFilter===tab.key?'active':''}`}
+              onClick={()=>setStatusFilter(tab.key)}>
+              {tab.label}
+              {cnt > 0 && <span className="ml-1.5 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full"
+                style={statusFilter===tab.key?{background:'var(--primary)',color:'#fff'}:{}}>{cnt}</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex-1 min-w-48 relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="ค้นหา outlet, description, case #..."
+            style={{paddingLeft:32}}/>
+        </div>
+        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto'}}>
+          <option value="">All types</option>
+          {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+          style={myTeamOnly?{borderColor:'var(--primary)',background:'var(--primary-bg)',color:'var(--primary)'}:{}}>
+          <input type="checkbox" checked={myTeamOnly} onChange={e=>setMyTeamOnly(e.target.checked)} className="hidden"/>
+          <span>{myTeamOnly?'✓':''}</span>
+          My team only ({user.team})
+        </label>
+      </div>
+
+      {/* Cards */}
+      {loading
+        ? <div className="text-center py-10 text-gray-400"><Spinner/></div>
+        : filtered.length === 0
+          ? <div className="text-center py-10 text-gray-400">No cases found</div>
+          : <div className="space-y-3">
+              {filtered.map(t => (
+                <div key={t.id} className="card cursor-pointer hover:shadow-md transition-all hover:border-teal-200 border border-transparent"
+                  onClick={()=>onSelect(t.id)}>
+                  <div className="p-4 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      {/* Top row: id + type + priority + date */}
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span className="font-mono text-xs text-gray-400 font-semibold">#{t.id}</span>
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{t.case_type}</span>
+                        {t.case_subtype && <span className="text-xs text-gray-400">{t.case_subtype}</span>}
+                        <span className={`text-xs font-semibold priority-${t.priority}`}>{t.priority}</span>
+                        <span className="ml-auto text-xs text-gray-400">🕐 {fmtDt(t.created_at)}</span>
+                      </div>
+                      {/* Outlet + Account — prominent */}
+                      {(t.outlet_name || t.account_name) && (
+                        <div className="mb-1">
+                          {t.outlet_name && <span className="font-semibold text-sm text-gray-900">{t.outlet_name}</span>}
+                          {t.account_name && <span className="text-xs text-gray-400 ml-2">({t.account_name})</span>}
+                        </div>
+                      )}
+                      {/* Description */}
+                      <p className="text-gray-600 text-sm line-clamp-2 mb-2">{t.description}</p>
+                      {/* Bottom row: status + team flow */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`status-${t.status}`}>{STATUS_LABELS[t.status]||t.status}</span>
+                        <span className="text-xs text-gray-400">
+                          {TEAM_ICONS[t.opener_team]||'👥'} {t.opener_team}
+                          <span className="mx-1">→</span>
+                          {TEAM_ICONS[t.current_team]||'👥'} {t.current_team}
+                        </span>
+                      </div>
                     </div>
-                    <p className="mt-1.5 text-gray-800 font-medium line-clamp-2 text-sm">{t.description}</p>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-                      {t.account_name && <span>👤 {t.account_name}</span>}
-                      <span>{TEAM_ICONS[t.opener_team]||'👥'} {t.opener_team}</span>
-                      <span>→ {TEAM_ICONS[t.current_team]||'👥'} {t.current_team}</span>
-                      <span>🕐 {fmtDt(t.created_at)}</span>
-                    </div>
+                    {t.latest_image_url && (
+                      <img src={t.latest_image_url} alt="img"
+                        className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0"
+                        onClick={e=>{ e.stopPropagation(); window.open(t.latest_image_url,'_blank'); }}/>
+                    )}
                   </div>
-                  {t.latest_image_url && (
-                    <img src={t.latest_image_url} alt="latest image"
-                      className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0"
-                      onClick={e=>{ e.stopPropagation(); window.open(t.latest_image_url,'_blank'); }}/>
-                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+              ))}
+            </div>
+      }
     </div>
   );
 }
