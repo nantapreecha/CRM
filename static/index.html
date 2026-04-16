@@ -842,15 +842,12 @@ const STATUS_TABS = [
 ];
 
 function TicketList({ user, onSelect }) {
-  const [tickets, setTickets] = useState([]);
-  const [allCounts, setAllCounts] = useState({});
+  const [allTickets, setAllTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myTeamOnly, setMyTeamOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
-
-  const [allTickets, setAllTickets] = useState([]);
 
   const load = useCallback(() => {
     setLoading(true);
