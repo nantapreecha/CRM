@@ -917,12 +917,24 @@ def acknowledge_ticket(tid):
         (tid,), one=True
     )
     if pending['cnt'] == 0:
-        back_team = ticket['opener_team'] or 'CX'
-        mutate("UPDATE tickets SET current_team=%s, status='in_progress' WHERE id=%s", (back_team, tid))
+        # Auto-close: record fault attribution for each acknowledged team/employee
+        acknowledged = query(
+            "SELECT * FROM ticket_assignments WHERE ticket_id=%s AND acknowledged_at IS NOT NULL",
+            (tid,)
+        )
+        for ack in acknowledged:
+            if ack['employee_id']:
+                mutate("""INSERT INTO ticket_fault_attribution
+                    (ticket_id, fault_team, employee_id, note, attributed_by, attributed_user_id)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                    (tid, ack['team'], ack['employee_id'], ack.get('note') or '',
+                     'system (auto-close)', g.user['user_id']))
+        mutate("""UPDATE tickets SET status='closed', closed_at=%s, fault_attributed_at=%s
+            WHERE id=%s""", (now, now, tid))
         mutate("""INSERT INTO ticket_workflow_log
             (ticket_id, from_team, to_team, action, note, created_by)
             VALUES (%s,%s,%s,%s,%s,%s)""",
-            (tid, 'system', back_team, 'ทุกทีม Acknowledge ครบแล้ว', '', 'system'))
+            (tid, 'system', '', 'ปิดเคสอัตโนมัติ — ทุกทีม Acknowledge ครบแล้ว', '', 'system'))
 
     return jsonify({'ok': True})
 
@@ -1149,9 +1161,10 @@ def dashboard_employee():
     rows = query(f"""
         SELECT e.id, e.name, e.team, COUNT(DISTINCT tfa.ticket_id) AS cnt,
                ROUND(COUNT(DISTINCT tfa.ticket_id)*100.0/%s, 1) AS pct
-        FROM employees e
-        LEFT JOIN ticket_fault_attribution tfa ON tfa.employee_id = e.id
-        LEFT JOIN tickets t ON t.id = tfa.ticket_id {('AND 1=1' + extra) if extra else ''}
+        FROM ticket_fault_attribution tfa
+        JOIN employees e ON e.id = tfa.employee_id
+        JOIN tickets t ON t.id = tfa.ticket_id
+        WHERE 1=1 {extra}
         GROUP BY e.id, e.name, e.team ORDER BY cnt DESC
     """, [total] + params)
     return jsonify(rows)
