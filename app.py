@@ -1088,7 +1088,7 @@ def upload_image():
             api_secret=CLOUDINARY_API_SECRET
         )
         f = request.files['file']
-        result = cloudinary.uploader.upload(f, folder='smm-crm')
+        result = cloudinary.uploader.upload(f, folder='smm-crm', resource_type='auto')
         return jsonify({'url': result['secure_url']})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
