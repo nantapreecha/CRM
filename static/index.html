@@ -161,6 +161,23 @@ function Login({ onLogin }) {
   );
 }
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
+
+function FilePreview({ url, className = '' }) {
+  if (!url) return null;
+  if (isPdf(url)) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        className={`inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm hover:bg-red-100 ${className}`}>
+        📄 ดู PDF
+      </a>
+    );
+  }
+  return <img src={url} alt="attachment" className={`rounded-lg border border-gray-200 cursor-pointer ${className}`}
+    onClick={()=>window.open(url,'_blank')}/>;
+}
+
 // ── ImageUploader ─────────────────────────────────────────────────────────────
 function ImageUploader({ onUploaded }) {
   const [uploading, setUploading] = useState(false);
@@ -189,8 +206,8 @@ function ImageUploader({ onUploaded }) {
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-500 hover:text-gray-700">
         {uploading ? <Spinner/> : '📎'}
-        <span>{uploading ? 'Uploading...' : 'Attach image'}</span>
-        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={handle} style={{display:'none'}}/>
+        <span>{uploading ? 'Uploading...' : 'Attach file'}</span>
+        <input ref={ref} type="file" accept="image/*,application/pdf" className="hidden" onChange={handle} style={{display:'none'}}/>
       </label>
       {err && <p className="text-xs text-red-500">{err}</p>}
     </div>
@@ -776,10 +793,10 @@ function CreateTicket({ user, onCreated }) {
 
           {/* Image */}
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">Attach image</label>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Attach file</label>
             {imageUrl
               ? <div className="flex items-center gap-3">
-                  <img src={imageUrl} alt="preview" className="w-20 h-20 object-cover rounded-lg border"/>
+                  <FilePreview url={imageUrl} className="w-20 h-20 object-cover"/>
                   <button type="button" className="btn btn-secondary text-xs" onClick={()=>setImageUrl('')}>Remove</button>
                 </div>
               : <ImageUploader onUploaded={url=>setImageUrl(url)}/>
@@ -995,9 +1012,9 @@ function TicketList({ user, onSelect }) {
                       </div>
                     </div>
                     {t.latest_image_url && (
-                      <img src={t.latest_image_url} alt="img"
-                        className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0"
-                        onClick={e=>{ e.stopPropagation(); window.open(t.latest_image_url,'_blank'); }}/>
+                      <div onClick={e=>e.stopPropagation()} className="shrink-0">
+                        <FilePreview url={t.latest_image_url} className="w-16 h-16 object-cover"/>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1083,10 +1100,7 @@ function Timeline({ ticketId, user, isClosed }) {
                     {log.note}
                   </div>
                 )}
-                {log.image_url && (
-                  <img src={log.image_url} alt="attachment" className="mt-2 max-w-xs rounded-lg border border-gray-200 cursor-pointer"
-                    onClick={()=>window.open(log.image_url,'_blank')}/>
-                )}
+                {log.image_url && <FilePreview url={log.image_url} className="mt-2 max-w-xs"/>}
               </div>
             </div>
           ))
@@ -1349,7 +1363,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                 This Complain case has been assigned to team <strong>{user.team}</strong> for acknowledgement
               </p>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Acknowledgement note *" className="mb-2"/>
-              {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
+              {imageUrl && <FilePreview url={imageUrl} className="max-w-xs mb-2"/>}
               <div className="mb-3">
                 <label className="text-sm font-medium text-gray-700 block mb-1">Acknowledging employee *</label>
                 <select value={ackEmployee} onChange={e=>setAckEmployee(e.target.value)}>
@@ -1372,7 +1386,7 @@ function TicketDetail({ ticketId, user, onBack }) {
             <div className="card p-4 border-l-4 border-amber-400">
               <h4 className="font-semibold text-gray-700 mb-2">💬 Save note</h4>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกข้อความ..." className="mb-2"/>
-              {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
+              {imageUrl && <FilePreview url={imageUrl} className="max-w-xs mb-2"/>}
               <div className="flex items-center justify-between">
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
                 <button className="btn btn-secondary text-sm" disabled={saving||(!note.trim()&&!imageUrl)}
@@ -1437,7 +1451,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                   ))}
                 </div>
               </div>
-              {imageUrl && <img src={imageUrl} alt="preview" className="max-w-xs rounded mb-2 border"/>}
+              {imageUrl && <FilePreview url={imageUrl} className="max-w-xs mb-2"/>}
               <div className="flex items-center gap-2">
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
                 <button className="btn btn-danger ml-auto" disabled={saving||!note||!faultTeam}
