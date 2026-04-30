@@ -12,7 +12,7 @@
 <style>
   :root { --primary: #0F4C45; --primary-light: #1a6b62; --primary-bg: #e8f5f3; }
   body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; }
-  .sidebar { background: var(--primary); min-height: 100vh; width: 220px; flex-shrink:0; }
+  .sidebar { background: var(--primary); width: 220px; flex-shrink:0; position:sticky; top:0; height:100vh; overflow-y:auto; }
   .sidebar a { color: #c8e6e3; transition: all .2s; display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:8px; cursor:pointer; text-decoration:none; }
   .sidebar a:hover, .sidebar a.active { background: var(--primary-light); color: #fff; }
   .badge { background:#ef4444; color:#fff; border-radius:9999px; padding:1px 7px; font-size:11px; }
@@ -2035,7 +2035,7 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <div className="sidebar flex flex-col py-4 px-2">
         <div className="px-3 mb-6">
