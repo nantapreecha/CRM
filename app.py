@@ -1590,6 +1590,26 @@ def import_erp():
 
 init_db()
 
+@app.route('/api/debug/all-tickets-fault', methods=['GET'])
+def debug_all_tickets_fault():
+    """Show all tickets with fault attribution and invoice match status."""
+    rows = query("""
+        SELECT
+            t.id, t.case_type, t.status,
+            t.invoice_number,
+            t.fault_team AS tickets_fault_team,
+            tfa.fault_team AS tfa_fault_team,
+            CASE WHEN t.invoice_number IS NOT NULL AND t.invoice_number != ''
+                 THEN (SELECT COUNT(*) FROM orders o WHERE o.invoice_number = t.invoice_number)
+                 ELSE 0
+            END AS invoice_in_orders,
+            t.opener_team, t.description
+        FROM tickets t
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
+        ORDER BY t.id
+    """)
+    return jsonify(rows)
+
 @app.route('/api/debug/complain-no-invoice', methods=['GET'])
 def debug_complain_no_invoice():
     rows = query("""
