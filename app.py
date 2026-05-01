@@ -1340,40 +1340,39 @@ def dashboard_aging():
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
-    # กรองเคสด้วย tickets.created_at (เหมือนกับ Overview)
-    # ตัวหาร = distinct invoice ที่มีเคส Claim/Complain ในช่วงนั้น
-    # ตัวตั้ง = เคสเหล่านั้น แยกตาม fault_team
+    # กรองด้วย delivery date (doc_date ของ invoice ใน orders)
+    # ตัวหาร = จำนวน invoice ที่ส่งในช่วงนั้น
+    # ตัวตั้ง = Claim+Complain ที่ invoice นั้นอยู่ในช่วง delivery date เดียวกัน
     start = request.args.get('start', '')
     end = request.args.get('end', '')
-    ticket_extra = ''
-    ticket_params = []
-    if start: ticket_extra += " AND t.created_at::date >= %s"; ticket_params.append(start)
-    if end:   ticket_extra += " AND t.created_at::date <= %s"; ticket_params.append(end)
+    date_extra = ''
+    date_params = []
+    if start: date_extra += " AND o.doc_date >= %s"; date_params.append(start)
+    if end:   date_extra += " AND o.doc_date <= %s"; date_params.append(end)
 
-    # ตัวหาร: distinct invoices จากเคส Claim+Complain ในช่วงเวลา
+    # ตัวหาร: invoice ที่ส่งในช่วง delivery date
     inv_row = query(f"""
-        SELECT COUNT(DISTINCT t.invoice_number) AS total_invoices
-        FROM tickets t
-        WHERE t.case_type IN ('Claim', 'Complain')
-          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
-          AND EXISTS (SELECT 1 FROM orders o WHERE o.invoice_number = t.invoice_number)
-          {ticket_extra}
-    """, ticket_params, one=True)
+        SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
+        FROM orders o WHERE 1=1 {date_extra}
+    """, date_params, one=True)
     total_invoices = int(inv_row['total_invoices']) if inv_row and inv_row['total_invoices'] else 0
     if total_invoices == 0:
         return jsonify({'total_invoices': 0, 'teams': []})
 
-    # ตัวตั้ง: เคสเดียวกัน แยกตาม fault_team (LEFT JOIN tfa สำหรับ multi-team Complain)
+    # ตัวตั้ง: Claim+Complain ที่ invoice ส่งในช่วงนั้น แยกตาม fault_team
+    # ใช้ EXISTS (ไม่ JOIN) เพื่อไม่ให้นับซ้ำตาม SKU
     rows = query(f"""
         SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
         FROM tickets t
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
         WHERE t.case_type IN ('Claim', 'Complain')
           AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
-          AND EXISTS (SELECT 1 FROM orders o WHERE o.invoice_number = t.invoice_number)
-          {ticket_extra}
+          AND EXISTS (
+              SELECT 1 FROM orders o
+              WHERE o.invoice_number = t.invoice_number {date_extra}
+          )
         GROUP BY COALESCE(tfa.fault_team, 'ยังไม่ระบุ') ORDER BY cnt DESC
-    """, ticket_params)
+    """, date_params)
     teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
     return jsonify({'total_invoices': total_invoices, 'teams': teams})
