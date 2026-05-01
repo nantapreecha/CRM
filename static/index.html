@@ -248,8 +248,10 @@ function LineChart({ data, xKey, yKey, color='var(--primary)' }) {
 }
 
 function StackedBar({ teams, totalInvoices }) {
-  if (!teams || teams.length===0 || !totalInvoices)
-    return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>;
+  if (!totalInvoices)
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก)</p>;
+  if (!teams || teams.length===0)
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>✅ ไม่มี fault case ใน {totalInvoices} invoice ช่วงนี้</p>;
   const total = teams.reduce((s,t)=>s+t.pct,0);
   return (
     <div>

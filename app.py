@@ -1279,28 +1279,34 @@ def dashboard_aging():
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
-    # orders ใช้ doc_date (TEXT) ไม่ใช่ created_at
+    # ทั้ง invoice และ fault cases กรองโดย doc_date ของ orders
+    # เพื่อให้ denominator (invoice) และ numerator (fault case) ใช้ช่วงเวลาเดียวกัน
     start = request.args.get('start', '')
     end = request.args.get('end', '')
-    inv_extra = ''
-    inv_params = []
-    if start: inv_extra += " AND o.doc_date >= %s"; inv_params.append(start)
-    if end:   inv_extra += " AND o.doc_date <= %s"; inv_params.append(end)
+    date_extra = ''
+    date_params = []
+    if start: date_extra += " AND o.doc_date >= %s"; date_params.append(start)
+    if end:   date_extra += " AND o.doc_date <= %s"; date_params.append(end)
+
+    # ตัวหาร: จำนวน invoice ในช่วงวันที่
     inv_row = query(f"""
         SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
-        FROM orders o WHERE 1=1 {inv_extra}
-    """, inv_params, one=True)
+        FROM orders o WHERE 1=1 {date_extra}
+    """, date_params, one=True)
     total_invoices = int(inv_row['total_invoices']) if inv_row and inv_row['total_invoices'] else 0
     if total_invoices == 0:
         return jsonify({'total_invoices': 0, 'teams': []})
-    extra_t, params_t = date_filter_sql()
+
+    # ตัวตั้ง: fault cases ที่ invoice ของเคสนั้นอยู่ในช่วง doc_date เดียวกัน
+    # join ผ่าน t.invoice_number → orders.invoice_number เพื่อให้ใช้ช่วงเวลาเดียวกัน
     rows = query(f"""
         SELECT tfa.fault_team, COUNT(DISTINCT tfa.ticket_id) AS cnt
         FROM ticket_fault_attribution tfa
         JOIN tickets t ON t.id = tfa.ticket_id
-        WHERE 1=1 {extra_t}
+        JOIN orders o ON o.invoice_number = t.invoice_number
+        WHERE 1=1 {date_extra}
         GROUP BY tfa.fault_team ORDER BY cnt DESC
-    """, params_t)
+    """, date_params)
     teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
     return jsonify({'total_invoices': total_invoices, 'teams': teams})
