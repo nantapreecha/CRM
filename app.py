@@ -118,6 +118,22 @@ def migrate_team_names():
 
 migrate_team_names()
 
+def migrate_orders_delivery_date():
+    """Add delivery_date column to orders if it doesn't exist yet."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_date TEXT
+        """)
+        conn.commit()
+        conn.close()
+        print("[migrate] orders.delivery_date column ensured")
+    except Exception as e:
+        print(f"[migrate] orders.delivery_date: {e}")
+
+migrate_orders_delivery_date()
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -248,6 +264,7 @@ CREATE TABLE IF NOT EXISTS orders (
     sku_group TEXT,
     sku_category TEXT,
     sku_type TEXT,
+    delivery_date TEXT,
     delivery_started_at TEXT,
     delivery_finished_at TEXT,
     loaded_at TEXT,
@@ -1340,17 +1357,22 @@ def dashboard_aging():
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
-    # กรองด้วย delivery date (doc_date ของ invoice ใน orders)
+    # กรองด้วย delivery_date (วันที่ส่งสินค้าจริงจาก ERP)
+    # ถ้า delivery_date เป็น NULL จะ fallback ไป doc_date
     # ตัวหาร = จำนวน invoice ที่ส่งในช่วงนั้น
-    # ตัวตั้ง = Claim+Complain ที่ invoice นั้นอยู่ในช่วง delivery date เดียวกัน
+    # ตัวตั้ง = Claim+Complain ที่ invoice นั้นอยู่ในช่วงเดียวกัน
     start = request.args.get('start', '')
     end = request.args.get('end', '')
     date_extra = ''
     date_params = []
-    if start: date_extra += " AND o.doc_date >= %s"; date_params.append(start)
-    if end:   date_extra += " AND o.doc_date <= %s"; date_params.append(end)
+    if start:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_params.append(start)
+    if end:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_params.append(end)
 
-    # ตัวหาร: invoice ที่ส่งในช่วง delivery date
+    # ตัวหาร: invoice ที่ส่งในช่วง delivery_date
     inv_row = query(f"""
         SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
         FROM orders o WHERE 1=1 {date_extra}
@@ -1424,69 +1446,143 @@ def import_erp():
     if not rows:
         return jsonify({'error': 'Empty file'}), 400
 
-    headers = [str(h).strip() if h is not None else '' for h in rows[0]]
-    col_idx = {h: i for i, h in enumerate(headers)}
+    # Normalize header: lowercase + replace spaces/dashes with underscore
+    # ทำให้ "Order Item Id", "order_item_id", "OrderItemId" → "order_item_id" หมด
+    def norm_col(h):
+        return str(h).strip().lower().replace(' ', '_').replace('-', '_') if h is not None else ''
 
+    headers = [str(h).strip() if h is not None else '' for h in rows[0]]
+    col_idx = {norm_col(h): i for i, h in enumerate(headers)}  # normalized → column index
+
+    # COL_ALIASES: key = canonical name (normalized), values = alternate normalized names
     COL_ALIASES = {
-        'order_item_id': ['order_item_id', 'order_iter', 'OrderItemId', 'order_item'],
-        'Total_Sales':   ['Total_Sales', 'Total_Sale', 'total_sales', 'total_sale'],
-        'outlet_id':     ['outlet_id', 'customer_outlet_id', 'OutletId'],
-        'customer_id':   ['customer_id', 'CustomerId', 'erp_customer_id'],
-        'account_name':  ['account_name', 'AccountName', 'account'],
-        'Customer_Name': ['Customer_Name', 'Customer_name', 'customer_name', 'CustomerName'],
-        'Product_Name':  ['Product_Name', 'Product_name', 'product_name', 'ProductName'],
-        'sku_category':  ['sku_category', 'sku_categ', 'SKU_Category'],
-        'delivery_started_at':  ['delivery_started_at', 'delivery_s', 'delivery_start'],
-        'delivery_finished_at': ['delivery_finished_at', 'delivery_f', 'delivery_finish'],
-        'invoice_number': ['invoice_number', 'invoice_no', 'InvoiceNumber'],
-        'doc_no':        ['doc_no', 'DocNo', 'Doc_No'],
+        'order_item_id':      ['order_item_id', 'order_iter', 'orderitemid', 'order_item'],
+        'total_sales':        ['total_sales', 'total_sale'],
+        'outlet_id':          ['outlet_id', 'customer_outlet_id', 'outletid'],
+        'customer_id':        ['customer_id', 'customerid', 'erp_customer_id'],
+        'account_name':       ['account_name', 'accountname', 'account'],
+        'customer_name':      ['customer_name', 'customername'],
+        'product_name':       ['product_name', 'productname'],
+        'sku_category':       ['sku_category', 'sku_categ'],
+        'delivery_date':      ['delivery_date', 'delivery_dt'],
+        'delivery_started_at': ['delivery_started_at', 'delivery_s', 'delivery_start'],
+        'delivery_finished_at':['delivery_finished_at', 'delivery_f', 'delivery_finish'],
+        'invoice_number':     ['invoice_number', 'invoice_no', 'invoicenumber'],
+        'doc_no':             ['doc_no', 'docno'],
+        'doc_date':           ['doc_date'],
+        'sku':                ['sku'],
+        'qty':                ['qty'],
+        'csc_code':           ['csc_code', 'csccode'],
+        'order_id':           ['order_id', 'orderid'],
+        'owner':              ['owner'],
+        'unit':               ['unit'],
+        'vat_price':          ['vat_price', 'vatprice'],
+        'is_vat':             ['is_vat', 'isvat'],
+        'sku_group':          ['sku_group', 'skupgroup'],
+        'sku_type':           ['sku_type', 'skutype'],
+        'loaded_at':          ['loaded_at', 'loadedat'],
     }
 
     def get(row, erp_col):
-        candidates = COL_ALIASES.get(erp_col, [erp_col])
+        key = norm_col(erp_col)
+        candidates = COL_ALIASES.get(key, [key])
         for name in candidates:
-            idx = col_idx.get(name)
+            idx = col_idx.get(norm_col(name))
             if idx is not None and idx < len(row):
                 return row[idx]
         return None
+
+    def parse_date_str(v):
+        """แปลง string วันที่หลายรูปแบบ → YYYY-MM-DD หรือ None
+        ตรรกะ:
+          - มี AM/PM → ใช้ US format M/D/YYYY H:MM:SS AM/PM  (เช่น delivery_started_at)
+          - ไม่มี AM/PM → ใช้ Thai format DD/MM/YYYY ก่อน   (เช่น doc_date)
+        """
+        if not v:
+            return None
+        s = str(v).strip()
+        if not s or s.lower() in ('none', 'nan', ''):
+            return None
+        # Already ISO date YYYY-MM-DD
+        if len(s) == 10 and s[4] == '-':
+            return s
+        # Excel serial number (numeric)
+        if s.replace('.', '', 1).isdigit():
+            try:
+                from openpyxl.utils.datetime import from_excel
+                return str(from_excel(float(s)).date())
+            except Exception:
+                pass
+        from datetime import datetime as _dt
+        su = s.upper()
+        if 'AM' in su or 'PM' in su:
+            # US-style datetime: M/D/YYYY H:MM:SS AM/PM  (เช่น "4/1/2026 1:00:00 AM")
+            for fmt in ('%m/%d/%Y %I:%M:%S %p', '%m/%d/%Y %I:%M %p'):
+                try:
+                    return str(_dt.strptime(s, fmt).date())
+                except Exception:
+                    pass
+        else:
+            # Thai-style date: DD/MM/YYYY [HH:MM:SS]  (เช่น "01/04/2026")
+            for fmt in ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y',
+                        '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d',
+                        '%m/%d/%Y %H:%M:%S', '%m/%d/%Y'):
+                try:
+                    return str(_dt.strptime(s, fmt).date())
+                except Exception:
+                    pass
+        return s  # return as-is if nothing matched
 
     parsed = []
     for row in rows[1:]:
         erp_item_id = safe_str(get(row, 'order_item_id'))
         if not erp_item_id:
             continue
-        doc_date = safe_str(get(row, 'Doc_date'))
-        if doc_date and 'T' not in doc_date and '-' not in doc_date:
-            try:
-                from openpyxl.utils.datetime import from_excel
-                doc_date = str(from_excel(float(doc_date)).date())
-            except Exception:
-                pass
+
+        doc_date = parse_date_str(safe_str(get(row, 'doc_date')))
+
+        # delivery_date: ใช้คอลัม delivery_date ถ้ามี, ถ้าไม่มีให้ดึงวันจาก delivery_started_at
+        delivery_date_raw = safe_str(get(row, 'delivery_date'))
+        if delivery_date_raw:
+            delivery_date = parse_date_str(delivery_date_raw)
+        else:
+            # extract date portion from delivery_started_at (เช่น "4/1/2026 1:00:00 AM")
+            delivery_date = parse_date_str(safe_str(get(row, 'delivery_started_at')))
+
+        is_vat_val = get(row, 'is_vat')
+        if isinstance(is_vat_val, bool):
+            is_vat = 1 if is_vat_val else 0
+        elif isinstance(is_vat_val, str):
+            is_vat = 1 if is_vat_val.strip().lower() in ('true', '1', 'yes') else 0
+        else:
+            is_vat = 1 if is_vat_val else 0
+
         parsed.append({
-            'erp_item_id': erp_item_id,
-            'account_name': safe_str(get(row, 'account_name')) or 'Unknown',
-            'outlet_name': safe_str(get(row, 'Customer_Name')) or 'Unknown',
-            'owner': safe_str(get(row, 'Owner')) or '',
-            'erp_customer_id': safe_str(get(row, 'customer_id')),
-            'erp_outlet_id': safe_str(get(row, 'outlet_id')),
-            'csc_code': safe_str(get(row, 'csc_code')),
-            'order_id': safe_str(get(row, 'order_id')),
-            'invoice_number': safe_str(get(row, 'invoice_number')),
-            'doc_no': safe_str(get(row, 'doc_no')),
-            'doc_date': doc_date,
-            'sku_code': safe_str(get(row, 'SKU')),
-            'product_name': safe_str(get(row, 'Product_Name')),
-            'qty': safe_float(get(row, 'QTY')),
-            'unit': safe_str(get(row, 'unit')),
-            'total_sales': safe_float(get(row, 'Total_Sales')),
-            'vat_price': safe_float(get(row, 'vat_price')),
-            'is_vat': 1 if get(row, 'is_vat') else 0,
-            'sku_group': safe_str(get(row, 'sku_group')),
-            'sku_category': safe_str(get(row, 'sku_category')),
-            'sku_type': safe_str(get(row, 'sku_type')),
-            'delivery_started_at': safe_str(get(row, 'delivery_started_at')),
+            'erp_item_id':      erp_item_id,
+            'account_name':     safe_str(get(row, 'account_name')) or 'Unknown',
+            'outlet_name':      safe_str(get(row, 'customer_name')) or 'Unknown',
+            'owner':            safe_str(get(row, 'owner')) or '',
+            'erp_customer_id':  safe_str(get(row, 'customer_id')),
+            'erp_outlet_id':    safe_str(get(row, 'outlet_id')),
+            'csc_code':         safe_str(get(row, 'csc_code')),
+            'order_id':         safe_str(get(row, 'order_id')),
+            'invoice_number':   safe_str(get(row, 'invoice_number')),
+            'doc_no':           safe_str(get(row, 'doc_no')),
+            'doc_date':         doc_date,
+            'delivery_date':    delivery_date,
+            'sku_code':         safe_str(get(row, 'sku')),
+            'product_name':     safe_str(get(row, 'product_name')),
+            'qty':              safe_float(get(row, 'qty')),
+            'unit':             safe_str(get(row, 'unit')),
+            'total_sales':      safe_float(get(row, 'total_sales')),
+            'vat_price':        safe_float(get(row, 'vat_price')),
+            'is_vat':           is_vat,
+            'sku_group':        safe_str(get(row, 'sku_group')),
+            'sku_category':     safe_str(get(row, 'sku_category')),
+            'sku_type':         safe_str(get(row, 'sku_type')),
+            'delivery_started_at':  safe_str(get(row, 'delivery_started_at')),
             'delivery_finished_at': safe_str(get(row, 'delivery_finished_at')),
-            'loaded_at': safe_str(get(row, 'loaded_at')),
+            'loaded_at':        safe_str(get(row, 'loaded_at')),
         })
 
     inserted = 0
@@ -1560,7 +1656,7 @@ def import_erp():
             out_id = outlet_map.get((acc_id, p['outlet_name'])) if acc_id else None
             order_tuples.append((
                 p['erp_item_id'], p['order_id'], p['invoice_number'], p['doc_no'],
-                p['doc_date'], out_id, p['sku_code'], p['product_name'],
+                p['doc_date'], p['delivery_date'], out_id, p['sku_code'], p['product_name'],
                 p['qty'], p['unit'], p['total_sales'], p['vat_price'], p['is_vat'],
                 p['sku_group'], p['sku_category'], p['sku_type'],
                 p['delivery_started_at'], p['delivery_finished_at'], p['loaded_at'],
@@ -1569,13 +1665,13 @@ def import_erp():
         if order_tuples:
             psycopg2.extras.execute_values(cur, """
                 INSERT INTO orders
-                (erp_item_id, order_id, invoice_number, doc_no, doc_date,
+                (erp_item_id, order_id, invoice_number, doc_no, doc_date, delivery_date,
                  outlet_id, sku_code, product_name, qty, unit,
                  total_sales, vat_price, is_vat, sku_group, sku_category,
                  sku_type, delivery_started_at, delivery_finished_at, loaded_at)
                 VALUES %s ON CONFLICT (erp_item_id) DO UPDATE
-                    SET outlet_id = EXCLUDED.outlet_id
-                    WHERE orders.outlet_id IS NULL
+                    SET outlet_id = COALESCE(orders.outlet_id, EXCLUDED.outlet_id),
+                        delivery_date = COALESCE(orders.delivery_date, EXCLUDED.delivery_date)
             """, order_tuples, page_size=500)
             inserted = len(order_tuples)
 
