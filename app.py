@@ -1358,16 +1358,18 @@ def dashboard_case_invoice_ratio():
     if total_invoices == 0:
         return jsonify({'total_invoices': 0, 'teams': []})
 
-    # ตัวตั้ง: Claim+Complain ที่ attribute แล้วเท่านั้น
-    # multi-team Complain นับทุกทีม, กรองช่วงวันที่จาก invoice doc_date
+    # ตัวตั้ง: Claim+Complain ทุกเคสที่มี invoice ในช่วง doc_date
+    # - มี fault attribution → แสดงตามทีม
+    # - ยังไม่ attribute → แสดงเป็น "ยังไม่ระบุ" (สีเทา)
+    # - multi-team Complain → LEFT JOIN tfa นับทุกทีม
     rows = query(f"""
-        SELECT tfa.fault_team, COUNT(*) AS cnt
-        FROM ticket_fault_attribution tfa
-        JOIN tickets t ON t.id = tfa.ticket_id
+        SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
+        FROM tickets t
         JOIN orders o ON o.invoice_number = t.invoice_number
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
         WHERE t.case_type IN ('Claim', 'Complain')
           {date_extra}
-        GROUP BY tfa.fault_team ORDER BY cnt DESC
+        GROUP BY COALESCE(tfa.fault_team, 'ยังไม่ระบุ') ORDER BY cnt DESC
     """, date_params)
     teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]

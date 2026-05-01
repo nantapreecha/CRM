@@ -275,7 +275,8 @@ function StackedBar({ teams, totalInvoices }) {
         ))}
       </div>
       <p style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
-        รวม {totalInvoices} invoice ในช่วงวันที่เลือก — fault rate: {total.toFixed(2)}%
+        รวม {totalInvoices} invoice — fault rate: {teams.filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.pct,0).toFixed(2)}%
+        {teams.find(t=>t.team==='ยังไม่ระบุ') && <> · <span style={{color:'#9e9e9e'}}>pending: {teams.find(t=>t.team==='ยังไม่ระบุ').cnt} เคส</span></>}
       </p>
     </div>
   );
