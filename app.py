@@ -58,6 +58,46 @@ def mutate(sql, params=()):
     return last_id
 
 # ---------------------------------------------------------------------------
+# One-time team name migration (old → new naming convention)
+# ---------------------------------------------------------------------------
+
+def migrate_team_names():
+    """Rename old team names to new ones across all relevant tables/columns."""
+    renames = [
+        ('Sales',            'Sales/KAM'),
+        ('KAM',              'Sales/KAM'),
+        ('Inbound/QC',       'Inbound'),
+        ('Outbound/Logistics','Outbound'),
+        ('Management',       None),   # no direct replacement — will be skipped
+    ]
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        for old, new in renames:
+            if new is None:
+                continue
+            stmts = [
+                ("tickets",                  "fault_team"),
+                ("tickets",                  "current_team"),
+                ("tickets",                  "opener_team"),
+                ("ticket_fault_attribution", "fault_team"),
+                ("ticket_workflow_log",      "from_team"),
+                ("ticket_workflow_log",      "to_team"),
+                ("ticket_assignments",       "team"),
+                ("users",                    "team"),
+                ("employees",                "team"),
+            ]
+            for table, col in stmts:
+                cur.execute(f"UPDATE {table} SET {col}=%s WHERE {col}=%s", (new, old))
+        conn.commit()
+        conn.close()
+        print("[migrate_team_names] done")
+    except Exception as e:
+        print(f"[migrate_team_names] error: {e}")
+
+migrate_team_names()
+
+# ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
