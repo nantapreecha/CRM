@@ -125,7 +125,8 @@ const TEAM_ICONS = {
 
 const TEAM_COLORS = {
   'CX':'#1589EE', 'Sales/KAM':'#2E844A', 'Sales Co':'#DD7A01',
-  'Merchandise':'#9050E9', 'Inbound':'#C23934', 'Outbound':'#0EBEC9', 'Customer':'#747474'
+  'Merchandise':'#9050E9', 'Inbound':'#C23934', 'Outbound':'#0EBEC9',
+  'Customer':'#747474', 'ยังไม่ระบุ':'#BDBDBD'
 };
 
 const STATUS_LABELS = {
@@ -274,7 +275,8 @@ function StackedBar({ teams, totalInvoices }) {
         ))}
       </div>
       <p style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
-        รวม {totalInvoices} invoice ในช่วงวันที่เลือก — total fault rate: {total.toFixed(1)}%
+        รวม {totalInvoices} invoice ในช่วงวันที่เลือก — complaint/claim rate: {total.toFixed(2)}%
+        {teams.find(t=>t.team==='ยังไม่ระบุ') && <span style={{color:'#BDBDBD'}}> (รวมเคสที่ยังไม่ปิด)</span>}
       </p>
     </div>
   );
