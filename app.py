@@ -1573,7 +1573,6 @@ def import_erp():
 init_db()
 
 @app.route('/api/debug/team-names', methods=['GET'])
-@require_auth
 def debug_team_names():
     """Temporary: show all distinct team name values across tables."""
     result = {}
