@@ -334,19 +334,20 @@ function DateRangeFilter({ value, onChange }) {
   const d7 = new Date(Date.now() - 6*86400000).toISOString().slice(0, 10);
   const d30 = new Date(Date.now() - 29*86400000).toISOString().slice(0, 10);
   return (
-    <div className="flex items-center gap-2 flex-wrap mb-5">
-      <span className="text-sm text-gray-500 shrink-0">Date range:</span>
+    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:20}}>
+      <span style={{fontSize:12,color:'var(--text-muted)',flexShrink:0}}>Date range:</span>
       <input type="date" value={value.start} onChange={e=>onChange({...value,start:e.target.value})}
-        style={{fontSize:13,border:'1px solid #d1d5db',borderRadius:6,padding:'4px 8px'}}/>
-      <span className="text-xs text-gray-400">—</span>
+        style={{width:140,fontSize:13}}/>
+      <span style={{color:'var(--text-muted)',fontSize:12}}>—</span>
       <input type="date" value={value.end} onChange={e=>onChange({...value,end:e.target.value})}
-        style={{fontSize:13,border:'1px solid #d1d5db',borderRadius:6,padding:'4px 8px'}}/>
-      <button className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
-        onClick={()=>onChange({start:d7,end:today})}>7 days</button>
-      <button className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
-        onClick={()=>onChange({start:d30,end:today})}>30 days</button>
-      <button className="text-xs text-gray-400 hover:underline"
-        onClick={()=>onChange({start:'',end:''})}>All time</button>
+        style={{width:140,fontSize:13}}/>
+      {[{l:'7 วัน',s:d7},{l:'30 วัน',s:d30}].map(({l,s})=>(
+        <button key={l} onClick={()=>onChange({start:s,end:today})}
+          style={{fontSize:12,padding:'4px 10px',border:'1px solid var(--border)',borderRadius:4,
+            background:'#fff',cursor:'pointer',color:'var(--text)'}}>{l}</button>
+      ))}
+      <button onClick={()=>onChange({start:'',end:''})}
+        style={{fontSize:12,color:'var(--text-muted)',background:'none',border:'none',cursor:'pointer'}}>All time</button>
     </div>
   );
 }
