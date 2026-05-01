@@ -1572,6 +1572,27 @@ def import_erp():
 
 init_db()
 
+@app.route('/api/debug/team-names', methods=['GET'])
+@require_auth
+def debug_team_names():
+    """Temporary: show all distinct team name values across tables."""
+    result = {}
+    checks = [
+        ('tickets.fault_team',              "SELECT DISTINCT fault_team AS v FROM tickets WHERE fault_team IS NOT NULL"),
+        ('tickets.current_team',            "SELECT DISTINCT current_team AS v FROM tickets WHERE current_team IS NOT NULL"),
+        ('ticket_fault_attribution.fault_team', "SELECT DISTINCT fault_team AS v FROM ticket_fault_attribution WHERE fault_team IS NOT NULL"),
+        ('ticket_workflow_log.from_team',   "SELECT DISTINCT from_team AS v FROM ticket_workflow_log WHERE from_team IS NOT NULL"),
+        ('users.team',                      "SELECT DISTINCT team AS v FROM users WHERE team IS NOT NULL"),
+        ('employees.team',                  "SELECT DISTINCT team AS v FROM employees WHERE team IS NOT NULL"),
+    ]
+    for label, sql in checks:
+        try:
+            rows = query(sql)
+            result[label] = [r['v'] for r in rows]
+        except Exception as e:
+            result[label] = f'ERROR: {e}'
+    return jsonify(result)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
