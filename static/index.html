@@ -394,7 +394,7 @@ function Dashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       api(`/api/dashboard/overview${qs}`),
       api(`/api/dashboard/bottleneck${qs}`),
       api(`/api/dashboard/fault-by-team`),
@@ -404,7 +404,8 @@ function Dashboard() {
       api(`/api/dashboard/trend${qs}`),
       api(`/api/dashboard/aging`),
       api(`/api/dashboard/case-invoice-ratio${qs}`),
-    ]).then(([ov, bn, ft, sk, bc, be, tr, ag, ra]) => {
+    ]).then(results => {
+      const [ov, bn, ft, sk, bc, be, tr, ag, ra] = results.map(r => r.status==='fulfilled' ? r.value : null);
       setOverview(ov); setBottleneck(bn||[]); setFaultTeam(ft||[]);
       setSkuProblems(sk||[]); setByCust(bc||[]); setByEmp(be||[]);
       setTrend(tr||[]); setAging(ag||[]); setRatio(ra||null);

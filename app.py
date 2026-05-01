@@ -1279,11 +1279,17 @@ def dashboard_aging():
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
-    extra_inv, params_inv = date_filter_sql('o')
+    # orders ใช้ doc_date (TEXT) ไม่ใช่ created_at
+    start = request.args.get('start', '')
+    end = request.args.get('end', '')
+    inv_extra = ''
+    inv_params = []
+    if start: inv_extra += " AND o.doc_date >= %s"; inv_params.append(start)
+    if end:   inv_extra += " AND o.doc_date <= %s"; inv_params.append(end)
     inv_row = query(f"""
         SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
-        FROM orders o WHERE 1=1 {extra_inv}
-    """, params_inv, one=True)
+        FROM orders o WHERE 1=1 {inv_extra}
+    """, inv_params, one=True)
     total_invoices = int(inv_row['total_invoices']) if inv_row and inv_row['total_invoices'] else 0
     if total_invoices == 0:
         return jsonify({'total_invoices': 0, 'teams': []})
