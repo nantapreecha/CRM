@@ -1590,6 +1590,22 @@ def import_erp():
 
 init_db()
 
+@app.route('/api/debug/complain-no-invoice', methods=['GET'])
+def debug_complain_no_invoice():
+    rows = query("""
+        SELECT t.id, t.ticket_no, t.status, t.priority,
+               t.description, t.opener_team, t.current_team,
+               t.fault_team, t.created_at,
+               o.name AS outlet_name, a.name AS account_name
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        WHERE t.case_type = 'Complain'
+          AND (t.invoice_number IS NULL OR t.invoice_number = '')
+        ORDER BY t.created_at DESC
+    """)
+    return jsonify(rows)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
