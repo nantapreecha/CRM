@@ -62,38 +62,41 @@ def mutate(sql, params=()):
 # ---------------------------------------------------------------------------
 
 def migrate_team_names():
-    """Rename old team names to new ones across all relevant tables/columns."""
+    """Rename old team names to new ones across all relevant tables/columns.
+    Each statement runs in its own transaction so a missing table won't abort the rest."""
     renames = [
-        ('Sales',            'Sales/KAM'),
-        ('KAM',              'Sales/KAM'),
-        ('Inbound/QC',       'Inbound'),
-        ('Outbound/Logistics','Outbound'),
-        ('Management',       None),   # no direct replacement — will be skipped
+        ('Sales',             'Sales/KAM'),
+        ('KAM',               'Sales/KAM'),
+        ('Inbound/QC',        'Inbound'),
+        ('Outbound/Logistics', 'Outbound'),
     ]
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        for old, new in renames:
-            if new is None:
-                continue
-            stmts = [
-                ("tickets",                  "fault_team"),
-                ("tickets",                  "current_team"),
-                ("tickets",                  "opener_team"),
-                ("ticket_fault_attribution", "fault_team"),
-                ("ticket_workflow_log",      "from_team"),
-                ("ticket_workflow_log",      "to_team"),
-                ("ticket_assignments",       "team"),
-                ("users",                    "team"),
-                ("employees",                "team"),
-            ]
-            for table, col in stmts:
+    stmts = [
+        ("tickets",                  "fault_team"),
+        ("tickets",                  "current_team"),
+        ("tickets",                  "opener_team"),
+        ("ticket_fault_attribution", "fault_team"),
+        ("ticket_workflow_log",      "from_team"),
+        ("ticket_workflow_log",      "to_team"),
+        ("ticket_assignments",       "team"),
+        ("users",                    "team"),
+        ("employees",                "team"),
+    ]
+    total = 0
+    for old, new in renames:
+        for table, col in stmts:
+            try:
+                conn = get_db()
+                cur = conn.cursor()
                 cur.execute(f"UPDATE {table} SET {col}=%s WHERE {col}=%s", (new, old))
-        conn.commit()
-        conn.close()
-        print("[migrate_team_names] done")
-    except Exception as e:
-        print(f"[migrate_team_names] error: {e}")
+                rows = cur.rowcount
+                conn.commit()
+                conn.close()
+                if rows:
+                    print(f"[migrate] {table}.{col}: '{old}'→'{new}' ({rows} rows)")
+                    total += rows
+            except Exception as e:
+                print(f"[migrate] skip {table}.{col}: {e}")
+    print(f"[migrate_team_names] done — {total} rows updated")
 
 migrate_team_names()
 
