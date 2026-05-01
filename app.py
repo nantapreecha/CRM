@@ -18,9 +18,9 @@ CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
 CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
 
-TEAMS = ['CX', 'Sales', 'KAM', 'Merchandise', 'Inbound/QC', 'Outbound/Logistics', 'Management']
+TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound']
 FAULT_TEAMS = TEAMS + ['Customer']
-CASE_TYPES = ['Complain', 'Claim', 'Update Invoice']
+CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล']
 CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
 ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ']
 PRIORITIES = ['Urgent', 'High', 'Medium', 'Low']
@@ -940,12 +940,14 @@ def close_ticket(tid):
     d = request.json
     fault_team = (d.get('fault_team') or '').strip()
     note = (d.get('note') or '').strip()
-    if not fault_team:
-        return jsonify({'error': 'กรุณาเลือก Fault Team ก่อนปิดเคส'}), 400
 
     ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
     if not ticket:
         return jsonify({'error': 'Not found'}), 404
+
+    is_wang_bil = ticket.get('case_type') == 'วางบิล'
+    if not fault_team and not is_wang_bil:
+        return jsonify({'error': 'กรุณาเลือก Fault Team ก่อนปิดเคส'}), 400
 
     my_team = g.user['team']
     is_admin = g.user['role'] == 'admin'
@@ -953,14 +955,18 @@ def close_ticket(tid):
         return jsonify({'error': 'เฉพาะทีมที่เปิดเคสเท่านั้นที่ปิดได้'}), 403
 
     now = datetime.now().isoformat()
-    if fault_team == 'Customer':
+    if is_wang_bil:
         new_status = 'closed'
-        mutate("""UPDATE tickets SET status=%s, fault_team=%s, closed_at=%s, fault_attributed_at=%s WHERE id=%s""",
-               (new_status, fault_team, now, now, tid))
+        mutate("""UPDATE tickets SET status='closed', closed_at=%s, fault_attributed_at=%s WHERE id=%s""",
+               (now, now, tid))
+    elif fault_team == 'Customer':
+        new_status = 'closed'
+        mutate("""UPDATE tickets SET status='closed', fault_team=%s, closed_at=%s, fault_attributed_at=%s WHERE id=%s""",
+               (fault_team, now, now, tid))
     else:
         new_status = 'pending_fault'
-        mutate("""UPDATE tickets SET status=%s, fault_team=%s, closed_at=%s WHERE id=%s""",
-               (new_status, fault_team, now, tid))
+        mutate("""UPDATE tickets SET status='pending_fault', fault_team=%s, closed_at=%s WHERE id=%s""",
+               (fault_team, now, tid))
 
     mutate("""INSERT INTO ticket_workflow_log
         (ticket_id, from_team, to_team, action, note, user_id, created_by)
@@ -1185,10 +1191,18 @@ def dashboard_customer():
 @app.route('/api/dashboard/bottleneck', methods=['GET'])
 @require_auth
 def dashboard_bottleneck():
-    logs = query("""
+    extra, params = date_filter_sql()
+    ticket_ids_row = query(f"SELECT id FROM tickets t WHERE 1=1 {extra}", params)
+    ticket_ids = [r['id'] for r in ticket_ids_row] if ticket_ids_row else []
+    if not ticket_ids:
+        return jsonify([])
+    placeholders = ','.join(['%s'] * len(ticket_ids))
+    logs = query(f"""
         SELECT ticket_id, from_team, created_at
-        FROM ticket_workflow_log ORDER BY ticket_id, created_at
-    """)
+        FROM ticket_workflow_log
+        WHERE ticket_id IN ({placeholders})
+        ORDER BY ticket_id, created_at
+    """, ticket_ids)
     team_totals = {}
     team_counts = {}
     by_ticket = {}
@@ -1231,6 +1245,59 @@ def dashboard_fault_team():
         GROUP BY fault_team ORDER BY cnt DESC
     """)
     return jsonify(rows)
+
+@app.route('/api/dashboard/trend', methods=['GET'])
+@require_auth
+def dashboard_trend():
+    extra, params = date_filter_sql()
+    rows = query(f"""
+        SELECT DATE(t.created_at) AS day, COUNT(*) AS cnt
+        FROM tickets t WHERE 1=1 {extra}
+        GROUP BY DATE(t.created_at) ORDER BY day
+    """, params)
+    return jsonify(rows or [])
+
+@app.route('/api/dashboard/aging', methods=['GET'])
+@require_auth
+def dashboard_aging():
+    rows = query("""
+        SELECT
+            CASE
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 24 THEN '< 1 วัน'
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 72 THEN '1-3 วัน'
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 168 THEN '3-7 วัน'
+                ELSE '> 7 วัน'
+            END AS bucket,
+            COUNT(*) AS cnt,
+            MIN(EXTRACT(EPOCH FROM (NOW() - created_at))) AS min_age
+        FROM tickets
+        WHERE status NOT IN ('closed')
+        GROUP BY bucket ORDER BY min_age
+    """)
+    return jsonify(rows or [])
+
+@app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
+@require_auth
+def dashboard_case_invoice_ratio():
+    extra_inv, params_inv = date_filter_sql('o')
+    inv_row = query(f"""
+        SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
+        FROM orders o WHERE 1=1 {extra_inv}
+    """, params_inv, one=True)
+    total_invoices = int(inv_row['total_invoices']) if inv_row and inv_row['total_invoices'] else 0
+    if total_invoices == 0:
+        return jsonify({'total_invoices': 0, 'teams': []})
+    extra_t, params_t = date_filter_sql()
+    rows = query(f"""
+        SELECT tfa.fault_team, COUNT(DISTINCT tfa.ticket_id) AS cnt
+        FROM ticket_fault_attribution tfa
+        JOIN tickets t ON t.id = tfa.ticket_id
+        WHERE 1=1 {extra_t}
+        GROUP BY tfa.fault_team ORDER BY cnt DESC
+    """, params_t)
+    teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
+               'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
+    return jsonify({'total_invoices': total_invoices, 'teams': teams})
 
 @app.route('/api/dashboard/fault-by-employee', methods=['GET'])
 @require_auth

@@ -10,43 +10,76 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
-  :root { --primary: #0F4C45; --primary-light: #1a6b62; --primary-bg: #e8f5f3; }
-  body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; }
-  .sidebar { background: var(--primary); width: 220px; flex-shrink:0; position:sticky; top:0; height:100vh; overflow-y:auto; }
-  .sidebar a { color: #c8e6e3; transition: all .2s; display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:8px; cursor:pointer; text-decoration:none; }
-  .sidebar a:hover, .sidebar a.active { background: var(--primary-light); color: #fff; }
-  .badge { background:#ef4444; color:#fff; border-radius:9999px; padding:1px 7px; font-size:11px; }
-  .btn { padding:7px 16px; border-radius:8px; font-size:14px; cursor:pointer; border:none; transition:all .15s; }
-  .btn-primary { background: var(--primary); color:#fff; }
-  .btn-primary:hover { background: var(--primary-light); }
-  .btn-secondary { background:#f3f4f6; color:#374151; }
-  .btn-secondary:hover { background:#e5e7eb; }
-  .btn-danger { background:#fee2e2; color:#dc2626; }
-  .btn-danger:hover { background:#fecaca; }
-  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
-  .status-open { color:#2563eb; background:#eff6ff; border-radius:20px; padding:2px 10px; font-size:12px; }
-  .status-in_progress { color:#d97706; background:#fffbeb; border-radius:20px; padding:2px 10px; font-size:12px; }
-  .status-pending_ack { color:#7c3aed; background:#ede9fe; border-radius:20px; padding:2px 10px; font-size:12px; }
-  .status-pending_fault { color:#db2777; background:#fce7f3; border-radius:20px; padding:2px 10px; font-size:12px; }
-  .status-closed { color:#6b7280; background:#f9fafb; border-radius:20px; padding:2px 10px; font-size:12px; }
-  .priority-Urgent { color:#dc2626; font-weight:700; }
-  .priority-High { color:#ea580c; font-weight:600; }
-  .priority-Medium { color:#d97706; }
-  .priority-Low { color:#16a34a; }
-  input, select, textarea { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; width:100%; outline:none; font-size:14px; }
-  input:focus, select:focus, textarea:focus { border-color:var(--primary); box-shadow:0 0 0 2px rgba(15,76,69,.15); }
-  .tab { padding:8px 18px; cursor:pointer; border-bottom:2px solid transparent; color:#6b7280; font-size:14px; white-space:nowrap; }
+  :root {
+    --primary:#0F4C45; --primary-light:#1a6b62; --primary-bg:#e8f5f3;
+    --border:#DDDBDA; --text:#181818; --text-muted:#706E6B; --text-label:#3E3E3C;
+    --bg:#F3F3F3; --bg-card:#fff; --bg-header:#FAFAF9;
+    --cx:#1589EE; --sales-kam:#2E844A; --sales-co:#DD7A01;
+    --merchandise:#9050E9; --inbound:#C23934; --outbound:#0EBEC9; --customer:#747474;
+  }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
+
+  /* ── Sidebar ── */
+  .sidebar { background:var(--primary); width:240px; flex-shrink:0; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .sidebar a { color:rgba(255,255,255,.75); transition:all .15s; display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; text-decoration:none; font-size:13px; border-left:3px solid transparent; margin:1px 0; }
+  .sidebar a:hover { background:rgba(255,255,255,.1); color:#fff; border-left-color:rgba(255,255,255,.4); }
+  .sidebar a.active { background:rgba(255,255,255,.18); color:#fff; font-weight:600; border-left-color:#fff; }
+
+  /* ── Buttons ── */
+  .btn { padding:7px 16px; border-radius:4px; font-size:13px; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; display:inline-flex; align-items:center; gap:6px; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn-primary:hover:not(:disabled) { background:var(--primary-light); border-color:var(--primary-light); }
+  .btn-secondary { background:#fff; color:var(--text); border-color:var(--border); }
+  .btn-secondary:hover:not(:disabled) { background:var(--bg); border-color:#9e9e9e; }
+  .btn-danger { background:#fff; color:#C23934; border-color:#C23934; }
+  .btn-danger:hover:not(:disabled) { background:#fff1f0; }
+
+  /* ── Cards ── */
+  .card { background:var(--bg-card); border-radius:4px; border:1px solid var(--border); box-shadow:0 2px 3px rgba(0,0,0,.07); }
+  .card-header { background:var(--bg-header); border-bottom:1px solid var(--border); padding:10px 16px; border-radius:4px 4px 0 0; font-weight:600; font-size:13px; color:var(--text); display:flex; align-items:center; gap:8px; }
+
+  /* ── Status badges ── */
+  .status-open { color:#0176D3; background:#EEF4FF; border:1px solid #B3D4FF; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.03em; }
+  .status-in_progress { color:#DD7A01; background:#FFF3E0; border:1px solid #FFD699; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.03em; }
+  .status-pending_ack { color:#9050E9; background:#F5F0FF; border:1px solid #CDB4F8; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.03em; }
+  .status-pending_fault { color:#C23934; background:#FFF0EE; border:1px solid #FFBCB4; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.03em; }
+  .status-closed { color:#3E3E3C; background:#F3F3F3; border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; letter-spacing:.03em; }
+
+  /* ── Priority ── */
+  .priority-Urgent { color:#C23934; font-weight:700; }
+  .priority-High { color:#DD7A01; font-weight:600; }
+  .priority-Medium { color:#706E6B; font-weight:500; }
+  .priority-Low { color:#2E844A; font-weight:500; }
+
+  /* ── Forms ── */
+  input, select, textarea { border:1px solid var(--border); border-radius:4px; padding:7px 10px; width:100%; outline:none; font-size:13px; color:var(--text); background:#fff; transition:border-color .15s,box-shadow .15s; font-family:inherit; }
+  input:focus, select:focus, textarea:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(15,76,69,.12); }
+  label { font-size:11px; font-weight:700; color:var(--text-label); display:block; margin-bottom:4px; letter-spacing:.04em; text-transform:uppercase; }
+
+  /* ── Tabs ── */
+  .tab { padding:10px 18px; cursor:pointer; border-bottom:3px solid transparent; color:var(--text-muted); font-size:13px; white-space:nowrap; font-weight:500; transition:color .15s; }
   .tab.active { color:var(--primary); border-color:var(--primary); font-weight:600; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .spin { animation: spin 1s linear infinite; display:inline-block; }
-  .timeline-line { position:absolute; left:13px; top:28px; bottom:0; width:2px; background:#e5e7eb; }
-  .tl-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; z-index:1; }
-  .fault-btn { border:2px solid #e5e7eb; border-radius:10px; padding:10px 14px; cursor:pointer; text-align:center; transition:all .15s; font-size:13px; }
+  .tab:hover { color:var(--text); }
+
+  /* ── Tables ── */
+  thead th { background:var(--bg-header); color:var(--text-label); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:9px 12px; border-bottom:1px solid var(--border); text-align:left; }
+  tbody td { padding:9px 12px; border-bottom:1px solid var(--border); color:var(--text); font-size:13px; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover td { background:var(--bg); }
+
+  /* ── Misc ── */
+  .badge { background:#C23934; color:#fff; border-radius:12px; padding:1px 7px; font-size:11px; font-weight:600; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spin { animation:spin .8s linear infinite; display:inline-block; }
+  .timeline-line { position:absolute; left:13px; top:28px; bottom:0; width:2px; background:var(--border); }
+  .tl-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; z-index:1; }
+  .fault-btn { border:1px solid var(--border); border-radius:4px; padding:10px 12px; cursor:pointer; text-align:center; transition:all .15s; font-size:12px; background:#fff; }
   .fault-btn:hover { border-color:var(--primary); background:var(--primary-bg); }
-  .fault-btn.selected { border-color:var(--primary); background:var(--primary-bg); color:var(--primary); font-weight:600; }
-  .checkbox-team { display:flex; align-items:center; gap:8px; padding:8px 12px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; transition:all .15s; font-size:13px; }
-  .checkbox-team:hover { border-color:#9ca3af; }
-  .checkbox-team.checked { border-color:var(--primary); background:var(--primary-bg); color:var(--primary); }
+  .fault-btn.selected { border-color:var(--primary); background:var(--primary-bg); color:var(--primary); font-weight:600; box-shadow:0 0 0 1px var(--primary); }
+  .checkbox-team { display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--border); border-radius:4px; cursor:pointer; transition:all .15s; font-size:13px; background:#fff; }
+  .checkbox-team:hover { border-color:#9e9e9e; }
+  .checkbox-team.checked { border-color:var(--primary); background:var(--primary-bg); color:var(--primary); font-weight:500; }
 </style>
 </head>
 <body>
@@ -78,16 +111,21 @@ async function apiUpload(path, formData) {
 }
 
 // ── constants ─────────────────────────────────────────────────────────────────
-const TEAMS = ['CX', 'Sales', 'KAM', 'Merchandise', 'Inbound/QC', 'Outbound/Logistics', 'Management'];
+const TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound'];
 const FAULT_TEAMS = [...TEAMS, 'Customer'];
-const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice'];
+const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล'];
 const CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)'];
 const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ'];
 const PRIORITIES = ['Urgent', 'High', 'Medium', 'Low'];
 
 const TEAM_ICONS = {
-  'CX': '🎧', 'Sales': '💼', 'KAM': '🤝', 'Merchandise': '📦',
-  'Inbound/QC': '🔍', 'Outbound/Logistics': '🚚', 'Management': '👔', 'Customer': '🧑'
+  'CX':'🎧', 'Sales/KAM':'🤝', 'Sales Co':'💼', 'Merchandise':'📦',
+  'Inbound':'🔍', 'Outbound':'🚚', 'Customer':'🧑'
+};
+
+const TEAM_COLORS = {
+  'CX':'#1589EE', 'Sales/KAM':'#2E844A', 'Sales Co':'#DD7A01',
+  'Merchandise':'#9050E9', 'Inbound':'#C23934', 'Outbound':'#0EBEC9', 'Customer':'#747474'
 };
 
 const STATUS_LABELS = {
@@ -163,6 +201,82 @@ function Login({ onLogin }) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
+
+function TeamBadge({ team, size='sm' }) {
+  const color = TEAM_COLORS[team] || '#747474';
+  const fs = size === 'xs' ? '10px' : '11px';
+  const pad = size === 'xs' ? '1px 5px' : '2px 7px';
+  return (
+    <span style={{background:color+'18', color, border:`1px solid ${color}40`,
+      borderRadius:4, padding:pad, fontSize:fs, fontWeight:700, whiteSpace:'nowrap'}}>
+      {TEAM_ICONS[team]||'👥'} {team}
+    </span>
+  );
+}
+
+function LineChart({ data, xKey, yKey, color='var(--primary)' }) {
+  if (!data || data.length === 0) return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>;
+  const max = Math.max(...data.map(d => d[yKey]||0)) || 1;
+  const W=560, H=100, pt={top:8,bottom:20,left:28,right:8};
+  const cw=W-pt.left-pt.right, ch=H-pt.top-pt.bottom;
+  const pts = data.map((d,i)=>({
+    x: pt.left + (data.length>1 ? i/(data.length-1)*cw : cw/2),
+    y: pt.top + (1-(d[yKey]||0)/max)*ch,
+    val:d[yKey], lbl:(d[xKey]||'').slice(5)
+  }));
+  const path = pts.map((p,i)=>`${i?'L':'M'}${p.x},${p.y}`).join(' ');
+  const area = `M${pts[0].x},${pt.top+ch} ${pts.map(p=>`L${p.x},${p.y}`).join(' ')} L${pts[pts.length-1].x},${pt.top+ch}Z`;
+  const step = Math.ceil(data.length/8);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:100}}>
+      <defs>
+        <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity=".15"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#lg)"/>
+      <path d={path} fill="none" stroke={color} strokeWidth="2"/>
+      {pts.map((p,i)=>(
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={3} fill={color}/>
+          {i%step===0 && <text x={p.x} y={H-2} textAnchor="middle" fontSize={8} fill="var(--text-muted)">{p.lbl}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function StackedBar({ teams, totalInvoices }) {
+  if (!teams || teams.length===0 || !totalInvoices)
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>;
+  const total = teams.reduce((s,t)=>s+t.pct,0);
+  return (
+    <div>
+      <div style={{display:'flex',height:36,borderRadius:4,overflow:'hidden',border:'1px solid var(--border)',marginBottom:10}}>
+        {teams.map(t=>(
+          <div key={t.team} style={{width:t.pct+'%',background:TEAM_COLORS[t.team]||'#747474',
+            display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',
+            fontSize:10,fontWeight:700,minWidth:t.pct>2?'auto':0}}>
+            {t.pct>3?t.pct+'%':''}
+          </div>
+        ))}
+        {(100-total)>0 && <div style={{flex:1,background:'#f3f3f3'}}/>}
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'8px 16px',fontSize:12}}>
+        {teams.map(t=>(
+          <div key={t.team} style={{display:'flex',alignItems:'center',gap:6}}>
+            <div style={{width:10,height:10,borderRadius:2,background:TEAM_COLORS[t.team]||'#747474',flexShrink:0}}/>
+            <span><strong>{t.team}</strong>: {t.pct}% ({t.cnt} เคส)</span>
+          </div>
+        ))}
+      </div>
+      <p style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
+        รวม {totalInvoices} invoice ในช่วงวันที่เลือก — total fault rate: {total.toFixed(1)}%
+      </p>
+    </div>
+  );
+}
 
 function FilePreview({ url, className = '' }) {
   if (!url) return null;
@@ -268,10 +382,12 @@ function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [bottleneck, setBottleneck] = useState([]);
   const [faultTeam, setFaultTeam] = useState([]);
-  const [faultEmp, setFaultEmp] = useState([]);
   const [skuProblems, setSkuProblems] = useState([]);
   const [byCust, setByCust] = useState([]);
   const [byEmp, setByEmp] = useState([]);
+  const [trend, setTrend] = useState([]);
+  const [aging, setAging] = useState([]);
+  const [ratio, setRatio] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const qs = dateRange.start ? `?start=${dateRange.start}&end=${dateRange.end}` : '';
@@ -280,28 +396,29 @@ function Dashboard() {
     setLoading(true);
     Promise.all([
       api(`/api/dashboard/overview${qs}`),
-      api(`/api/dashboard/bottleneck`),
+      api(`/api/dashboard/bottleneck${qs}`),
       api(`/api/dashboard/fault-by-team`),
-      api(`/api/dashboard/fault-by-employee`),
       api(`/api/dashboard/sku-problems${qs}`),
       api(`/api/dashboard/by-customer${qs}`),
       api(`/api/dashboard/by-employee${qs}`),
-    ]).then(([ov, bn, ft, fe, sk, bc, be]) => {
-      setOverview(ov);
-      setBottleneck(bn || []);
-      setFaultTeam(ft || []);
-      setFaultEmp(fe || []);
-      setSkuProblems(sk || []);
-      setByCust(bc || []);
-      setByEmp(be || []);
+      api(`/api/dashboard/trend${qs}`),
+      api(`/api/dashboard/aging`),
+      api(`/api/dashboard/case-invoice-ratio${qs}`),
+    ]).then(([ov, bn, ft, sk, bc, be, tr, ag, ra]) => {
+      setOverview(ov); setBottleneck(bn||[]); setFaultTeam(ft||[]);
+      setSkuProblems(sk||[]); setByCust(bc||[]); setByEmp(be||[]);
+      setTrend(tr||[]); setAging(ag||[]); setRatio(ra||null);
       setLoading(false);
     });
   }, [qs]);
 
-  if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/> Loading...</div>;
+  if (loading) return <div className="p-8 text-center" style={{color:'var(--text-muted)'}}><Spinner/> Loading...</div>;
 
   const tabs = [
-    {id:'overview', label:'Overview'},
+    {id:'overview', label:'📊 Overview'},
+    {id:'trend', label:'📈 Trend'},
+    {id:'aging', label:'⏳ Aging'},
+    {id:'ratio', label:'📉 Case/Invoice %'},
     {id:'bottleneck', label:'⏱ Bottleneck'},
     {id:'fault-team', label:'⚠️ Fault by Team'},
     {id:'sku', label:'📦 Problem SKUs'},
@@ -477,25 +594,79 @@ function Dashboard() {
       )}
 
       {tab === 'employee' && (
-        <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Fault Attribution by Employee</h3>
-          {byEmp.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">Employee</th><th className="pb-2">Team</th><th className="pb-2">Cases</th><th className="pb-2">% of Total</th>
+        <div className="card overflow-hidden">
+          <div className="card-header">👤 Fault Attribution by Employee</div>
+          <div className="p-4">
+          {byEmp.length === 0 ? <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p> : (
+            <table style={{width:'100%'}}>
+              <thead><tr>
+                <th>Employee</th><th>Team</th><th>Cases</th><th>% ของ Total</th>
               </tr></thead>
               <tbody>
                 {byEmp.map((r,i) => (
-                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
-                    <td className="py-2 font-medium">{r.name}</td>
-                    <td className="py-2 text-gray-500">{r.team}</td>
-                    <td className="py-2 font-semibold">{r.cnt}</td>
-                    <td className="py-2 text-gray-500">{r.pct}%</td>
+                  <tr key={i}>
+                    <td style={{fontWeight:600}}>{r.name}</td>
+                    <td><TeamBadge team={r.team} size="xs"/></td>
+                    <td style={{fontWeight:700,color:'var(--primary)'}}>{r.cnt}</td>
+                    <td style={{color:'var(--text-muted)'}}>{r.pct}%
+                      <div style={{height:4,borderRadius:2,background:'#eee',marginTop:3,width:80}}>
+                        <div style={{height:4,borderRadius:2,background:TEAM_COLORS[r.team]||'var(--primary)',width:r.pct+'%'}}/>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'trend' && (
+        <div className="card overflow-hidden">
+          <div className="card-header">📈 จำนวนเคสต่อวัน</div>
+          <div className="p-4">
+            <LineChart data={trend} xKey="day" yKey="cnt" color="var(--primary)"/>
+            {trend.length > 0 && (
+              <p style={{fontSize:11,color:'var(--text-muted)',marginTop:8}}>
+                รวม {trend.reduce((s,d)=>s+(d.cnt||0),0)} เคส ใน {trend.length} วัน
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'aging' && (
+        <div className="card overflow-hidden">
+          <div className="card-header">⏳ Open Cases Aging</div>
+          <div className="p-4">
+            {aging.length === 0
+              ? <p style={{color:'var(--text-muted)',fontSize:13}}>ไม่มีเคสค้างอยู่</p>
+              : (
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12}}>
+                  {aging.map(a => {
+                    const color = a.bucket==='> 7 วัน'?'#C23934':a.bucket==='3-7 วัน'?'#DD7A01':a.bucket==='1-3 วัน'?'#9050E9':'#2E844A';
+                    return (
+                      <div key={a.bucket} className="card p-4 text-center">
+                        <div style={{fontSize:28,fontWeight:700,color}}>{a.cnt}</div>
+                        <div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>{a.bucket}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            }
+          </div>
+        </div>
+      )}
+
+      {tab === 'ratio' && (
+        <div className="card overflow-hidden">
+          <div className="card-header">📉 % เคส (มี Fault) ต่อจำนวน Invoice</div>
+          <div className="p-4">
+            {ratio ? <StackedBar teams={ratio.teams} totalInvoices={ratio.total_invoices}/>
+              : <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>}
+          </div>
         </div>
       )}
     </div>
@@ -635,6 +806,7 @@ function CreateTicket({ user, onCreated }) {
 
   const isComplain = form.case_type === 'Complain';
   const isClaim = form.case_type === 'Claim';
+  const isWangBil = form.case_type === 'วางบิล';
 
   return (
     <div className="p-6 max-w-2xl">
@@ -701,8 +873,8 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Invoice — shows after outlet selected, for all case types */}
-          {form.outlet_id && (
+          {/* Invoice — shows after outlet selected, NOT for วางบิล */}
+          {form.outlet_id && !isWangBil && (
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Invoice Number {isClaim && <span className="text-red-500">*</span>}</label>
               {invoices.length === 0
@@ -719,8 +891,8 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Claim items — shows after invoice selected (all case types) */}
-          {selectedInvoice && invoiceSkus.length > 0 && (
+          {/* Claim items — shows after invoice selected, NOT for วางบิล */}
+          {selectedInvoice && invoiceSkus.length > 0 && !isWangBil && (
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-2">
                 {isClaim ? <>Claim Items <span className="text-red-500">*</span></> : 'Related Items'}
@@ -835,7 +1007,10 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
           {form.case_type === 'Update Invoice' && (
-            <p className="text-xs text-gray-400 mt-2">* Update Invoice is usually sent to Sales Co or KAM</p>
+            <p className="text-xs text-gray-400 mt-2">* Update Invoice is usually sent to Sales/KAM or Sales Co</p>
+          )}
+          {isWangBil && (
+            <p className="text-xs text-gray-400 mt-2">* วางบิล — เลือกทีมที่รับผิดชอบดำเนินการ</p>
           )}
         </div>
 
@@ -1083,10 +1258,7 @@ function Timeline({ ticketId, user, isClosed }) {
                     {log.user_display_name || log.created_by || '—'}
                   </span>
                   {(log.user_team || log.from_team) && (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{background:'#f0fdfa', color:'#0f766e', border:'1px solid #99f6e4'}}>
-                      {TEAM_ICONS[log.user_team || log.from_team]||'👥'} {log.user_team || log.from_team}
-                    </span>
+                    <TeamBadge team={log.user_team || log.from_team} size="xs"/>
                   )}
                   <span className="text-xs text-gray-400">{fmtDt(log.created_at)}</span>
                   {log.duration_seconds != null && (
@@ -1435,26 +1607,30 @@ function TicketDetail({ ticketId, user, onBack }) {
             </div>
           )}
 
-          {/* 3. Close with fault attribution (opener team only, not Complain — Complain auto-closes) */}
+          {/* 3. Close case (opener team only, not Complain — Complain auto-closes) */}
           {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isOpenerTeam && ticket.case_type !== 'Complain' && (
             <div className="card p-4 border-l-4 border-red-400">
               <h4 className="font-semibold text-gray-700 mb-3">🔒 Close Case</h4>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Closing note *" className="mb-3"/>
-              <div className="mb-3">
-                <label className="text-sm font-medium text-gray-700 block mb-2">Responsible team *</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {FAULT_TEAMS.map(t => (
-                    <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
-                      <div className="text-lg">{TEAM_ICONS[t]||'👥'}</div>
-                      <div className="text-xs mt-1">{t}</div>
-                    </div>
-                  ))}
+              {/* Fault team — ไม่แสดงสำหรับ วางบิล */}
+              {ticket.case_type !== 'วางบิล' && (
+                <div className="mb-3">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Responsible team *</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {FAULT_TEAMS.map(t => (
+                      <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
+                        <div style={{fontSize:18}}>{TEAM_ICONS[t]||'👥'}</div>
+                        <div className="text-xs mt-1">{t}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               {imageUrl && <FilePreview url={imageUrl} className="max-w-xs mb-2"/>}
               <div className="flex items-center gap-2">
                 <ImageUploader onUploaded={url=>setImageUrl(url)}/>
-                <button className="btn btn-danger ml-auto" disabled={saving||!note||!faultTeam}
+                <button className="btn btn-danger ml-auto"
+                  disabled={saving||!note||(ticket.case_type!=='วางบิล'&&!faultTeam)}
                   onClick={()=>act('close',{note,image_url:imageUrl,fault_team:faultTeam})}>
                   {saving?<Spinner/>:'🔒 Close Case'}
                 </button>
@@ -2038,24 +2214,31 @@ function App() {
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <div className="sidebar flex flex-col py-4 px-2">
-        <div className="px-3 mb-6">
-          <div className="text-white font-bold text-lg">📋 SMM CRM</div>
-          <div className="text-teal-300 text-xs mt-0.5">{TEAM_ICONS[user.team]||''} {user.display_name} · {user.team}</div>
+        <div style={{padding:'12px 16px 20px'}}>
+          <div style={{color:'#fff',fontWeight:700,fontSize:15,letterSpacing:'.02em'}}>📋 SMM CRM</div>
+          <div style={{marginTop:6,display:'inline-block',background:(TEAM_COLORS[user.team]||'#747474')+'25',
+            color:'#fff',border:`1px solid ${TEAM_COLORS[user.team]||'#747474'}60`,
+            borderRadius:4,padding:'2px 7px',fontSize:11,fontWeight:600}}>
+            {TEAM_ICONS[user.team]||'👤'} {user.display_name}
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-1">
+        <nav style={{flex:1}}>
           {navItems.map(n => (
             <a key={n.id} className={page===n.id&&!selectedTicket&&!creating?'active':''} onClick={()=>{ setPage(n.id); setSelectedTicket(null); setCreating(false); }}>
-              {n.icon} {n.label}
+              <span style={{fontSize:15}}>{n.icon}</span> {n.label}
             </a>
           ))}
         </nav>
 
-        <div className="mt-4 px-1 space-y-1">
-          <a onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }} className="cursor-pointer" style={{background:'rgba(255,255,255,0.1)'}}>
-            ➕ New Case
+        <div style={{borderTop:'1px solid rgba(255,255,255,.12)',paddingTop:8,margin:'0 4px'}}>
+          <a onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }}
+            style={{background:'rgba(255,255,255,.12)',borderLeftColor:'rgba(255,255,255,.5)'}}>
+            <span style={{fontSize:15}}>➕</span> New Case
           </a>
-          <a onClick={logout} style={{color:'#f87171'}}>🚪 Sign Out</a>
+          <a onClick={logout} style={{color:'#fca5a5'}}>
+            <span style={{fontSize:15}}>🚪</span> Sign Out
+          </a>
         </div>
       </div>
 
