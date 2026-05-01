@@ -426,7 +426,6 @@ function Dashboard() {
     {id:'aging', label:'⏳ Aging'},
     {id:'ratio', label:'📉 Case/Invoice %'},
     {id:'bottleneck', label:'⏱ Bottleneck'},
-    {id:'fault-team', label:'⚠️ Fault by Team'},
     {id:'sku', label:'📦 Problem SKUs'},
     {id:'customer', label:'🏪 By Account'},
     {id:'employee', label:'👤 Fault by Employee'},
@@ -531,26 +530,6 @@ function Dashboard() {
         </div>
       )}
 
-      {tab === 'fault-team' && (
-        <div className="card p-4">
-          <h3 className="font-semibold text-gray-700 mb-3">Fault by Team (all time)</h3>
-          {faultTeam.length === 0 ? <p className="text-gray-400 text-sm">No data yet</p> : (
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">Team</th><th className="pb-2">Cases</th>
-              </tr></thead>
-              <tbody>
-                {faultTeam.map((r,i) => (
-                  <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
-                    <td className="py-2">{TEAM_ICONS[r.fault_team]||'👥'} {r.fault_team}</td>
-                    <td className="py-2 font-semibold text-red-600">{r.cnt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
 
 
       {tab === 'sku' && (

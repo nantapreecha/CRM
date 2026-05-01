@@ -1359,16 +1359,18 @@ def dashboard_case_invoice_ratio():
         return jsonify({'total_invoices': 0, 'teams': []})
 
     # ตัวตั้ง: Claim+Complain ทุกเคสที่มี invoice ในช่วง doc_date
-    # - มี fault attribution → แสดงตามทีม
-    # - ยังไม่ attribute → แสดงเป็น "ยังไม่ระบุ" (สีเทา)
-    # - multi-team Complain → LEFT JOIN tfa นับทุกทีม
+    # ใช้ EXISTS แทน JOIN เพื่อไม่ให้ ticket ถูกนับซ้ำตาม SKU ใน invoice
+    # LEFT JOIN tfa เพื่อแยกทีม (multi-team Complain → นับทุกทีม)
     rows = query(f"""
         SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
         FROM tickets t
-        JOIN orders o ON o.invoice_number = t.invoice_number
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
         WHERE t.case_type IN ('Claim', 'Complain')
-          {date_extra}
+          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
+          AND EXISTS (
+              SELECT 1 FROM orders o
+              WHERE o.invoice_number = t.invoice_number {date_extra}
+          )
         GROUP BY COALESCE(tfa.fault_team, 'ยังไม่ระบุ') ORDER BY cnt DESC
     """, date_params)
     teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
