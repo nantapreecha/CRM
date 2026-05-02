@@ -1747,6 +1747,17 @@ function Users({ currentUser }) {
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [resetPw, setResetPw] = useState({});
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const clearTickets = async () => {
+    if (!clearConfirm) { setClearConfirm(true); return; }
+    setClearing(true);
+    const res = await api('/api/admin/clear-tickets', { method: 'POST' });
+    setClearing(false);
+    setClearConfirm(false);
+    setMsg(res.message || res.error || 'Done');
+  };
 
   const load = () => {
     setLoading(true);
@@ -1865,6 +1876,29 @@ function Users({ currentUser }) {
           </table>
         </div>
       )}
+
+      {/* Danger zone */}
+      <div className="card p-5 mt-5" style={{borderColor:'#fca5a5'}}>
+        <h3 style={{fontSize:13,fontWeight:700,color:'#dc2626',marginBottom:8}}>Danger Zone</h3>
+        <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>ล้างข้อมูลเคสทั้งหมด</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>ลบ tickets, logs, comments, fault attribution ทั้งหมด — ไม่สามารถกู้คืนได้</div>
+          </div>
+          {clearConfirm ? (
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:12,color:'#dc2626',fontWeight:600}}>แน่ใจแล้วหรือ?</span>
+              <button type="button" className="btn btn-danger" onClick={clearTickets} disabled={clearing}>
+                {clearing ? <Spinner size={13}/> : 'ยืนยัน ลบทั้งหมด'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={()=>setClearConfirm(false)}>ยกเลิก</button>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-danger" onClick={clearTickets}>ล้างข้อมูลเคส</button>
+          )}
+        </div>
+        {msg && <div style={{marginTop:8,fontSize:12,color:'#2e844a',fontWeight:600}}>{msg}</div>}
+      </div>
     </div>
   );
 }

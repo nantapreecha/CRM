@@ -578,6 +578,25 @@ def reset_password(uid):
            (hash_password(d['new_password']), uid))
     return jsonify({'ok': True})
 
+@app.route('/api/admin/clear-tickets', methods=['POST'])
+@require_admin
+def clear_all_tickets():
+    """Delete all ticket data (admin only). Irreversible."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM ticket_fault_attribution")
+        cur.execute("DELETE FROM ticket_comments")
+        cur.execute("DELETE FROM ticket_workflow_log")
+        cur.execute("DELETE FROM ticket_assignments")
+        cur.execute("DELETE FROM tickets")
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'message': 'ลบข้อมูลเคสทั้งหมดเรียบร้อยแล้ว'})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'error': str(e)}), 500
+
 # ---------------------------------------------------------------------------
 # Accounts
 # ---------------------------------------------------------------------------
