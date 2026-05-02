@@ -134,23 +134,26 @@ def migrate_orders_delivery_date():
 
 migrate_orders_delivery_date()
 
-def migrate_orders_erp_item_id_unique():
-    """Add UNIQUE constraint on orders.erp_item_id if not present."""
+def migrate_orders_reset_and_fix():
+    """One-time: clear orders + add UNIQUE index on erp_item_id.
+    Skips if the unique index already exists (already ran)."""
     try:
         conn = get_db()
         cur = conn.cursor()
-        # CREATE UNIQUE INDEX IF NOT EXISTS is idempotent and works even if column has no dupes
-        cur.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS orders_erp_item_id_uidx
-            ON orders (erp_item_id)
-        """)
+        cur.execute("SELECT 1 FROM pg_indexes WHERE indexname = 'orders_erp_item_id_uidx'")
+        if cur.fetchone():
+            conn.close()
+            return  # already done
+        # Index missing → old table without constraint → clear + fix
+        cur.execute("TRUNCATE TABLE orders RESTART IDENTITY")
+        cur.execute("CREATE UNIQUE INDEX orders_erp_item_id_uidx ON orders (erp_item_id)")
         conn.commit()
         conn.close()
-        print("[migrate] orders.erp_item_id unique index ensured")
+        print("[migrate] orders cleared + unique index created")
     except Exception as e:
-        print(f"[migrate] orders.erp_item_id unique: {e}")
+        print(f"[migrate] orders reset: {e}")
 
-migrate_orders_erp_item_id_unique()
+migrate_orders_reset_and_fix()
 
 # ---------------------------------------------------------------------------
 # Auth helpers
