@@ -577,6 +577,7 @@ def delete_user(uid):
     cur = conn.cursor()
     try:
         # Clear FK references before deleting
+        cur.execute("DELETE FROM user_sessions WHERE user_id=%s", (uid,))
         cur.execute("UPDATE tickets SET opener_user_id=NULL WHERE opener_user_id=%s", (uid,))
         cur.execute("UPDATE ticket_workflow_log SET user_id=NULL WHERE user_id=%s", (uid,))
         cur.execute("UPDATE ticket_assignments SET acknowledged_user_id=NULL WHERE acknowledged_user_id=%s", (uid,))
