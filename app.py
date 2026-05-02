@@ -1645,13 +1645,13 @@ def import_erp():
         account_map = {}
         unique_accounts = {(p['account_name'], p['owner']) for p in new_rows}
         for acc_name, owner in unique_accounts:
-            cur.execute("""
-                INSERT INTO accounts (name, owner) VALUES (%s, %s)
-                ON CONFLICT (name) DO UPDATE SET owner=EXCLUDED.owner
-                RETURNING id, name
-            """, (acc_name, owner))
+            cur.execute("SELECT id FROM accounts WHERE name=%s", (acc_name,))
             r = cur.fetchone()
-            account_map[r['name']] = r['id']
+            if r:
+                account_map[acc_name] = r['id']
+            else:
+                cur.execute("INSERT INTO accounts (name, owner) VALUES (%s,%s) RETURNING id", (acc_name, owner))
+                account_map[acc_name] = cur.fetchone()['id']
 
         outlet_map = {}
         unique_outlets = {(p['account_name'], p['outlet_name'], p['erp_customer_id'],
@@ -1660,28 +1660,21 @@ def import_erp():
             acc_id = account_map.get(acc_name)
             if acc_id is None:
                 continue
+            # Find existing outlet
             if erp_oid:
-                cur.execute("""
-                    INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (erp_outlet_id) DO UPDATE
-                        SET name=EXCLUDED.name,
-                            account_id=EXCLUDED.account_id,
-                            erp_customer_id=EXCLUDED.erp_customer_id,
-                            csc_code=EXCLUDED.csc_code
-                    RETURNING id, name, account_id
-                """, (acc_id, out_name, erp_cid, erp_oid, csc))
+                cur.execute("SELECT id, name FROM outlets WHERE erp_outlet_id=%s", (erp_oid,))
+            else:
+                cur.execute("SELECT id, name FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
+            r = cur.fetchone()
+            if r:
+                outlet_map[(acc_id, r['name'])] = r['id']
             else:
                 cur.execute("""
                     INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (account_id, name) DO UPDATE
-                        SET erp_customer_id=EXCLUDED.erp_customer_id,
-                            csc_code=EXCLUDED.csc_code
-                    RETURNING id, name, account_id
+                    VALUES (%s,%s,%s,%s,%s) RETURNING id, name
                 """, (acc_id, out_name, erp_cid, erp_oid, csc))
-            r = cur.fetchone()
-            outlet_map[(acc_id, r['name'])] = r['id']
+                r = cur.fetchone()
+                outlet_map[(acc_id, r['name'])] = r['id']
 
         # Fallback: look up outlets from DB if not found in outlet_map (e.g. existed from prev import)
         missing = {(p['account_name'], p['outlet_name']) for p in new_rows
