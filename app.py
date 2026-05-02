@@ -568,6 +568,14 @@ def update_user(uid):
            (d['display_name'], d['team'], d.get('role', 'staff'), d.get('status', 'active'), uid))
     return jsonify({'ok': True})
 
+@app.route('/api/users/<int:uid>', methods=['DELETE'])
+@require_admin
+def delete_user(uid):
+    if uid == g.user['id']:
+        return jsonify({'error': 'ไม่สามารถลบตัวเองได้'}), 400
+    mutate("DELETE FROM users WHERE id=%s", (uid,))
+    return jsonify({'ok': True})
+
 @app.route('/api/users/<int:uid>/password', methods=['PUT'])
 @require_admin
 def reset_password(uid):
@@ -593,6 +601,105 @@ def clear_all_tickets():
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'message': 'ลบข้อมูลเคสทั้งหมดเรียบร้อยแล้ว'})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/seed-tickets', methods=['POST'])
+@require_admin
+def seed_tickets():
+    """Create realistic sample tickets for dashboard testing (admin only)."""
+    import random
+    from datetime import datetime, timedelta
+
+    n = int(request.json.get('count', 60))
+    days_back = int(request.json.get('days', 30))
+    now = datetime.now()
+
+    teams      = ['CX','Sales/KAM','Sales Co','Merchandise','Inbound','Outbound']
+    fault_teams= ['CX','Sales/KAM','Sales Co','Merchandise','Inbound','Outbound','Customer']
+    case_types = ['Complain','Claim','Complain','Complain','Claim','Update Invoice']
+    priorities = ['Urgent','High','High','Medium','Medium','Medium','Low']
+    statuses   = ['open','in_progress','pending_ack','pending_fault','closed']
+    root_causes= ['สินค้าตกหล่น','คุณภาพไม่ผ่าน/ไม่ได้ spec','น้ำหนักไม่ครบ','ส่งผิด SKU','เอกสารผิดพลาด','อื่นๆ']
+    skus       = ['SKU-001','SKU-002','SKU-003','SKU-004','SKU-005','SKU-006','SKU-007']
+    products   = ['สินค้า A','สินค้า B','สินค้า C','สินค้า D','สินค้า E']
+    accounts   = ['ร้านตัวอย่าง A','ร้านตัวอย่าง B','ร้านตัวอย่าง C','ร้านตัวอย่าง D']
+
+    conn = get_db()
+    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        # get opener user id
+        cur.execute("SELECT id, username FROM users LIMIT 1")
+        u = cur.fetchone()
+        opener_id   = u['id']   if u else None
+        opener_name = u['username'] if u else 'admin'
+
+        created = 0
+        for i in range(n):
+            dt = now - timedelta(days=random.randint(0, days_back),
+                                 hours=random.randint(0,23), minutes=random.randint(0,59))
+            dt_str  = dt.strftime('%Y-%m-%dT%H:%M:%S')
+            opener  = random.choice(teams)
+            ctype   = random.choice(case_types)
+            prio    = random.choice(priorities)
+            inv_no  = f'INV-SEED-{random.randint(10000,99999)}'
+            sku     = random.choice(skus)
+            product = random.choice(products)
+            account = random.choice(accounts)
+
+            # determine status weighted toward realistic distribution
+            status = random.choices(statuses, weights=[15,20,10,10,45])[0]
+            cur_team = opener if status in ('open','in_progress') else random.choice(teams)
+            closed_at = None
+            if status == 'closed':
+                close_dt = dt + timedelta(hours=random.randint(2, 72))
+                closed_at = close_dt.strftime('%Y-%m-%dT%H:%M:%S')
+
+            ticket_no = f'TK-SEED-{dt.strftime("%Y%m")}-{i+1:04d}'
+            cur.execute("""
+                INSERT INTO tickets
+                (ticket_no, invoice_number, sku_code, product_name, case_type, priority,
+                 status, current_team, opener_team, opener_user_id,
+                 description, created_by, created_at, closed_at, root_cause)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (ticket_no, inv_no, sku, product, ctype, prio,
+                  status, cur_team, opener, opener_id,
+                  f'[Seed] ปัญหาเกี่ยวกับ {product} ร้าน {account}',
+                  opener_name, dt_str, closed_at,
+                  random.choice(root_causes) if ctype in ('Claim','Complain') else None))
+            tid = cur.fetchone()['id']
+
+            # workflow log
+            cur.execute("""
+                INSERT INTO ticket_workflow_log (ticket_id, from_team, to_team, action, note, created_by, created_at)
+                VALUES (%s,%s,%s,'created',%s,%s,%s)
+            """, (tid, None, opener, f'เปิดเคส {ctype}', opener_name, dt_str))
+
+            if status in ('in_progress','pending_ack','pending_fault','closed'):
+                fwd_dt = (dt + timedelta(hours=random.randint(1,8))).strftime('%Y-%m-%dT%H:%M:%S')
+                fwd_team = random.choice([t for t in teams if t != opener])
+                cur.execute("""
+                    INSERT INTO ticket_workflow_log (ticket_id, from_team, to_team, action, note, created_by, created_at)
+                    VALUES (%s,%s,%s,'forwarded','ส่งต่อเพื่อตรวจสอบ',%s,%s)
+                """, (tid, opener, fwd_team, opener_name, fwd_dt))
+
+            # fault attribution for closed/pending_fault
+            if status in ('closed','pending_fault') and ctype in ('Claim','Complain'):
+                if random.random() > 0.2:  # 80% have attribution
+                    fat = random.choice(fault_teams)
+                    fa_dt = (dt + timedelta(hours=random.randint(4,24))).strftime('%Y-%m-%dT%H:%M:%S')
+                    cur.execute("""
+                        INSERT INTO ticket_fault_attribution
+                        (ticket_id, fault_team, note, attributed_by, created_at)
+                        VALUES (%s,%s,'[Seed] ระบุ fault อัตโนมัติ',%s,%s)
+                    """, (tid, fat, opener_name, fa_dt))
+            created += 1
+
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'message': f'สร้างข้อมูลตัวอย่างเรียบร้อย {created} เคส'})
     except Exception as e:
         conn.rollback(); conn.close()
         return jsonify({'error': str(e)}), 500

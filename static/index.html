@@ -1861,14 +1861,34 @@ function Users({ currentUser }) {
   const [resetPw, setResetPw] = useState({});
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedCount, setSeedCount] = useState(60);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // user id to delete
 
   const clearTickets = async () => {
     if (!clearConfirm) { setClearConfirm(true); return; }
     setClearing(true);
     const res = await api('/api/admin/clear-tickets', { method: 'POST' });
-    setClearing(false);
-    setClearConfirm(false);
+    setClearing(false); setClearConfirm(false);
     setMsg(res.message || res.error || 'Done');
+  };
+
+  const seedTickets = async () => {
+    setSeeding(true);
+    const res = await api('/api/admin/seed-tickets', {
+      method: 'POST',
+      body: JSON.stringify({ count: seedCount, days: 30 })
+    });
+    setSeeding(false);
+    setMsg(res.message || res.error || 'Done');
+  };
+
+  const deleteUser = async (uid) => {
+    if (deleteConfirm !== uid) { setDeleteConfirm(uid); return; }
+    const res = await api(`/api/users/${uid}`, { method: 'DELETE' });
+    setDeleteConfirm(null);
+    if (res.ok) load();
+    else setMsg(res.error || 'ลบไม่สำเร็จ');
   };
 
   const load = () => {
@@ -1980,7 +2000,14 @@ function Users({ currentUser }) {
                     </div>
                   </td>
                   <td className="p-3">
-                    <button className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>Edit</button>
+                    <button type="button" className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>Edit</button>
+                    {u.id !== currentUser.id && (
+                      deleteConfirm === u.id
+                        ? <><span style={{fontSize:11,color:'#dc2626'}}>แน่ใจ?</span>
+                            <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id)}>ยืนยัน</button>
+                            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setDeleteConfirm(null)}>ยกเลิก</button></>
+                        : <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id)}>ลบ</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1988,6 +2015,26 @@ function Users({ currentUser }) {
           </table>
         </div>
       )}
+
+      {/* Seed data */}
+      <div className="card p-5 mt-5" style={{borderColor:'#d1d5db'}}>
+        <h3 style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:8}}>ข้อมูลตัวอย่าง (Seed)</h3>
+        <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>สร้างเคสตัวอย่าง</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>สร้าง fake tickets กระจาย 30 วันย้อนหลัง — ลบทิ้งได้ด้วยปุ่ม "ล้างข้อมูลเคส" ด้านล่าง</div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <select value={seedCount} onChange={e=>setSeedCount(Number(e.target.value))} style={{width:80,fontSize:13}}>
+              {[30,60,100,200].map(n=><option key={n} value={n}>{n} เคส</option>)}
+            </select>
+            <button type="button" className="btn btn-primary" onClick={seedTickets} disabled={seeding}>
+              {seeding ? <Spinner size={13}/> : 'สร้างข้อมูล'}
+            </button>
+          </div>
+        </div>
+        {msg && <div style={{marginTop:8,fontSize:12,color:'#2e844a',fontWeight:600}}>{msg}</div>}
+      </div>
 
       {/* Danger zone */}
       <div className="card p-5 mt-5" style={{borderColor:'#fca5a5'}}>
