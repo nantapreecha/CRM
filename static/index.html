@@ -353,6 +353,119 @@ function StackedBar({ teams, totalInvoices }) {
   );
 }
 
+function CaseInvoicePanel({ ratio, faultTrend }) {
+  if (!ratio || !ratio.total_invoices) return (
+    <p style={{color:'var(--text-muted)',fontSize:13,padding:'8px 0'}}>
+      ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก — กรุณา Import ERP ก่อน)
+    </p>
+  );
+
+  const { total_invoices, teams } = ratio;
+  const totalFaults = (teams||[]).filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.cnt, 0);
+  const pendingFaults = (teams||[]).find(t=>t.team==='ยังไม่ระบุ');
+  const overallRate = total_invoices ? (totalFaults/total_invoices*100).toFixed(2) : 0;
+  const maxPct = Math.max(...(teams||[]).map(t=>t.pct), 0.1);
+
+  // Trend SVG
+  const W=500, H=80, pad={t:8,b:20,l:30,r:10};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const hasT = faultTrend && faultTrend.length > 1;
+  let trendSVG = null;
+  if (hasT) {
+    const rates = faultTrend.map(d=>d.rate);
+    const maxR = Math.max(...rates, 1);
+    const pts = faultTrend.map((d,i)=>({
+      x: pad.l + (i/(faultTrend.length-1))*cw,
+      y: pad.t + ch - (d.rate/maxR)*ch,
+      lbl: d.date.slice(5),
+      r: d.rate
+    }));
+    const step = Math.max(1, Math.ceil(faultTrend.length/7));
+    const pathD = pts.map((p,i)=>(i===0?`M${p.x},${p.y}`:`L${p.x},${p.y}`)).join(' ');
+    const areaD = `M${pts[0].x},${pad.t+ch} ${pts.map(p=>`L${p.x},${p.y}`).join(' ')} L${pts[pts.length-1].x},${pad.t+ch}Z`;
+    trendSVG = (
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:90,display:'block'}}>
+        <defs>
+          <linearGradient id="flt" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ef4444" stopOpacity=".2"/>
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {/* Y gridlines */}
+        {[0,50,100].map(pct=>{
+          const y = pad.t + ch - (pct/100)*ch;
+          return <line key={pct} x1={pad.l} y1={y} x2={W-pad.r} y2={y} stroke="#e5e7eb" strokeWidth="1"/>;
+        })}
+        <path d={areaD} fill="url(#flt)"/>
+        <path d={pathD} fill="none" stroke="#ef4444" strokeWidth="2"/>
+        {pts.map((p,i)=>(
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={2.5} fill="#ef4444"/>
+            {i%step===0 && <text x={p.x} y={H-3} textAnchor="middle" fontSize={7} fill="var(--text-muted)">{p.lbl}</text>}
+          </g>
+        ))}
+        <text x={pad.l-2} y={pad.t+4} textAnchor="end" fontSize={7} fill="var(--text-muted)">{maxR.toFixed(1)}%</text>
+        <text x={pad.l-2} y={pad.t+ch} textAnchor="end" fontSize={7} fill="var(--text-muted)">0%</text>
+      </svg>
+    );
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      {/* KPI row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
+        {[
+          {label:'Invoice ที่ส่งในช่วงนี้', value: total_invoices.toLocaleString(), color:'#111827'},
+          {label:'Fault Cases (Claim+Complain)', value: totalFaults, color:'#dc2626'},
+          {label:'Fault Rate รวม', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
+        ].map(({label,value,color})=>(
+          <div key={label} className="card" style={{padding:'14px 16px'}}>
+            <div style={{fontSize:22,fontWeight:700,color}}>{value}</div>
+            <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>{label}</div>
+          </div>
+        ))}
+      </div>
+      {pendingFaults && (
+        <div style={{fontSize:12,color:'#9ca3af',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:6,padding:'6px 12px'}}>
+          ⏳ รอระบุ fault team: <strong>{pendingFaults.cnt} เคส</strong>
+        </div>
+      )}
+
+      {/* Trend */}
+      {hasT ? (
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:8}}>Fault Rate Trend</div>
+          {trendSVG}
+        </div>
+      ) : (
+        <div style={{fontSize:12,color:'var(--text-muted)'}}>ไม่มีข้อมูล trend (ต้องมีข้อมูลอย่างน้อย 2 วัน)</div>
+      )}
+
+      {/* Per-team bars */}
+      {(teams||[]).filter(t=>t.team!=='ยังไม่ระบุ').length > 0 && (
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:12}}>Fault Rate แยกตาม Team</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {(teams||[]).filter(t=>t.team!=='ยังไม่ระบุ').map(t=>(
+              <div key={t.team} style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{width:100,fontSize:12,color:'var(--text)',flexShrink:0,fontWeight:500}}>{t.team}</div>
+                <div style={{flex:1,height:18,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
+                  <div style={{width:(t.pct/maxPct*100)+'%',height:'100%',background:TEAM_COLORS[t.team]||'#6b7280',borderRadius:4,
+                    display:'flex',alignItems:'center',paddingLeft:6,transition:'width .4s'}}>
+                  </div>
+                </div>
+                <div style={{width:80,fontSize:12,color:'var(--text-muted)',flexShrink:0,textAlign:'right'}}>
+                  {t.pct}% · {t.cnt} เคส
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FilePreview({ url, className = '' }) {
   if (!url) return null;
   if (isPdf(url)) {
@@ -466,6 +579,7 @@ function Dashboard() {
   const [trend, setTrend] = useState([]);
   const [aging, setAging] = useState([]);
   const [ratio, setRatio] = useState(null);
+  const [faultTrend, setFaultTrend] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const hasData = useRef(false);
@@ -485,11 +599,13 @@ function Dashboard() {
       api(`/api/dashboard/trend${qs}`),
       api(`/api/dashboard/aging`),
       api(`/api/dashboard/case-invoice-ratio${qs}`),
+      api(`/api/dashboard/fault-rate-trend${qs}`),
     ]).then(results => {
-      const [ov, bn, ft, sk, bc, be, tr, ag, ra] = results.map(r => r.status==='fulfilled' ? r.value : null);
+      const [ov, bn, ft, sk, bc, be, tr, ag, ra, frt] = results.map(r => r.status==='fulfilled' ? r.value : null);
       setOverview(ov); setBottleneck(bn||[]); setFaultTeam(ft||[]);
       setSkuProblems(sk||[]); setByCust(bc||[]); setByEmp(be||[]);
       setTrend(tr||[]); setAging(ag||[]); setRatio(ra||null);
+      setFaultTrend(frt||[]);
       setLoading(false); setRefreshing(false);
       hasData.current = true;
     });
@@ -726,12 +842,8 @@ function Dashboard() {
       )}
 
       {tab === 'ratio' && (
-        <div className="card overflow-hidden">
-          <div className="card-header">% เคส (มี Fault) ต่อจำนวน Invoice</div>
-          <div className="p-4">
-            {ratio ? <StackedBar teams={ratio.teams} totalInvoices={ratio.total_invoices}/>
-              : <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>}
-          </div>
+        <div>
+          <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend}/>
         </div>
       )}
     </div>

@@ -1462,6 +1462,58 @@ def dashboard_case_invoice_ratio():
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
     return jsonify({'total_invoices': total_invoices, 'teams': teams})
 
+@app.route('/api/dashboard/fault-rate-trend', methods=['GET'])
+@require_auth
+def dashboard_fault_rate_trend():
+    """Fault rate trend by date — for Case/Invoice % chart."""
+    start = request.args.get('start', '')
+    end   = request.args.get('end', '')
+    date_extra = ''
+    date_params = []
+    if start:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_params.append(start)
+    if end:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_params.append(end)
+
+    # Invoices per date
+    inv_rows = query(f"""
+        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+               COUNT(DISTINCT o.invoice_number) AS inv_cnt
+        FROM orders o WHERE 1=1 {date_extra}
+        GROUP BY dt ORDER BY dt
+    """, date_params)
+
+    if not inv_rows:
+        return jsonify([])
+
+    # Fault cases per date (link via invoice_number)
+    fault_rows = query(f"""
+        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+               COUNT(DISTINCT t.id) AS fault_cnt
+        FROM tickets t
+        JOIN orders o ON o.invoice_number = t.invoice_number
+        WHERE t.case_type IN ('Claim','Complain')
+          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
+          {date_extra}
+        GROUP BY dt ORDER BY dt
+    """, date_params)
+
+    fault_map = {r['dt']: int(r['fault_cnt']) for r in (fault_rows or [])}
+    result = []
+    for r in inv_rows:
+        dt = r['dt']
+        inv = int(r['inv_cnt'])
+        fault = fault_map.get(dt, 0)
+        result.append({
+            'date': str(dt),
+            'invoices': inv,
+            'faults': fault,
+            'rate': round(fault / inv * 100, 2) if inv else 0
+        })
+    return jsonify(result)
+
 @app.route('/api/dashboard/fault-by-employee', methods=['GET'])
 @require_auth
 def dashboard_fault_employee():
