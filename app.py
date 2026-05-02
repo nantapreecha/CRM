@@ -651,9 +651,10 @@ def seed_tickets():
 
         # pull real invoice numbers from orders so Case/Invoice % works
         cur.execute("""
-            SELECT DISTINCT invoice_number FROM orders
-            WHERE invoice_number IS NOT NULL AND invoice_number != ''
-            ORDER BY RANDOM() LIMIT 500
+            SELECT invoice_number FROM (
+                SELECT DISTINCT invoice_number FROM orders
+                WHERE invoice_number IS NOT NULL AND invoice_number != ''
+            ) t ORDER BY RANDOM() LIMIT 500
         """)
         real_invoices = [r['invoice_number'] for r in cur.fetchall()]
 
