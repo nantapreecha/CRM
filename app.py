@@ -1687,9 +1687,7 @@ def import_erp():
                  outlet_id, sku_code, product_name, qty, unit,
                  total_sales, vat_price, is_vat, sku_group, sku_category,
                  sku_type, delivery_started_at, delivery_finished_at, loaded_at)
-                VALUES %s ON CONFLICT (erp_item_id) DO UPDATE
-                    SET outlet_id = COALESCE(orders.outlet_id, EXCLUDED.outlet_id),
-                        delivery_date = COALESCE(orders.delivery_date, EXCLUDED.delivery_date)
+                VALUES %s
             """, order_tuples, page_size=500)
             inserted = len(order_tuples)
 
