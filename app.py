@@ -573,8 +573,21 @@ def update_user(uid):
 def delete_user(uid):
     if uid == g.user['id']:
         return jsonify({'error': 'ไม่สามารถลบตัวเองได้'}), 400
-    mutate("DELETE FROM users WHERE id=%s", (uid,))
-    return jsonify({'ok': True})
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # Clear FK references before deleting
+        cur.execute("UPDATE tickets SET opener_user_id=NULL WHERE opener_user_id=%s", (uid,))
+        cur.execute("UPDATE ticket_workflow_log SET user_id=NULL WHERE user_id=%s", (uid,))
+        cur.execute("UPDATE ticket_assignments SET acknowledged_user_id=NULL WHERE acknowledged_user_id=%s", (uid,))
+        cur.execute("UPDATE ticket_fault_attribution SET attributed_user_id=NULL WHERE attributed_user_id=%s", (uid,))
+        cur.execute("DELETE FROM users WHERE id=%s", (uid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/users/<int:uid>/password', methods=['PUT'])
 @require_admin
