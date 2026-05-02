@@ -1863,8 +1863,6 @@ function Users({ currentUser }) {
   const [clearing, setClearing] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seedCount, setSeedCount] = useState(60);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // user id to delete
-
   const clearTickets = async () => {
     if (!clearConfirm) { setClearConfirm(true); return; }
     setClearing(true);
@@ -1883,8 +1881,8 @@ function Users({ currentUser }) {
     setMsg(res.message || res.error || 'Done');
   };
 
-  const deleteUser = async (uid) => {
-    if (deleteConfirm !== uid) { setDeleteConfirm(uid); return; }
+  const deleteUser = async (uid, name) => {
+    if (!window.confirm(`ลบ user "${name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถยกเลิกได้`)) return;
     try {
       const token = localStorage.getItem('crm_token');
       const r = await fetch(`/api/users/${uid}`, {
@@ -1894,11 +1892,9 @@ function Users({ currentUser }) {
       const text = await r.text();
       let data;
       try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
-      setDeleteConfirm(null);
-      if (r.ok && data.ok) load();
+      if (r.ok && data.ok) { load(); setMsg(''); }
       else setMsg('ลบไม่สำเร็จ: ' + (data.error || r.status));
     } catch(err) {
-      setDeleteConfirm(null);
       setMsg('ลบไม่สำเร็จ: ' + err.message);
     }
   };
@@ -2014,11 +2010,7 @@ function Users({ currentUser }) {
                   <td className="p-3">
                     <button type="button" className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>Edit</button>
                     {u.id !== currentUser.id && (
-                      deleteConfirm === u.id
-                        ? <><span style={{fontSize:11,color:'#dc2626'}}>แน่ใจ?</span>
-                            <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id)}>ยืนยัน</button>
-                            <button type="button" className="btn btn-secondary text-xs" onClick={()=>setDeleteConfirm(null)}>ยกเลิก</button></>
-                        : <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id)}>ลบ</button>
+                      <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id, u.display_name)}>ลบ</button>
                     )}
                   </td>
                 </tr>
