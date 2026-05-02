@@ -467,11 +467,14 @@ function Dashboard() {
   const [aging, setAging] = useState([]);
   const [ratio, setRatio] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const hasData = useRef(false);
 
   const qs = dateRange.start ? `?start=${dateRange.start}&end=${dateRange.end}` : '';
 
   useEffect(() => {
-    setLoading(true);
+    if (hasData.current) { setRefreshing(true); }
+    else { setLoading(true); }
     Promise.allSettled([
       api(`/api/dashboard/overview${qs}`),
       api(`/api/dashboard/bottleneck${qs}`),
@@ -487,7 +490,8 @@ function Dashboard() {
       setOverview(ov); setBottleneck(bn||[]); setFaultTeam(ft||[]);
       setSkuProblems(sk||[]); setByCust(bc||[]); setByEmp(be||[]);
       setTrend(tr||[]); setAging(ag||[]); setRatio(ra||null);
-      setLoading(false);
+      setLoading(false); setRefreshing(false);
+      hasData.current = true;
     });
   }, [qs]);
 
@@ -506,7 +510,10 @@ function Dashboard() {
 
   return (
     <div className="p-6">
-      <h2 className="text-xl font-bold mb-4" style={{color:'var(--text)'}}>Dashboard</h2>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+        <h2 className="text-xl font-bold" style={{color:'var(--text)'}}>Dashboard</h2>
+        {refreshing && <span style={{fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><Spinner size={12}/> updating...</span>}
+      </div>
 
       <DateRangeFilter value={dateRange} onChange={setDateRange}/>
 
