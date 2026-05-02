@@ -137,8 +137,8 @@ const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพ
 const PRIORITIES = ['Urgent', 'High', 'Medium', 'Low'];
 
 const TEAM_ICONS = {
-  'CX':'CX', 'Sales/KAM':'SK', 'Sales Co':'SC', 'Merchandise':'MD',
-  'Inbound':'IN', 'Outbound':'OB', 'Customer':'CS'
+  'CX':'', 'Sales/KAM':'', 'Sales Co':'', 'Merchandise':'',
+  'Inbound':'', 'Outbound':'', 'Customer':''
 };
 
 const TEAM_COLORS = {
@@ -248,7 +248,7 @@ function Login({ onLogin }) {
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f9fafb'}}>
       <div className="card" style={{width:'100%',maxWidth:360,padding:'32px 32px 28px'}}>
         <div style={{textAlign:'center',marginBottom:28}}>
-          <div style={{width:36,height:36,background:'#dc2626',borderRadius:8,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:13,fontWeight:700,marginBottom:12}}>SM</div>
+          <div style={{width:36,height:36,background:'#dc2626',borderRadius:8,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:11,fontWeight:700,marginBottom:12}}>SMM</div>
           <h1 style={{fontSize:18,fontWeight:700,color:'#111827',margin:0}}>SMM CRM</h1>
           <p style={{fontSize:13,color:'#6b7280',marginTop:4}}>Sign in to your account</p>
         </div>
@@ -281,7 +281,7 @@ function TeamBadge({ team, size='sm' }) {
   return (
     <span style={{background:color+'18', color, border:`1px solid ${color}40`,
       borderRadius:4, padding:pad, fontSize:fs, fontWeight:700, whiteSpace:'nowrap'}}>
-      {TEAM_ICONS[team]||'?'} {team}
+      {TEAM_ICONS[team]||''} {team}
     </span>
   );
 }
@@ -558,7 +558,7 @@ function Dashboard() {
                 const pct = overview.total ? Math.round(r.count/overview.total*100) : 0;
                 return (
                   <div key={r.opener_team} className="flex items-center gap-3">
-                    <div className="w-32 text-sm text-gray-600 shrink-0">{TEAM_ICONS[r.opener_team]||'?'} {r.opener_team}</div>
+                    <div className="w-32 text-sm text-gray-600 shrink-0">{TEAM_ICONS[r.opener_team]||''} {r.opener_team}</div>
                     <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{width:pct+'%', background:'var(--primary)'}}/>
                     </div>
@@ -590,7 +590,7 @@ function Dashboard() {
               <tbody>
                 {bottleneck.map((r,i) => (
                   <tr key={i} className={`border-b last:border-0 ${i%2===1?'bg-gray-50':''}`}>
-                    <td className="py-2">{TEAM_ICONS[r.team]||'?'} {r.team}</td>
+                    <td className="py-2">{TEAM_ICONS[r.team]||''} {r.team}</td>
                     <td className="py-2">{r.ticket_count}</td>
                     <td className="py-2 font-medium" style={{color:'var(--primary)'}}>{fmtDuration(r.avg_seconds)}</td>
                   </tr>
@@ -1236,9 +1236,9 @@ function TicketList({ user, onSelect }) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`status-${t.status}`}>{STATUS_LABELS[t.status]||t.status}</span>
                         <span className="text-xs text-gray-400">
-                          {TEAM_ICONS[t.opener_team]||'?'} {t.opener_team}
+                          {TEAM_ICONS[t.opener_team]||''} {t.opener_team}
                           <span className="mx-1">→</span>
-                          {TEAM_ICONS[t.current_team]||'?'} {t.current_team}
+                          {TEAM_ICONS[t.current_team]||''} {t.current_team}
                         </span>
                       </div>
                     </div>
@@ -1522,8 +1522,8 @@ function TicketDetail({ ticketId, user, onBack }) {
             {ticket.root_cause && <p className="text-gray-500 text-xs">Root cause: {ticket.root_cause}</p>}
           </div>
           <div className="text-right text-sm text-gray-500">
-            <div>Opened by: {TEAM_ICONS[ticket.opener_team]||'?'} {ticket.opener_team}</div>
-            <div>Current team: {TEAM_ICONS[ticket.current_team]||'?'} <strong>{ticket.current_team}</strong></div>
+            <div>Opened by: {TEAM_ICONS[ticket.opener_team]||''} {ticket.opener_team}</div>
+            <div>Current team: {TEAM_ICONS[ticket.current_team]||''} <strong>{ticket.current_team}</strong></div>
             <div className="text-xs mt-1">{fmtDt(ticket.created_at)}</div>
           </div>
         </div>
@@ -1675,7 +1675,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {FAULT_TEAMS.map(t => (
                       <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
-                        <div style={{fontSize:18}}>{TEAM_ICONS[t]||'?'}</div>
+                        <div style={{width:28,height:28,borderRadius:'50%',background:TEAM_COLORS[t]||'#9ca3af',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 4px'}}>{t.substring(0,2).toUpperCase()}</div>
                         <div className="text-xs mt-1">{t}</div>
                       </div>
                     ))}
@@ -2271,7 +2271,7 @@ function App() {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-brand">
-          <div className="sidebar-logo">SM</div>
+          <div className="sidebar-logo">SMM</div>
           <div>
             <div className="sidebar-title">SMM CRM</div>
             <div className="sidebar-subtitle">Sales Operations</div>
