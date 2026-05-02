@@ -1654,17 +1654,21 @@ def import_erp():
                 account_map[acc_name] = cur.fetchone()['id']
 
         outlet_map = {}
-        unique_outlets = {(p['account_name'], p['outlet_name'], p['erp_customer_id'],
-                           p['erp_outlet_id'], p['csc_code']) for p in new_rows}
-        for acc_name, out_name, erp_cid, erp_oid, csc in unique_outlets:
+        # Dedupe outlets by (acc_name, out_name) — same outlet may appear many times with diff erp_oid/csc
+        seen_outlet_keys = {}
+        for p in new_rows:
+            key = (p['account_name'], p['outlet_name'])
+            if key not in seen_outlet_keys:
+                seen_outlet_keys[key] = p
+        for (acc_name, out_name), p in seen_outlet_keys.items():
             acc_id = account_map.get(acc_name)
             if acc_id is None:
                 continue
-            # Find existing outlet
-            if erp_oid:
-                cur.execute("SELECT id, name FROM outlets WHERE erp_outlet_id=%s", (erp_oid,))
-            else:
-                cur.execute("SELECT id, name FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
+            erp_cid = p['erp_customer_id']
+            erp_oid = p['erp_outlet_id']
+            csc = p['csc_code']
+            # Always look up by (account_id, name) — most reliable key
+            cur.execute("SELECT id, name FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
             r = cur.fetchone()
             if r:
                 outlet_map[(acc_id, r['name'])] = r['id']
