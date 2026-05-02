@@ -134,6 +134,24 @@ def migrate_orders_delivery_date():
 
 migrate_orders_delivery_date()
 
+def migrate_orders_erp_item_id_unique():
+    """Add UNIQUE constraint on orders.erp_item_id if not present."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        # CREATE UNIQUE INDEX IF NOT EXISTS is idempotent and works even if column has no dupes
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS orders_erp_item_id_uidx
+            ON orders (erp_item_id)
+        """)
+        conn.commit()
+        conn.close()
+        print("[migrate] orders.erp_item_id unique index ensured")
+    except Exception as e:
+        print(f"[migrate] orders.erp_item_id unique: {e}")
+
+migrate_orders_erp_item_id_unique()
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
