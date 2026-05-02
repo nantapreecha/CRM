@@ -155,6 +155,29 @@ def migrate_orders_reset_and_fix():
 
 migrate_orders_reset_and_fix()
 
+def migrate_accounts_outlets_unique():
+    """Add missing UNIQUE indexes on accounts.name, outlets.erp_outlet_id, outlets(account_id,name)."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS accounts_name_uidx ON accounts (name)
+        """)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_uidx ON outlets (erp_outlet_id)
+            WHERE erp_outlet_id IS NOT NULL
+        """)
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS outlets_account_name_uidx ON outlets (account_id, name)
+        """)
+        conn.commit()
+        conn.close()
+        print("[migrate] accounts/outlets unique indexes ensured")
+    except Exception as e:
+        print(f"[migrate] accounts/outlets unique: {e}")
+
+migrate_accounts_outlets_unique()
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
