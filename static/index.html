@@ -417,11 +417,11 @@ function DateRangeFilter({ value, onChange }) {
       <input type="date" value={value.end} onChange={e=>onChange({...value,end:e.target.value})}
         style={{width:140,fontSize:13}}/>
       {[{l:'7 วัน',s:d7},{l:'30 วัน',s:d30}].map(({l,s})=>(
-        <button key={l} onClick={()=>onChange({start:s,end:today})}
+        <button type="button" key={l} onClick={()=>onChange({start:s,end:today})}
           style={{fontSize:12,padding:'4px 10px',border:'1px solid var(--border)',borderRadius:4,
             background:'#fff',cursor:'pointer',color:'var(--text)'}}>{l}</button>
       ))}
-      <button onClick={()=>onChange({start:'',end:''})}
+      <button type="button" onClick={()=>onChange({start:'',end:''})}
         style={{fontSize:12,color:'var(--text-muted)',background:'none',border:'none',cursor:'pointer'}}>All time</button>
     </div>
   );
