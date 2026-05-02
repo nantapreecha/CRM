@@ -649,6 +649,14 @@ def seed_tickets():
         opener_id   = u['id']   if u else None
         opener_name = u['username'] if u else 'admin'
 
+        # pull real invoice numbers from orders so Case/Invoice % works
+        cur.execute("""
+            SELECT DISTINCT invoice_number FROM orders
+            WHERE invoice_number IS NOT NULL AND invoice_number != ''
+            ORDER BY RANDOM() LIMIT 500
+        """)
+        real_invoices = [r['invoice_number'] for r in cur.fetchall()]
+
         created = 0
         for i in range(n):
             dt = now - timedelta(days=random.randint(0, days_back),
@@ -657,7 +665,8 @@ def seed_tickets():
             opener  = random.choice(teams)
             ctype   = random.choice(case_types)
             prio    = random.choice(priorities)
-            inv_no  = f'INV-SEED-{random.randint(10000,99999)}'
+            # ใช้ invoice จริงจาก orders (ถ้ามี) เพื่อให้ Case/Invoice % ทำงานได้
+            inv_no  = random.choice(real_invoices) if real_invoices else f'INV-SEED-{random.randint(10000,99999)}'
             sku     = random.choice(skus)
             product = random.choice(products)
             account = random.choice(accounts)
@@ -699,11 +708,13 @@ def seed_tickets():
                     VALUES (%s,%s,%s,'forwarded','ส่งต่อเพื่อตรวจสอบ',%s,%s)
                 """, (tid, opener, fwd_team, opener_name, fwd_dt))
 
-            # fault attribution for closed/pending_fault
+            # fault attribution for closed/pending_fault Claim/Complain tickets
             if status in ('closed','pending_fault') and ctype in ('Claim','Complain'):
                 if random.random() > 0.2:  # 80% have attribution
                     fat = random.choice(fault_teams)
                     fa_dt = (dt + timedelta(hours=random.randint(4,24))).strftime('%Y-%m-%dT%H:%M:%S')
+                    # อัปเดต tickets.fault_team ด้วย (ให้ Fault Team card ใน Overview มีข้อมูล)
+                    cur.execute("UPDATE tickets SET fault_team=%s WHERE id=%s", (fat, tid))
                     cur.execute("""
                         INSERT INTO ticket_fault_attribution
                         (ticket_id, fault_team, note, attributed_by, created_at)
