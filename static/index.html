@@ -1885,10 +1885,22 @@ function Users({ currentUser }) {
 
   const deleteUser = async (uid) => {
     if (deleteConfirm !== uid) { setDeleteConfirm(uid); return; }
-    const res = await api(`/api/users/${uid}`, { method: 'DELETE' });
-    setDeleteConfirm(null);
-    if (res.ok) load();
-    else setMsg(res.error || 'ลบไม่สำเร็จ');
+    try {
+      const token = localStorage.getItem('crm_token');
+      const r = await fetch(`/api/users/${uid}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+      });
+      const text = await r.text();
+      let data;
+      try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
+      setDeleteConfirm(null);
+      if (r.ok && data.ok) load();
+      else setMsg('ลบไม่สำเร็จ: ' + (data.error || r.status));
+    } catch(err) {
+      setDeleteConfirm(null);
+      setMsg('ลบไม่สำเร็จ: ' + err.message);
+    }
   };
 
   const load = () => {
