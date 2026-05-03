@@ -463,36 +463,57 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                   {String(d.date).slice(5)}
                 </text>
               ))}
-              {/* lines — วาดจากหลังไปหน้าเพื่อให้ hovered อยู่บนสุด */}
+              {/* Pass 1: hit areas + paths */}
               {[...lines].reverse().map((ln, rli)=>{
                 const li = lines.length - 1 - rli;
                 const isHovered = hoveredLine === li;
                 const isFaded = isHovering && !isHovered;
-                const showLabels = !isHovering || isHovered;
                 return (
-                  <g key={li} style={{cursor:'pointer'}}
-                    onMouseEnter={()=>setHoveredLine(li)}>
-                    {/* wider invisible hit area */}
+                  <g key={li} style={{cursor:'pointer'}} onMouseEnter={()=>setHoveredLine(li)}>
                     <path d={ln.pathD} fill="none" stroke="transparent" strokeWidth={12}/>
                     <path d={ln.pathD} fill="none" stroke={ln.color}
                       strokeWidth={isHovered ? ln.strokeW+1.5 : ln.strokeW}
                       opacity={isFaded ? 0.12 : 1}
-                      style={{transition:'opacity .2s, stroke-width .15s'}}/>
+                      style={{transition:'opacity .2s'}}/>
+                  </g>
+                );
+              })}
+              {/* Pass 2: circles */}
+              {[...lines].reverse().map((ln, rli)=>{
+                const li = lines.length - 1 - rli;
+                const isHovered = hoveredLine === li;
+                const isFaded = isHovering && !isHovered;
+                return (
+                  <g key={li} style={{cursor:'pointer'}} onMouseEnter={()=>setHoveredLine(li)}>
                     {ln.pts.map((p,i)=>(
-                      <g key={i}>
-                        <circle cx={p.x} cy={p.y} r={isHovered?(li===0?4.5:3.5):(li===0?3:2)}
-                          fill={ln.color} opacity={isFaded?0.12:1}
-                          style={{transition:'opacity .2s, r .15s'}}/>
-                        {showLabels && p.r > 0 && (
-                          <text x={p.x} y={p.y-6} textAnchor="middle"
-                            fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
-                            fill={ln.color} opacity={isFaded?0:1}
-                            style={{transition:'opacity .15s'}}>
-                            {p.r.toFixed(1)}%
-                          </text>
-                        )}
-                      </g>
+                      <circle key={i} cx={p.x} cy={p.y}
+                        r={isHovered?(li===0?4.5:3.5):(li===0?3:2)}
+                        fill={ln.color} opacity={isFaded?0.12:1}
+                        style={{transition:'opacity .2s'}}/>
                     ))}
+                  </g>
+                );
+              })}
+              {/* Pass 3: labels — always on top */}
+              {lines.map((ln, li)=>{
+                const isHovered = hoveredLine === li;
+                const isFaded = isHovering && !isHovered;
+                const showLabels = !isHovering || isHovered;
+                if (!showLabels) return null;
+                return (
+                  <g key={li}>
+                    {ln.pts.map((p,i)=> p.r > 0 ? (
+                      <g key={i}>
+                        <rect x={p.x-13} y={p.y-17} width={26} height={11} rx={2}
+                          fill="white" opacity={isFaded?0:0.85}/>
+                        <text x={p.x} y={p.y-8} textAnchor="middle"
+                          fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
+                          fill={ln.color} opacity={isFaded?0:1}
+                          style={{transition:'opacity .15s'}}>
+                          {p.r.toFixed(1)}%
+                        </text>
+                      </g>
+                    ) : null)}
                   </g>
                 );
               })}
