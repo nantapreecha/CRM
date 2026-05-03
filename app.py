@@ -571,7 +571,7 @@ def update_user(uid):
 @app.route('/api/users/<int:uid>', methods=['DELETE'])
 @require_admin
 def delete_user(uid):
-    if uid == g.user['id']:
+    if uid == g.user.get('id') or uid == g.user.get('user_id'):
         return jsonify({'error': 'ไม่สามารถลบตัวเองได้'}), 400
     conn = get_db()
     cur = conn.cursor()
@@ -1537,13 +1537,13 @@ def dashboard_aging():
     rows = query("""
         SELECT
             CASE
-                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 24 THEN '< 1 วัน'
-                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 72 THEN '1-3 วัน'
-                WHEN EXTRACT(EPOCH FROM (NOW() - created_at))/3600 < 168 THEN '3-7 วัน'
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at::timestamp))/3600 < 24 THEN '< 1 วัน'
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at::timestamp))/3600 < 72 THEN '1-3 วัน'
+                WHEN EXTRACT(EPOCH FROM (NOW() - created_at::timestamp))/3600 < 168 THEN '3-7 วัน'
                 ELSE '> 7 วัน'
             END AS bucket,
             COUNT(*) AS cnt,
-            MIN(EXTRACT(EPOCH FROM (NOW() - created_at))) AS min_age
+            MIN(EXTRACT(EPOCH FROM (NOW() - created_at::timestamp))) AS min_age
         FROM tickets
         WHERE status NOT IN ('closed')
         GROUP BY bucket ORDER BY min_age
