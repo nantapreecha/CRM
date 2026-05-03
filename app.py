@@ -1690,7 +1690,7 @@ def dashboard_fault_rate_trend():
     if not inv_rows:
         return jsonify([])
 
-    # Fault cases per date (link via invoice_number)
+    # Fault cases per date — overall
     fault_rows = query(f"""
         SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
                COUNT(DISTINCT t.id) AS fault_cnt
@@ -1702,18 +1702,50 @@ def dashboard_fault_rate_trend():
         GROUP BY dt ORDER BY dt
     """, date_params)
 
+    # Fault cases per date per team
+    team_rows = query(f"""
+        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+               COALESCE(t.fault_team, 'ยังไม่ระบุ') AS team,
+               COUNT(DISTINCT t.id) AS fault_cnt
+        FROM tickets t
+        JOIN orders o ON o.invoice_number = t.invoice_number
+        WHERE t.case_type IN ('Claim','Complain')
+          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
+          {date_extra}
+        GROUP BY dt, team ORDER BY dt
+    """, date_params)
+
+    # build maps
     fault_map = {r['dt']: int(r['fault_cnt']) for r in (fault_rows or [])}
+    team_map = {}  # team -> {dt -> cnt}
+    for r in (team_rows or []):
+        team = r['team']
+        if team not in team_map:
+            team_map[team] = {}
+        team_map[team][r['dt']] = int(r['fault_cnt'])
+
+    inv_map = {r['dt']: int(r['inv_cnt']) for r in inv_rows}
+    all_dates = [r['dt'] for r in inv_rows]
+
     result = []
     for r in inv_rows:
         dt = r['dt']
         inv = int(r['inv_cnt'])
         fault = fault_map.get(dt, 0)
-        result.append({
+        row = {
             'date': str(dt),
             'invoices': inv,
             'faults': fault,
-            'rate': round(fault / inv * 100, 2) if inv else 0
-        })
+            'rate': round(fault / inv * 100, 2) if inv else 0,
+            'by_team': {}
+        }
+        for team, dmap in team_map.items():
+            cnt = dmap.get(dt, 0)
+            row['by_team'][team] = {
+                'faults': cnt,
+                'rate': round(cnt / inv * 100, 2) if inv else 0
+            }
+        result.append(row)
     return jsonify(result)
 
 @app.route('/api/dashboard/fault-by-employee', methods=['GET'])
