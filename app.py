@@ -23,7 +23,7 @@ FAULT_TEAMS = TEAMS + ['Customer']
 CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล']
 CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
 ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ']
-PRIORITIES = ['Urgent', 'High', 'Medium', 'Low']
+PRIORITIES = ['High', 'Medium']
 
 # ---------------------------------------------------------------------------
 # DB helpers
