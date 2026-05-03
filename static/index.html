@@ -359,6 +359,27 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
   const [showDebug, setShowDebug] = useState(false);
   const [filterDebug, setFilterDebug] = useState('all'); // all | included | excluded
   const [hoveredLine, setHoveredLine] = useState(null); // index of hovered line
+  const [weeklyData, setWeeklyData]   = useState(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [hoveredBar, setHoveredBar]   = useState(null); // index of hovered weekly bar
+
+  // Load weekly trend whenever date range changes
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setWeeklyLoading(true);
+      const parts = ['group_by=week'];
+      if (start) parts.push('start=' + start);
+      if (end)   parts.push('end='   + end);
+      const d = await api('/api/dashboard/fault-rate-trend?' + parts.join('&'));
+      if (!cancelled) {
+        setWeeklyData(Array.isArray(d) ? d : []);
+        setWeeklyLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [start, end]);
 
   const loadDebug = async () => {
     if (debug) { setShowDebug(v => !v); return; }
@@ -534,6 +555,156 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       })() : (
         <div style={{fontSize:12,color:'var(--text-muted)'}}>ไม่มีข้อมูล trend (ต้องมีข้อมูลอย่างน้อย 2 วัน)</div>
       )}
+
+      {/* Weekly Stacked Bar Chart */}
+      {weeklyLoading ? (
+        <div className="card" style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:8}}>
+          <Spinner size={14}/> <span style={{fontSize:12,color:'var(--text-muted)'}}>กำลังโหลด weekly trend...</span>
+        </div>
+      ) : weeklyData && weeklyData.length > 0 ? (() => {
+        const W=1000, H=300, pad={t:28,b:52,l:48,r:20};
+        const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+        const n = weeklyData.length;
+        const maxRate = Math.max(...weeklyData.map(w=>w.rate), 1);
+        const barSlot = cw / n;
+        const barW = Math.min(barSlot * 0.72, 90);
+        const xOf = i => pad.l + (i + 0.5) * barSlot;
+        const yOf = r => pad.t + ch - (r / maxRate) * ch;
+
+        const TEAM_ORDER = ['CX','Sales/KAM','Sales Co','Merchandise','Inbound','Outbound','Customer','ยังไม่ระบุ'];
+        const allTeams = TEAM_ORDER.filter(t =>
+          weeklyData.some(w => (w.by_team?.[t]?.rate||0) > 0)
+        );
+
+        const weekLabel = (dateStr) => {
+          if (!dateStr) return '';
+          const d = new Date(dateStr + 'T00:00:00');
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          return `${months[d.getMonth()]} W${Math.ceil(d.getDate()/7)}`;
+        };
+
+        const rawStep = maxRate / 4;
+        const niceStep = rawStep <= 1 ? 1 : rawStep <= 2.5 ? 2.5 : rawStep <= 5 ? 5 : Math.ceil(rawStep/5)*5;
+        const yTicks = [];
+        for (let v = 0; v <= maxRate * 1.15; v += niceStep) yTicks.push(parseFloat(v.toFixed(2)));
+
+        return (
+          <div className="card" style={{padding:'16px 20px'}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>Fault Rate รายสัปดาห์ (แยกตามทีม)</div>
+            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:12}}>1 แท่ง = 1 สัปดาห์ (อา–ส) · hover ที่แท่งเพื่อดูสัดส่วนแต่ละทีม</div>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'default'}}
+              onMouseLeave={()=>setHoveredBar(null)}>
+
+              {/* grid lines + y-axis labels */}
+              {yTicks.map(v => {
+                const y = yOf(v);
+                if (y < pad.t - 2 || y > pad.t + ch + 2) return null;
+                return (
+                  <g key={v}>
+                    <line x1={pad.l} y1={y} x2={W-pad.r} y2={y} stroke="#f3f4f6" strokeWidth="1"/>
+                    <text x={pad.l-5} y={y+4} textAnchor="end" fontSize={9} fill="#9ca3af">{v}%</text>
+                  </g>
+                );
+              })}
+
+              {/* bars */}
+              {weeklyData.map((w, i) => {
+                const x = xOf(i);
+                let stackY = yOf(0);
+                const segments = [];
+                allTeams.forEach(team => {
+                  const data = w.by_team?.[team];
+                  if (!data || data.rate <= 0) return;
+                  const segH = (data.rate / maxRate) * ch;
+                  stackY -= segH;
+                  segments.push({ team, rate: data.rate, faults: data.faults, y: stackY, h: segH });
+                });
+                const isHovered = hoveredBar === i;
+
+                return (
+                  <g key={i} onMouseEnter={()=>setHoveredBar(i)} style={{cursor:'pointer'}}>
+                    {/* background track */}
+                    <rect x={x-barW/2} y={pad.t} width={barW} height={ch} fill="#f9fafb" rx="3"/>
+                    {/* stacked team segments */}
+                    {segments.map((s, si) => (
+                      <rect key={si} x={x-barW/2} y={s.y} width={barW} height={s.h}
+                        fill={LINE_COLORS[s.team]||'#9ca3af'}
+                        opacity={isHovered ? 1 : 0.82}
+                        rx={si===segments.length-1 ? 3 : 0}/>
+                    ))}
+                    {/* total % label above bar */}
+                    {w.rate > 0 && (
+                      <text x={x} y={yOf(w.rate)-5} textAnchor="middle" fontSize={10} fontWeight="700"
+                        fill="#111827" stroke="white" strokeWidth="2.5" paintOrder="stroke">
+                        {w.rate.toFixed(1)}%
+                      </text>
+                    )}
+                    {/* x-label: week */}
+                    <text x={x} y={H-32} textAnchor="middle" fontSize={9}
+                      fill={isHovered?'#111827':'#6b7280'} fontWeight={isHovered?'700':'400'}>
+                      {weekLabel(w.date)}
+                    </text>
+                    {/* x-label: invoice count */}
+                    <text x={x} y={H-18} textAnchor="middle" fontSize={8} fill="#9ca3af">
+                      {w.invoices} inv
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* SVG Tooltip */}
+              {hoveredBar !== null && (() => {
+                const w = weeklyData[hoveredBar];
+                const bx = xOf(hoveredBar);
+                const teams = allTeams
+                  .filter(t => (w.by_team?.[t]?.rate||0) > 0)
+                  .map(t => ({ team: t, ...w.by_team[t] }));
+                const TW = 195, lineH = 18;
+                const TH = 26 + teams.length * lineH + 8;
+                const tx = Math.max(pad.l+2, Math.min(bx - TW/2, W - pad.r - TW));
+                const ty = Math.max(pad.t+4, yOf(w.rate) - TH - 12);
+                return (
+                  <g style={{pointerEvents:'none'}}>
+                    {/* shadow rect */}
+                    <rect x={tx-1} y={ty-1} width={TW+2} height={TH+2} rx={6} fill="#0001"/>
+                    <rect x={tx} y={ty} width={TW} height={TH} rx={6} fill="white" stroke="#e5e7eb" strokeWidth="1"/>
+                    {/* header */}
+                    <text x={tx+10} y={ty+16} fontSize={10} fontWeight="700" fill="#111827">
+                      {weekLabel(w.date)} · รวม {w.rate.toFixed(1)}% ({w.faults}/{w.invoices})
+                    </text>
+                    {/* divider */}
+                    <line x1={tx+6} y1={ty+22} x2={tx+TW-6} y2={ty+22} stroke="#e5e7eb" strokeWidth="0.5"/>
+                    {/* per-team rows */}
+                    {teams.map((t, ti) => (
+                      <g key={t.team}>
+                        <rect x={tx+10} y={ty+28+ti*lineH} width={10} height={10} rx={2}
+                          fill={LINE_COLORS[t.team]||'#9ca3af'}/>
+                        <text x={tx+26} y={ty+37+ti*lineH} fontSize={9} fill="#374151">
+                          {t.team}:
+                        </text>
+                        <text x={tx+TW-10} y={ty+37+ti*lineH} textAnchor="end" fontSize={9} fontWeight="600" fill="#111827">
+                          {t.rate.toFixed(1)}% · {t.faults} เคส
+                        </text>
+                      </g>
+                    ))}
+                  </g>
+                );
+              })()}
+            </svg>
+            {/* Legend */}
+            <div style={{display:'flex',flexWrap:'wrap',gap:'6px 16px',marginTop:10}}>
+              {allTeams.map(team => (
+                <div key={team} style={{display:'flex',alignItems:'center',gap:5}}>
+                  <div style={{width:12,height:12,background:LINE_COLORS[team]||'#9ca3af',borderRadius:2}}/>
+                  <span style={{fontSize:11,color:'var(--text-muted)'}}>{team}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })() : weeklyData && weeklyData.length === 0 ? (
+        <div style={{fontSize:12,color:'var(--text-muted)',padding:'4px 0'}}>ไม่มีข้อมูล weekly trend ในช่วงที่เลือก</div>
+      ) : null}
 
       {/* Per-team bars — รวม ยังไม่ระบุ (สีเทา) */}
       {(teams||[]).length > 0 && (

@@ -1667,9 +1667,11 @@ def dashboard_case_invoice_debug():
 @app.route('/api/dashboard/fault-rate-trend', methods=['GET'])
 @require_auth
 def dashboard_fault_rate_trend():
-    """Fault rate trend by date — for Case/Invoice % chart."""
-    start = request.args.get('start', '')
-    end   = request.args.get('end', '')
+    """Fault rate trend by date or week — for Case/Invoice % chart."""
+    start    = request.args.get('start', '')
+    end      = request.args.get('end', '')
+    group_by = request.args.get('group_by', 'day')  # 'day' | 'week'
+
     date_extra = ''
     date_params = []
     if start:
@@ -1679,9 +1681,15 @@ def dashboard_fault_rate_trend():
         date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
         date_params.append(end)
 
-    # Invoices per date
+    # For weekly: group by Sun-Sat week (week_start = Sunday of that week)
+    if group_by == 'week':
+        dt_expr = "(COALESCE(o.delivery_date, o.doc_date) - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_date, o.doc_date)) AS INT))"
+    else:
+        dt_expr = "COALESCE(o.delivery_date, o.doc_date)"
+
+    # Invoices per period
     inv_rows = query(f"""
-        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+        SELECT {dt_expr} AS dt,
                COUNT(DISTINCT o.invoice_number) AS inv_cnt
         FROM orders o WHERE 1=1 {date_extra}
         GROUP BY dt ORDER BY dt
@@ -1690,9 +1698,9 @@ def dashboard_fault_rate_trend():
     if not inv_rows:
         return jsonify([])
 
-    # Fault cases per date — overall
+    # Fault cases per period — overall
     fault_rows = query(f"""
-        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+        SELECT {dt_expr} AS dt,
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
         JOIN orders o ON o.invoice_number = t.invoice_number
@@ -1702,9 +1710,9 @@ def dashboard_fault_rate_trend():
         GROUP BY dt ORDER BY dt
     """, date_params)
 
-    # Fault cases per date per team
+    # Fault cases per period per team
     team_rows = query(f"""
-        SELECT COALESCE(o.delivery_date, o.doc_date) AS dt,
+        SELECT {dt_expr} AS dt,
                COALESCE(t.fault_team, 'ยังไม่ระบุ') AS team,
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
@@ -1723,9 +1731,6 @@ def dashboard_fault_rate_trend():
         if team not in team_map:
             team_map[team] = {}
         team_map[team][r['dt']] = int(r['fault_cnt'])
-
-    inv_map = {r['dt']: int(r['inv_cnt']) for r in inv_rows}
-    all_dates = [r['dt'] for r in inv_rows]
 
     result = []
     for r in inv_rows:
