@@ -494,7 +494,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                   </g>
                 );
               })}
-              {/* Pass 3: labels — always on top */}
+              {/* Pass 3: labels — always on top, white halo via stroke */}
               {lines.map((ln, li)=>{
                 const isHovered = hoveredLine === li;
                 const isFaded = isHovering && !isHovered;
@@ -503,16 +503,13 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                 return (
                   <g key={li}>
                     {ln.pts.map((p,i)=> p.r > 0 ? (
-                      <g key={i}>
-                        <rect x={p.x-13} y={p.y-17} width={26} height={11} rx={2}
-                          fill="white" opacity={isFaded?0:0.85}/>
-                        <text x={p.x} y={p.y-8} textAnchor="middle"
-                          fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
-                          fill={ln.color} opacity={isFaded?0:1}
-                          style={{transition:'opacity .15s'}}>
-                          {p.r.toFixed(1)}%
-                        </text>
-                      </g>
+                      <text key={i} x={p.x} y={p.y-8} textAnchor="middle"
+                        fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
+                        fill={ln.color} opacity={isFaded?0:1}
+                        stroke="white" strokeWidth="3" paintOrder="stroke"
+                        style={{transition:'opacity .15s'}}>
+                        {p.r.toFixed(1)}%
+                      </text>
                     ) : null)}
                   </g>
                 );
