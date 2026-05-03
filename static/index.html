@@ -1203,16 +1203,6 @@ function CreateTicket({ user, onCreated }) {
             </div>
           </div>
 
-          {/* Claim subtype */}
-          {form.case_type === 'Claim' && (
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Claim Type *</label>
-              <select value={form.case_subtype} onChange={e=>set('case_subtype',e.target.value)} required>
-                <option value="">-- Select type --</option>
-                {CLAIM_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          )}
 
           {/* Root cause */}
           <div>
@@ -1318,10 +1308,10 @@ function CreateTicket({ user, onCreated }) {
             </div>
           )}
 
-          {/* Resolution type — for Claim only */}
+          {/* Claim Type — for Claim only */}
           {isClaim && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Resolution Type *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Claim Type *</label>
               <select value={form.resolution_type} onChange={e=>set('resolution_type',e.target.value)}>
                 <option value="">-- Select resolution --</option>
                 <option value="ส่งด่วน">🚚 ส่งด่วน (Express delivery)</option>
