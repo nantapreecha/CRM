@@ -358,6 +358,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
   const [loadingDebug, setLoadingDebug] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [filterDebug, setFilterDebug] = useState('all'); // all | included | excluded
+  const [hoveredLine, setHoveredLine] = useState(null); // index of hovered line
 
   const loadDebug = async () => {
     if (debug) { setShowDebug(v => !v); return; }
@@ -443,10 +444,12 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
         // y-axis labels
         const yTicks = [0, 25, 50, 75, 100].map(p=>({pct:p, y:yOf(maxR*p/100), val:(maxR*p/100).toFixed(1)+'%'}));
 
+        const isHovering = hoveredLine !== null;
         return (
           <div className="card" style={{padding:'16px 20px'}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:12}}>Fault Rate Trend</div>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:220,display:'block'}}>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:220,display:'block',cursor:'crosshair'}}
+              onMouseLeave={()=>setHoveredLine(null)}>
               {/* grid */}
               {yTicks.map(t=>(
                 <g key={t.pct}>
@@ -460,36 +463,51 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                   {String(d.date).slice(5)}
                 </text>
               ))}
-              {/* lines */}
-              {lines.map((ln,li)=>(
-                <g key={li}>
-                  <path d={ln.pathD} fill="none" stroke={ln.color} strokeWidth={ln.strokeW}
-                    strokeDasharray={ln.dashed?'4 3':undefined} opacity={li===0?1:0.75}/>
-                  {ln.pts.map((p,i)=>(
-                    <g key={i}>
-                      <circle cx={p.x} cy={p.y} r={li===0?3:2} fill={ln.color}/>
-                      {/* data label: แสดงเฉพาะจุดที่ rate > 0 และทุก step จุด หรือจุดสูงสุด */}
-                      {p.r > 0 && (i%step===0 || p.r===Math.max(...ln.pts.map(q=>q.r))) && (
-                        <text x={p.x} y={p.y-5} textAnchor="middle" fontSize={7}
-                          fontWeight={li===0?'600':'400'} fill={ln.color}>
-                          {p.r.toFixed(1)}%
-                        </text>
-                      )}
-                    </g>
-                  ))}
-                </g>
-              ))}
+              {/* lines — วาดจากหลังไปหน้าเพื่อให้ hovered อยู่บนสุด */}
+              {[...lines].reverse().map((ln, rli)=>{
+                const li = lines.length - 1 - rli;
+                const isHovered = hoveredLine === li;
+                const isFaded = isHovering && !isHovered;
+                const showLabels = !isHovering || isHovered;
+                return (
+                  <g key={li} style={{cursor:'pointer'}}
+                    onMouseEnter={()=>setHoveredLine(li)}>
+                    {/* wider invisible hit area */}
+                    <path d={ln.pathD} fill="none" stroke="transparent" strokeWidth={12}/>
+                    <path d={ln.pathD} fill="none" stroke={ln.color}
+                      strokeWidth={isHovered ? ln.strokeW+1.5 : ln.strokeW}
+                      opacity={isFaded ? 0.12 : 1}
+                      style={{transition:'opacity .2s, stroke-width .15s'}}/>
+                    {ln.pts.map((p,i)=>(
+                      <g key={i}>
+                        <circle cx={p.x} cy={p.y} r={isHovered?(li===0?4.5:3.5):(li===0?3:2)}
+                          fill={ln.color} opacity={isFaded?0.12:1}
+                          style={{transition:'opacity .2s, r .15s'}}/>
+                        {showLabels && p.r > 0 && (i%step===0 || p.r===Math.max(...ln.pts.map(q=>q.r))) && (
+                          <text x={p.x} y={p.y-6} textAnchor="middle"
+                            fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
+                            fill={ln.color} opacity={isFaded?0:1}
+                            style={{transition:'opacity .15s'}}>
+                            {p.r.toFixed(1)}%
+                          </text>
+                        )}
+                      </g>
+                    ))}
+                  </g>
+                );
+              })}
             </svg>
-            {/* Legend */}
-            <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:8}}>
-              <div style={{display:'flex',alignItems:'center',gap:5}}>
-                <div style={{width:20,height:2.5,background:TOTAL_COLOR,borderRadius:2}}/>
-                <span style={{fontSize:11,color:'var(--text)',fontWeight:600}}>รวมทุกทีม</span>
-              </div>
-              {trendTeams.map(team=>(
-                <div key={team} style={{display:'flex',alignItems:'center',gap:5}}>
-                  <div style={{width:16,height:2,background:LINE_COLORS[team]||'#94a3b8',borderRadius:2}}/>
-                  <span style={{fontSize:11,color:'var(--text-muted)'}}>{team}</span>
+            {/* Legend — hover to highlight */}
+            <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:10}}>
+              {lines.map((ln,li)=>(
+                <div key={li} style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',
+                  opacity: isHovering&&hoveredLine!==li ? 0.3 : 1, transition:'opacity .2s'}}
+                  onMouseEnter={()=>setHoveredLine(li)}
+                  onMouseLeave={()=>setHoveredLine(null)}>
+                  <div style={{width: li===0?22:16, height: li===0?3:2, background:ln.color, borderRadius:2}}/>
+                  <span style={{fontSize:11,color:li===0?'var(--text)':'var(--text-muted)',fontWeight:li===0?600:400}}>
+                    {li===0 ? 'รวมทุกทีม' : trendTeams[li-1]}
+                  </span>
                 </div>
               ))}
             </div>
