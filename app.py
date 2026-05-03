@@ -1595,6 +1595,75 @@ def dashboard_case_invoice_ratio():
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
     return jsonify({'total_invoices': total_invoices, 'teams': teams})
 
+@app.route('/api/dashboard/case-invoice-debug', methods=['GET'])
+@require_auth
+def dashboard_case_invoice_debug():
+    """Show why tickets are excluded from Case/Invoice % calculation."""
+    extra, params = date_filter_sql()
+    start = request.args.get('start', '')
+    end   = request.args.get('end', '')
+    date_extra = ''
+    date_params = []
+    if start:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_params.append(start)
+    if end:
+        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_params.append(end)
+
+    # ดึง tickets ทั้งหมดในช่วงเวลา (จาก created_at เหมือน Overview)
+    tickets_all = query(f"""
+        SELECT t.id, t.ticket_no, t.case_type, t.invoice_number,
+               t.created_at, t.status
+        FROM tickets t WHERE 1=1 {extra}
+        ORDER BY t.created_at DESC
+    """, params)
+
+    result = []
+    for t in (tickets_all or []):
+        reason = None
+        included = False
+        inv = t['invoice_number']
+
+        if t['case_type'] not in ('Claim', 'Complain'):
+            reason = f"ประเภท '{t['case_type']}' ไม่ใช่ Claim/Complain"
+        elif not inv or inv.strip() == '':
+            reason = 'ไม่มี Invoice Number'
+        else:
+            # check invoice exists in orders
+            in_orders = query(
+                "SELECT 1 FROM orders WHERE invoice_number=%s LIMIT 1", (inv,), one=True)
+            if not in_orders:
+                reason = f'Invoice {inv} ไม่มีในระบบ Orders'
+            else:
+                # check delivery_date in range
+                if date_extra:
+                    in_range = query(
+                        f"SELECT 1 FROM orders o WHERE o.invoice_number=%s {date_extra} LIMIT 1",
+                        [inv] + date_params, one=True)
+                    if not in_range:
+                        reason = f'Invoice {inv} อยู่นอกช่วงวันที่ที่เลือก (delivery_date ไม่ตรง)'
+                    else:
+                        included = True
+                        reason = '✓ นับใน Case/Invoice %'
+                else:
+                    included = True
+                    reason = '✓ นับใน Case/Invoice %'
+
+        result.append({
+            'ticket_no': t['ticket_no'],
+            'case_type': t['case_type'],
+            'invoice_number': inv or '-',
+            'created_at': t['created_at'],
+            'status': t['status'],
+            'included': included,
+            'reason': reason,
+        })
+
+    total = len(result)
+    included_count = sum(1 for r in result if r['included'])
+    return jsonify({'total': total, 'included': included_count, 'rows': result})
+
 @app.route('/api/dashboard/fault-rate-trend', methods=['GET'])
 @require_auth
 def dashboard_fault_rate_trend():

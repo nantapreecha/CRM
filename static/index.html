@@ -353,7 +353,22 @@ function StackedBar({ teams, totalInvoices }) {
   );
 }
 
-function CaseInvoicePanel({ ratio, faultTrend }) {
+function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
+  const [debug, setDebug] = useState(null);
+  const [loadingDebug, setLoadingDebug] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [filterDebug, setFilterDebug] = useState('all'); // all | included | excluded
+
+  const loadDebug = async () => {
+    if (debug) { setShowDebug(v => !v); return; }
+    setLoadingDebug(true);
+    const qs = [start && `start=${start}`, end && `end=${end}`].filter(Boolean).join('&');
+    const d = await api(`/api/dashboard/case-invoice-debug${qs ? '?'+qs : ''}`);
+    setDebug(d);
+    setLoadingDebug(false);
+    setShowDebug(true);
+  };
+
   if (!ratio || !ratio.total_invoices) return (
     <p style={{color:'var(--text-muted)',fontSize:13,padding:'8px 0'}}>
       ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก — กรุณา Import ERP ก่อน)
@@ -462,6 +477,81 @@ function CaseInvoicePanel({ ratio, faultTrend }) {
           </div>
         </div>
       )}
+
+      {/* Debug: ทำไมเคสถึงไม่ขึ้น */}
+      <div className="card" style={{padding:'14px 16px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom: showDebug ? 12 : 0}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>🔍 วิเคราะห์เคสทั้งหมด — ทำไมถึงนับ/ไม่นับใน Case/Invoice %</div>
+          <button className="btn btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={loadDebug} disabled={loadingDebug}>
+            {loadingDebug ? <Spinner size={12}/> : showDebug ? 'ซ่อน' : 'ดูรายละเอียด'}
+          </button>
+        </div>
+        {showDebug && debug && (() => {
+          const rows = debug.rows || [];
+          const filtered = filterDebug === 'included' ? rows.filter(r=>r.included)
+                         : filterDebug === 'excluded' ? rows.filter(r=>!r.included)
+                         : rows;
+          // summary by reason
+          const reasonMap = {};
+          rows.forEach(r => { reasonMap[r.reason] = (reasonMap[r.reason]||0)+1; });
+          return (
+            <div>
+              {/* summary chips */}
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+                {Object.entries(reasonMap).sort((a,b)=>b[1]-a[1]).map(([reason, cnt])=>(
+                  <span key={reason} style={{
+                    fontSize:11,padding:'3px 8px',borderRadius:20,
+                    background: reason.startsWith('✓') ? '#d1fae5' : '#fee2e2',
+                    color: reason.startsWith('✓') ? '#065f46' : '#991b1b',
+                    border: '1px solid ' + (reason.startsWith('✓') ? '#a7f3d0' : '#fca5a5')
+                  }}>{reason}: {cnt} เคส</span>
+                ))}
+              </div>
+              {/* filter tabs */}
+              <div style={{display:'flex',gap:6,marginBottom:10}}>
+                {[['all','ทั้งหมด ('+rows.length+')'],['included','นับแล้ว ('+debug.included+')'],['excluded','ไม่นับ ('+(rows.length-debug.included)+')']].map(([v,l])=>(
+                  <button key={v} onClick={()=>setFilterDebug(v)}
+                    style={{fontSize:11,padding:'3px 10px',borderRadius:4,border:'1px solid var(--border)',
+                      background: filterDebug===v?'#111827':'#fff', color: filterDebug===v?'#fff':'var(--text)', cursor:'pointer'}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {/* table */}
+              <div style={{overflowX:'auto',maxHeight:360,overflowY:'auto'}}>
+                <table style={{width:'100%',fontSize:11,borderCollapse:'collapse'}}>
+                  <thead style={{position:'sticky',top:0,background:'#f9fafb'}}>
+                    <tr style={{color:'var(--text-muted)',textAlign:'left'}}>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Ticket</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>ประเภท</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Invoice</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>วันที่เปิด</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>เหตุผล</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r,i)=>(
+                      <tr key={i} style={{background: i%2===0?'#fff':'#fafafa'}}>
+                        <td style={{padding:'5px 8px',fontFamily:'monospace',color:'#6b7280'}}>{r.ticket_no}</td>
+                        <td style={{padding:'5px 8px'}}>{r.case_type}</td>
+                        <td style={{padding:'5px 8px',fontFamily:'monospace',fontSize:10}}>{r.invoice_number}</td>
+                        <td style={{padding:'5px 8px',color:'#6b7280'}}>{r.created_at?.slice(0,10)}</td>
+                        <td style={{padding:'5px 8px'}}>
+                          <span style={{
+                            padding:'2px 7px',borderRadius:20,fontSize:10,
+                            background: r.included ? '#d1fae5' : '#fff7ed',
+                            color: r.included ? '#065f46' : '#9a3412'
+                          }}>{r.reason}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
@@ -843,7 +933,7 @@ function Dashboard() {
 
       {tab === 'ratio' && (
         <div>
-          <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend}/>
+          <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend} start={dateRange.start} end={dateRange.end}/>
         </div>
       )}
     </div>
