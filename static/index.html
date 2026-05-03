@@ -789,7 +789,6 @@ function Dashboard() {
 
   const tabs = [
     {id:'overview', label:'Overview'},
-    {id:'trend', label:'Trend'},
     {id:'aging', label:'Aging'},
     {id:'ratio', label:'Case/Invoice %'},
     {id:'bottleneck', label:'Bottleneck'},
@@ -1018,7 +1017,7 @@ function Dashboard() {
         </div>
       )}
 
-      {tab === 'trend' && (
+      {false && tab === 'trend' && (
         <div className="card overflow-hidden">
           <div className="card-header">จำนวนเคสต่อวัน</div>
           <div className="p-4">
