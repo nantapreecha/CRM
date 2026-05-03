@@ -758,7 +758,48 @@ function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Case Type</h3>
-            <BarChart data={overview.by_case_type} labelKey="case_type" valueKey="cnt" color="#0d9488"/>
+            {(() => {
+              const FAULT_TYPES = ['Complain','Claim'];
+              const all = overview.by_case_type || [];
+              const fault = all.filter(d => FAULT_TYPES.includes(d.case_type));
+              const service = all.filter(d => !FAULT_TYPES.includes(d.case_type));
+              const faultTotal = fault.reduce((s,d)=>s+d.cnt,0);
+              const serviceTotal = service.reduce((s,d)=>s+d.cnt,0);
+              const max = Math.max(...all.map(d=>d.cnt), 1);
+              const Bar = ({d, color}) => (
+                <div className="flex items-center gap-3">
+                  <div className="w-32 text-sm text-gray-600 truncate shrink-0">{d.case_type}</div>
+                  <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{width:Math.round(d.cnt/max*100)+'%',background:color}}/>
+                  </div>
+                  <div className="text-sm text-gray-600 w-8 text-right shrink-0">{d.cnt}</div>
+                </div>
+              );
+              return (
+                <div className="space-y-3">
+                  {fault.length > 0 && (
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:'#0d9488',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                        Fault Cases — {faultTotal}
+                      </div>
+                      <div className="space-y-2">
+                        {fault.map((d,i)=><Bar key={i} d={d} color="#0d9488"/>)}
+                      </div>
+                    </div>
+                  )}
+                  {service.length > 0 && (
+                    <div style={{paddingTop: fault.length>0?8:0, borderTop: fault.length>0?'1px solid #f3f4f6':'none'}}>
+                      <div style={{fontSize:11,fontWeight:600,color:'#9ca3af',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                        Service Requests — {serviceTotal}
+                      </div>
+                      <div className="space-y-2">
+                        {service.map((d,i)=><Bar key={i} d={d} color="#d1d5db"/>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Fault Team</h3>
