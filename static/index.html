@@ -483,7 +483,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                         <circle cx={p.x} cy={p.y} r={isHovered?(li===0?4.5:3.5):(li===0?3:2)}
                           fill={ln.color} opacity={isFaded?0.12:1}
                           style={{transition:'opacity .2s, r .15s'}}/>
-                        {showLabels && p.r > 0 && (i%step===0 || p.r===Math.max(...ln.pts.map(q=>q.r))) && (
+                        {showLabels && p.r > 0 && (
                           <text x={p.x} y={p.y-6} textAnchor="middle"
                             fontSize={isHovered?8:7} fontWeight={li===0||isHovered?'700':'400'}
                             fill={ln.color} opacity={isFaded?0:1}
