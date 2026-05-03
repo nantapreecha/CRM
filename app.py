@@ -1683,7 +1683,7 @@ def dashboard_fault_rate_trend():
 
     # For weekly: group by Sun-Sat week (week_start = Sunday of that week)
     if group_by == 'week':
-        dt_expr = "(COALESCE(o.delivery_date, o.doc_date) - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_date, o.doc_date)) AS INT))"
+        dt_expr = "(COALESCE(o.delivery_date, o.doc_date)::date - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_date, o.doc_date)::date) AS INT))"
     else:
         dt_expr = "COALESCE(o.delivery_date, o.doc_date)"
 

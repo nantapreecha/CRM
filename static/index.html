@@ -368,13 +368,16 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
     let cancelled = false;
     const load = async () => {
       setWeeklyLoading(true);
-      const parts = ['group_by=week'];
-      if (start) parts.push('start=' + start);
-      if (end)   parts.push('end='   + end);
-      const d = await api('/api/dashboard/fault-rate-trend?' + parts.join('&'));
-      if (!cancelled) {
-        setWeeklyData(Array.isArray(d) ? d : []);
-        setWeeklyLoading(false);
+      try {
+        const parts = ['group_by=week'];
+        if (start) parts.push('start=' + start);
+        if (end)   parts.push('end='   + end);
+        const d = await api('/api/dashboard/fault-rate-trend?' + parts.join('&'));
+        if (!cancelled) setWeeklyData(Array.isArray(d) ? d : []);
+      } catch(e) {
+        if (!cancelled) setWeeklyData([]);
+      } finally {
+        if (!cancelled) setWeeklyLoading(false);
       }
     };
     load();
