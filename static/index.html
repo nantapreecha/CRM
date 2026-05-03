@@ -417,7 +417,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
 
       {/* Multi-line Trend Chart */}
       {hasT ? (() => {
-        const W=700, H=220, pad={t:16,b:32,l:42,r:16};
+        const W=1000, H=260, pad={t:16,b:32,l:42,r:16};
         const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
         const n = faultTrend.length;
         const allRates = [
@@ -448,7 +448,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
         return (
           <div className="card" style={{padding:'16px 20px'}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:12}}>Fault Rate Trend</div>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:220,display:'block',cursor:'crosshair'}}
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}}
               onMouseLeave={()=>setHoveredLine(null)}>
               {/* grid */}
               {yTicks.map(t=>(
