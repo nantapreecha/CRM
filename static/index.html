@@ -133,7 +133,7 @@ const TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outboun
 const FAULT_TEAMS = [...TEAMS, 'Customer'];
 const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล'];
 const CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)'];
-const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ'];
+const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'อื่นๆ'];
 const PRIORITIES = ['High', 'Medium'];
 
 const TEAM_ICONS = {
@@ -1038,6 +1038,35 @@ function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Team Backlog — เคสค้างแต่ละทีม */}
+        {overview.by_team_backlog && overview.by_team_backlog.length > 0 && (
+          <div className="card p-4">
+            <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:14}}>
+              <h3 className="font-semibold text-gray-700">🔄 เคสค้างแต่ละทีม</h3>
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>เรียงจากมากไปน้อย · ไม่นับเคสที่ปิดแล้ว</span>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {overview.by_team_backlog.map((r, i) => {
+                const maxCnt = overview.by_team_backlog[0].cnt;
+                const pct = maxCnt ? (r.cnt / maxCnt * 100) : 0;
+                const color = TEAM_COLORS[r.team] || '#6b7280';
+                return (
+                  <div key={r.team} style={{display:'flex',alignItems:'center',gap:10}}>
+                    <div style={{width:20,fontSize:11,color:'#9ca3af',textAlign:'right',flexShrink:0}}>#{i+1}</div>
+                    <div style={{width:110,fontSize:13,fontWeight:500,color:'var(--text)',flexShrink:0}}>
+                      {TEAM_ICONS[r.team]||''} {r.team}
+                    </div>
+                    <div style={{flex:1,height:20,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
+                      <div style={{width:pct+'%',height:'100%',background:color,borderRadius:4,transition:'width .4s'}}/>
+                    </div>
+                    <div style={{width:36,fontSize:14,fontWeight:700,color,textAlign:'right',flexShrink:0}}>{r.cnt}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Bar charts row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -22,7 +22,7 @@ TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound']
 FAULT_TEAMS = TEAMS + ['Customer']
 CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล']
 CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
-ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'เอกสารผิดพลาด', 'อื่นๆ']
+ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'อื่นๆ']
 PRIORITIES = ['High', 'Medium']
 
 # ---------------------------------------------------------------------------
@@ -1423,6 +1423,18 @@ def dashboard_overview():
     by_root = query(f"SELECT root_cause, COUNT(*) AS cnt FROM tickets t WHERE root_cause IS NOT NULL AND root_cause!='' {extra} GROUP BY root_cause ORDER BY cnt DESC", params)
     by_priority = query(f"SELECT priority, COUNT(*) AS cnt FROM tickets t WHERE 1=1 {extra} GROUP BY priority", params)
     by_opener = query(f"SELECT opener_team, COUNT(*) AS count FROM tickets t WHERE opener_team IS NOT NULL {extra} GROUP BY opener_team ORDER BY count DESC", params)
+    # เคสที่ยังค้างอยู่กับแต่ละทีม (ไม่นับ closed)
+    by_backlog = query(f"""
+        SELECT t.current_team AS team, COUNT(*) AS cnt
+        FROM tickets t
+        WHERE t.status NOT IN ('closed')
+          AND t.current_team IS NOT NULL
+          AND t.current_team != ''
+          AND t.current_team != 'pending_ack'
+          {extra}
+        GROUP BY t.current_team
+        ORDER BY cnt DESC
+    """, params)
     status_map = {r['status']: r['cnt'] for r in by_status}
     return jsonify({
         'total': total['cnt'] if total else 0,
@@ -1436,6 +1448,7 @@ def dashboard_overview():
         'by_root_cause': by_root,
         'by_priority': by_priority,
         'by_opener_team': by_opener,
+        'by_team_backlog': by_backlog,
     })
 
 @app.route('/api/dashboard/sku-problems', methods=['GET'])
