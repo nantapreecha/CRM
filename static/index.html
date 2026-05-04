@@ -1337,7 +1337,9 @@ function CreateTicket({ user, onCreated }) {
     case_type: 'Complain', case_subtype: '', root_cause: '', priority: 'Medium',
     outlet_id: '', description: '', initial_teams: [], resolution_type: ''
   });
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState([]);
+  const addFormImg    = url => setImageUrls(u => [...u, url]);
+  const removeFormImg = i   => setImageUrls(u => u.filter((_, j) => j !== i));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -1393,7 +1395,7 @@ function CreateTicket({ user, onCreated }) {
     setSaving(true); setMsg('');
     const payload = {
       ...form,
-      image_url: imageUrl,
+      image_url: serializeImages(imageUrls),
       invoice_number: selectedInvoice || null,
       claim_items: claimItems.length > 0 ? JSON.stringify(claimItems) : null,
     };
@@ -1555,13 +1557,7 @@ function CreateTicket({ user, onCreated }) {
           {/* Image */}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Attach file</label>
-            {imageUrl
-              ? <div className="flex items-center gap-3">
-                  <FilePreview url={imageUrl} className="w-20 h-20 object-cover"/>
-                  <button type="button" className="btn btn-secondary text-xs" onClick={()=>setImageUrl('')}>Remove</button>
-                </div>
-              : <ImageUploader onUploaded={url=>setImageUrl(url)}/>
-            }
+            <ImageUploader urls={imageUrls} onAdd={addFormImg} onRemove={removeFormImg}/>
           </div>
         </div>
 
