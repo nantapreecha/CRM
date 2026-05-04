@@ -969,6 +969,26 @@ def update_employee(eid):
          d.get('email',''), d.get('status','active'), eid))
     return jsonify({'ok': True})
 
+@app.route('/api/employees/<int:eid>', methods=['DELETE'])
+@require_auth
+def delete_employee(eid):
+    emp = query("SELECT id, name FROM employees WHERE id=%s", (eid,), one=True)
+    if not emp:
+        return jsonify({'error': 'ไม่พบพนักงานนี้'}), 404
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE ticket_fault_attribution SET employee_id=NULL WHERE employee_id=%s", (eid,))
+        cur.execute("UPDATE ticket_assignments SET employee_id=NULL WHERE employee_id=%s", (eid,))
+        cur.execute("DELETE FROM employees WHERE id=%s", (eid,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+    return jsonify({'ok': True})
+
 # ---------------------------------------------------------------------------
 # Tickets
 # ---------------------------------------------------------------------------
@@ -1239,8 +1259,9 @@ def close_ticket(tid):
                (fault_team, now, now, tid))
     else:
         new_status = 'pending_fault'
-        mutate("""UPDATE tickets SET status='pending_fault', fault_team=%s, closed_at=%s WHERE id=%s""",
-               (fault_team, now, tid))
+        # ตั้ง current_team=fault_team ด้วย เพื่อให้ fault team มองเห็นเคสใน My Team
+        mutate("""UPDATE tickets SET status='pending_fault', fault_team=%s, current_team=%s, closed_at=%s WHERE id=%s""",
+               (fault_team, fault_team, now, tid))
 
     mutate("""INSERT INTO ticket_workflow_log
         (ticket_id, from_team, to_team, action, note, user_id, created_by)
@@ -1289,8 +1310,8 @@ def add_ticket_note(tid):
     d = request.json
     note = (d.get('note') or '').strip()
     image_url = d.get('image_url', '')
-    if not note:
-        return jsonify({'error': 'กรุณาใส่ข้อความก่อน'}), 400
+    if not note and not image_url:
+        return jsonify({'error': 'กรุณาใส่ข้อความหรือแนบไฟล์ก่อน'}), 400
     ticket = query("SELECT id FROM tickets WHERE id=%s", (tid,), one=True)
     if not ticket:
         return jsonify({'error': 'Not found'}), 404
