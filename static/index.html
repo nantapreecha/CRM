@@ -2887,6 +2887,22 @@ const STAGE_COLORS = {
   'Closed Lost':     { bg:'#fef2f2', border:'#ef4444', text:'#991b1b', dot:'#ef4444' },
 };
 
+class PipelineErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{padding:32,textAlign:'center',color:'#ef4444'}}>
+        <p className="font-semibold mb-2">Pipeline Error</p>
+        <pre style={{fontSize:12,textAlign:'left',background:'#fef2f2',padding:12,borderRadius:8,overflow:'auto'}}>
+          {String(this.state.error)}
+        </pre>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 function StageBadge({ stage }) {
   const c = STAGE_COLORS[stage] || { bg:'#f3f4f6', border:'#9ca3af', text:'#374151', dot:'#9ca3af' };
   return (
@@ -2899,8 +2915,8 @@ function StageBadge({ stage }) {
 }
 
 function AddActivityModal({ leadId, onClose, onSaved }) {
-  const [form, setForm] = React.useState({ activity_type:'call', subject:'', description:'' });
-  const [saving, setSaving] = React.useState(false);
+  const [form, setForm] = useState({ activity_type:'call', subject:'', description:'' });
+  const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const typeIcon = { call:'📞', email:'✉️', meeting:'📅', note:'📝' };
   const submit = async e => {
@@ -2941,11 +2957,11 @@ function AddActivityModal({ leadId, onClose, onSaved }) {
 }
 
 function ConvertModal({ lead, onClose, onConverted }) {
-  const [accounts, setAccounts] = React.useState([]);
-  const [search, setSearch] = React.useState('');
-  const [selected, setSelected] = React.useState(null);
-  const [saving, setSaving] = React.useState(false);
-  React.useEffect(()=>{ api('/api/accounts').then(d=>setAccounts(d||[])); },[]);
+  const [accounts, setAccounts] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(()=>{ api('/api/accounts').then(d=>setAccounts(d||[])); },[]);
   const filtered = accounts.filter(a=>a.name.toLowerCase().includes(search.toLowerCase()));
   const confirm = async (accountId) => {
     setSaving(true);
@@ -2982,21 +2998,21 @@ function ConvertModal({ lead, onClose, onConverted }) {
 }
 
 function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
-  const [lead, setLead] = React.useState(initLead);
-  const [activities, setActivities] = React.useState([]);
-  const [users, setUsers] = React.useState([]);
-  const [editing, setEditing] = React.useState(false);
-  const [form, setForm] = React.useState({});
-  const [showAddActivity, setShowAddActivity] = React.useState(false);
-  const [showConvert, setShowConvert] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
+  const [lead, setLead] = useState(initLead);
+  const [activities, setActivities] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({});
+  const [showAddActivity, setShowAddActivity] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
+  const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const typeIcon = { call:'📞', email:'✉️', meeting:'📅', note:'📝' };
 
   const reload = () => api(`/api/leads/${lead.id}`).then(d=>{ if(d&&d.id) setLead(d); });
   const reloadAct = () => api(`/api/leads/${lead.id}/activities`).then(d=>setActivities(d||[]));
 
-  React.useEffect(()=>{
+  useEffect(()=>{
     reloadAct();
     api('/api/users').then(d=>setUsers(d||[]));
   },[lead.id]);
@@ -3133,14 +3149,14 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
 }
 
 function Pipeline({ user }) {
-  const [leads, setLeads] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [view, setView] = React.useState('kanban'); // 'kanban' | 'list'
-  const [filterStage, setFilterStage] = React.useState('');
-  const [filterOwner, setFilterOwner] = React.useState('');
-  const [users, setUsers] = React.useState([]);
-  const [selectedLead, setSelectedLead] = React.useState(null);
-  const [showCreate, setShowCreate] = React.useState(false);
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('kanban'); // 'kanban' | 'list'
+  const [filterStage, setFilterStage] = useState('');
+  const [filterOwner, setFilterOwner] = useState('');
+  const [users, setUsers] = useState([]);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const reload = () => {
     setLoading(true);
@@ -3150,8 +3166,8 @@ function Pipeline({ user }) {
     api('/api/leads?' + params).then(d=>{ setLeads(d||[]); setLoading(false); });
   };
 
-  React.useEffect(()=>{ api('/api/users').then(d=>setUsers(d||[])); },[]);
-  React.useEffect(()=>{ reload(); }, [filterStage, filterOwner]);
+  useEffect(()=>{ api('/api/users').then(d=>setUsers(d||[])); },[]);
+  useEffect(()=>{ reload(); }, [filterStage, filterOwner]);
 
   if (selectedLead) return <LeadDetail lead={selectedLead} user={user} onBack={()=>setSelectedLead(null)} onUpdated={reload}/>;
 
@@ -3276,11 +3292,11 @@ function ListView({ leads, onSelect }) {
 }
 
 function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
-  const [form, setForm] = React.useState({
+  const [form, setForm] = useState({
     company_name:'', contact_name:'', contact_phone:'', contact_email:'',
     stage:'Cold Call/Email', owner_user_id: currentUser.id, description:''
   });
-  const [saving, setSaving] = React.useState(false);
+  const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const submit = async e => {
     e.preventDefault(); setSaving(true);
@@ -3383,7 +3399,7 @@ function App() {
     if (creating) return <CreateTicket user={user} onCreated={id=>{ setCreating(false); setSelectedTicket(id); }}/>;
     switch(page) {
       case 'dashboard': return <Dashboard/>;
-      case 'pipeline': return <Pipeline user={user}/>;
+      case 'pipeline': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'Name'},{key:'supplier_type',label:'Type'},{key:'contact_person',label:'Contact'},{key:'phone',label:'Phone'}]}/>;
