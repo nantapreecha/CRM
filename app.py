@@ -407,6 +407,36 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
     created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)
 );
+
+CREATE TABLE IF NOT EXISTS leads (
+    id SERIAL PRIMARY KEY,
+    lead_no TEXT UNIQUE,
+    company_name TEXT NOT NULL,
+    contact_name TEXT,
+    contact_phone TEXT,
+    contact_email TEXT,
+    stage TEXT DEFAULT 'Cold Call/Email',
+    owner_user_id INTEGER,
+    description TEXT,
+    created_by TEXT,
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    updated_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    converted_at TEXT,
+    converted_account_id INTEGER,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id),
+    FOREIGN KEY (converted_account_id) REFERENCES accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS lead_activities (
+    id SERIAL PRIMARY KEY,
+    lead_id INTEGER NOT NULL,
+    activity_type TEXT NOT NULL,
+    subject TEXT,
+    description TEXT,
+    created_by TEXT,
+    created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')),
+    FOREIGN KEY (lead_id) REFERENCES leads(id)
+);
 """
 
 def init_db():
@@ -446,6 +476,8 @@ def init_db():
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claim_items TEXT",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
         "ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS image_url TEXT",
+        # leads sequence for lead_no
+        "CREATE SEQUENCE IF NOT EXISTS leads_lead_no_seq START 1",
     ]
     for m in migrations:
         try:
@@ -2109,6 +2141,135 @@ def debug_complain_no_invoice():
         ORDER BY t.created_at DESC
     """)
     return jsonify(rows)
+
+# ---------------------------------------------------------------------------
+# Pipeline / Leads
+# ---------------------------------------------------------------------------
+
+LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost']
+
+def next_lead_no(cur):
+    cur.execute("SELECT lead_no FROM leads ORDER BY id DESC LIMIT 1")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return 'LD-0001'
+    try:
+        num = int(row[0].split('-')[1]) + 1
+    except Exception:
+        num = 1
+    return f'LD-{num:04d}'
+
+@app.route('/api/leads', methods=['GET'])
+@require_auth
+def get_leads():
+    stage  = request.args.get('stage')
+    owner  = request.args.get('owner_user_id')
+    wheres = []
+    params = []
+    if stage:
+        wheres.append("l.stage = %s"); params.append(stage)
+    if owner:
+        wheres.append("l.owner_user_id = %s"); params.append(owner)
+    where_sql = ('WHERE ' + ' AND '.join(wheres)) if wheres else ''
+    rows = query(f"""
+        SELECT l.*, u.display_name AS owner_name,
+               a.name AS converted_account_name
+        FROM leads l
+        LEFT JOIN users u ON u.id = l.owner_user_id
+        LEFT JOIN accounts a ON a.id = l.converted_account_id
+        {where_sql}
+        ORDER BY l.created_at DESC
+    """, params)
+    return jsonify(rows)
+
+@app.route('/api/leads', methods=['POST'])
+@require_auth
+def create_lead():
+    d = request.json
+    conn = get_db()
+    cur  = conn.cursor(cursor_factory=RealDictCursor)
+    lead_no = next_lead_no(cur)
+    cur.execute("""
+        INSERT INTO leads (lead_no, company_name, contact_name, contact_phone,
+                           contact_email, stage, owner_user_id, description, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+    """, (lead_no, d['company_name'], d.get('contact_name'), d.get('contact_phone'),
+          d.get('contact_email'), d.get('stage','Cold Call/Email'),
+          d.get('owner_user_id'), d.get('description'), g.user['display_name']))
+    new_id = cur.fetchone()['id']
+    conn.commit()
+    return jsonify({'id': new_id, 'lead_no': lead_no}), 201
+
+@app.route('/api/leads/<int:lid>', methods=['GET'])
+@require_auth
+def get_lead(lid):
+    row = query("""
+        SELECT l.*, u.display_name AS owner_name,
+               a.name AS converted_account_name
+        FROM leads l
+        LEFT JOIN users u ON u.id = l.owner_user_id
+        LEFT JOIN accounts a ON a.id = l.converted_account_id
+        WHERE l.id = %s
+    """, (lid,), one=True)
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(row)
+
+@app.route('/api/leads/<int:lid>', methods=['PUT'])
+@require_auth
+def update_lead(lid):
+    d = request.json
+    now = 'to_char(now(), \'YYYY-MM-DD"T"HH24:MI:SS\')'
+    mutate(f"""
+        UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
+            contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
+            updated_at=({now})
+        WHERE id=%s
+    """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
+          d.get('contact_email'), d.get('stage'), d.get('owner_user_id'),
+          d.get('description'), lid))
+    return jsonify({'ok': True})
+
+@app.route('/api/leads/<int:lid>', methods=['DELETE'])
+@require_auth
+def delete_lead(lid):
+    mutate("DELETE FROM lead_activities WHERE lead_id=%s", (lid,))
+    mutate("DELETE FROM leads WHERE id=%s", (lid,))
+    return jsonify({'ok': True})
+
+@app.route('/api/leads/<int:lid>/convert', methods=['POST'])
+@require_auth
+def convert_lead(lid):
+    d = request.json  # { account_id: int|null }
+    account_id = d.get('account_id') or None
+    now_expr = "to_char(now(), 'YYYY-MM-DD\"T\"HH24:MI:SS')"
+    mutate(f"""
+        UPDATE leads SET stage='Closed Win', converted_at=({now_expr}),
+            converted_account_id=%s, updated_at=({now_expr})
+        WHERE id=%s
+    """, (account_id, lid))
+    return jsonify({'ok': True})
+
+@app.route('/api/leads/<int:lid>/activities', methods=['GET'])
+@require_auth
+def get_lead_activities(lid):
+    rows = query("""
+        SELECT * FROM lead_activities WHERE lead_id=%s ORDER BY created_at DESC
+    """, (lid,))
+    return jsonify(rows)
+
+@app.route('/api/leads/<int:lid>/activities', methods=['POST'])
+@require_auth
+def add_lead_activity(lid):
+    d = request.json
+    mutate("""
+        INSERT INTO lead_activities (lead_id, activity_type, subject, description, created_by)
+        VALUES (%s,%s,%s,%s,%s)
+    """, (lid, d['activity_type'], d.get('subject'), d.get('description'),
+          g.user['display_name']))
+    # bump updated_at on lead
+    mutate("UPDATE leads SET updated_at=to_char(now(),'YYYY-MM-DD\"T\"HH24:MI:SS') WHERE id=%s", (lid,))
+    return jsonify({'ok': True}), 201
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
