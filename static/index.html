@@ -3163,7 +3163,7 @@ function Pipeline({ user }) {
     const params = new URLSearchParams();
     if (filterStage) params.append('stage', filterStage);
     if (filterOwner) params.append('owner_user_id', filterOwner);
-    api('/api/leads?' + params).then(d=>{ setLeads(d||[]); setLoading(false); });
+    api('/api/leads?' + params).then(d=>{ setLeads(Array.isArray(d)?d:[]); setLoading(false); }).catch(()=>setLoading(false));
   };
 
   useEffect(()=>{ api('/api/users').then(d=>setUsers(d||[])); },[]);
