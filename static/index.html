@@ -1716,7 +1716,7 @@ function TicketList({ user, onSelect }) {
       </div>
 
       {/* Status tabs */}
-      <div className="flex border-b mb-4 overflow-x-auto">
+      <div className="flex border-b mb-3 overflow-x-auto">
         {STATUS_TABS.map(tab => {
           const cnt = allCounts[tab.key] || 0;
           return (
@@ -1731,6 +1731,30 @@ function TicketList({ user, onSelect }) {
         })}
       </div>
 
+      {/* Case Type filter pills */}
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {[{key:'',label:'ทุกประเภท'}, ...CASE_TYPES.map(t=>({key:t,label:t}))].map(({key,label}) => {
+          const cnt = key === ''
+            ? filteredForCount.length
+            : filteredForCount.filter(t => t.case_type === key).length;
+          const active = typeFilter === key;
+          return (
+            <button key={key} onClick={()=>setTypeFilter(key)}
+              style={{
+                fontSize:12, padding:'4px 12px', borderRadius:20, cursor:'pointer',
+                border: active ? '1.5px solid #111827' : '1.5px solid #e5e7eb',
+                background: active ? '#111827' : '#fff',
+                color: active ? '#fff' : '#374151',
+                fontWeight: active ? 600 : 400,
+                transition: 'all .15s',
+              }}>
+              {label}
+              {cnt > 0 && <span style={{marginLeft:5,opacity:.7}}>{cnt}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filter bar */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="flex-1 min-w-48 relative">
@@ -1739,10 +1763,6 @@ function TicketList({ user, onSelect }) {
             placeholder="ค้นหา outlet, description, case #..."
             style={{paddingLeft:32}}/>
         </div>
-        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} style={{width:'auto'}}>
-          <option value="">All types</option>
-          {CASE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
         <div className="flex items-center gap-1">
           <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
             style={{width:140}} title="จากวันที่"/>
