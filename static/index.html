@@ -2356,7 +2356,7 @@ function Users({ currentUser }) {
     const path = editId ? `/api/users/${editId}` : '/api/users';
     const res = await api(path, { method, body: JSON.stringify(form) });
     setSaving(false);
-    if (res && (res.id || res.success)) {
+    if (res && (res.id || res.success || res.ok)) {
       setForm({ username:'', display_name:'', password:'', team:'CX', role:'user' });
       setEditId(null); load();
     } else setMsg(res?.error || 'An error occurred');
