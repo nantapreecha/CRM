@@ -3441,16 +3441,22 @@ function ListView({ leads, user, onSelect, onReassigned, users }) {
 }
 
 function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
+  const myId = currentUser.id || currentUser.user_id;
+  const isAdmin = currentUser.role === 'admin';
   const [form, setForm] = useState({
     company_name:'', contact_name:'', contact_phone:'', contact_email:'',
-    stage:'Cold Call/Email', owner_user_id: currentUser.id, description:''
+    stage:'Cold Call/Email', owner_user_id: myId, description:''
   });
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const submit = async e => {
-    e.preventDefault(); setSaving(true);
-    await api('/api/leads', { method:'POST', body: JSON.stringify(form) });
-    setSaving(false); onCreated();
+    e.preventDefault(); setSaving(true); setErr('');
+    try {
+      const res = await api('/api/leads', { method:'POST', body: JSON.stringify(form) });
+      if (res && res.id) { onCreated(); }
+      else { setErr(res?.error || 'เกิดข้อผิดพลาด'); setSaving(false); }
+    } catch(e) { setErr('เกิดข้อผิดพลาด กรุณาลองใหม่'); setSaving(false); }
   };
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -3487,16 +3493,20 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Owner</label>
-              <select value={form.owner_user_id} onChange={e=>set('owner_user_id',e.target.value)} className="w-full">
-                <option value="">— ไม่ระบุ —</option>
-                {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
-              </select>
+              {isAdmin
+                ? <select value={form.owner_user_id} onChange={e=>set('owner_user_id',e.target.value)} className="w-full">
+                    <option value="">— ไม่ระบุ —</option>
+                    {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
+                  </select>
+                : <input value={currentUser.display_name||currentUser.username} disabled style={{background:'#f9fafb',color:'#6b7280'}}/>
+              }
             </div>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">หมายเหตุ</label>
             <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full" placeholder="รายละเอียดเพิ่มเติม..."/>
           </div>
+          {err && <div style={{color:'#dc2626',fontSize:12,background:'#fef2f2',padding:'8px 12px',borderRadius:6}}>{err}</div>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving}>{saving?<Spinner/>:'Create Lead'}</button>
