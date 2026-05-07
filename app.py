@@ -2,7 +2,7 @@ import os
 import json
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 from functools import wraps
@@ -2151,10 +2151,11 @@ LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed 
 def next_lead_no(cur):
     cur.execute("SELECT lead_no FROM leads ORDER BY id DESC LIMIT 1")
     row = cur.fetchone()
-    if not row or not row[0]:
+    lead_no_val = row['lead_no'] if row else None
+    if not lead_no_val:
         return 'LD-0001'
     try:
-        num = int(row[0].split('-')[1]) + 1
+        num = int(lead_no_val.split('-')[1]) + 1
     except Exception:
         num = 1
     return f'LD-{num:04d}'
@@ -2276,6 +2277,64 @@ def add_lead_activity(lid):
     # bump updated_at on lead
     mutate("UPDATE leads SET updated_at=to_char(now(),'YYYY-MM-DD\"T\"HH24:MI:SS') WHERE id=%s", (lid,))
     return jsonify({'ok': True}), 201
+
+@app.route('/api/sales-dashboard', methods=['GET'])
+@require_auth
+def sales_dashboard():
+    period     = request.args.get('period', '30d')
+    start_date = request.args.get('start_date', '')
+    end_date   = request.args.get('end_date', '')
+
+    now = datetime.now()
+    if period == '7d':
+        since = (now - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
+        until = now.strftime('%Y-%m-%dT23:59:59')
+    elif period == 'custom' and start_date and end_date:
+        since = start_date + 'T00:00:00'
+        until = end_date + 'T23:59:59'
+    else:
+        since = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00')
+        until = now.strftime('%Y-%m-%dT23:59:59')
+
+    week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
+    is_sales = g.user['role'] == 'sales'
+    uid      = g.user['user_id']
+
+    own = " AND owner_user_id=%s"
+
+    total = query(
+        "SELECT COUNT(*) AS cnt FROM leads" + (" WHERE owner_user_id=%s" if is_sales else ""),
+        ([uid] if is_sales else []), one=True)
+
+    by_stage = query(
+        "SELECT stage, COUNT(*) AS cnt FROM leads" +
+        (" WHERE owner_user_id=%s" if is_sales else "") +
+        " GROUP BY stage",
+        ([uid] if is_sales else []))
+
+    wins = query(
+        "SELECT COUNT(*) AS cnt FROM leads WHERE stage='Closed Win' AND updated_at>=%s AND updated_at<=%s" +
+        (own if is_sales else ""),
+        ([since, until, uid] if is_sales else [since, until]), one=True)
+
+    if is_sales:
+        acts = query(
+            "SELECT COUNT(*) AS cnt FROM lead_activities la"
+            " JOIN leads l ON l.id=la.lead_id"
+            " WHERE la.created_at>=%s AND l.owner_user_id=%s",
+            [week_ago, uid], one=True)
+    else:
+        acts = query(
+            "SELECT COUNT(*) AS cnt FROM lead_activities WHERE created_at>=%s",
+            [week_ago], one=True)
+
+    return jsonify({
+        'total_leads':    total['cnt']   if total else 0,
+        'by_stage':       by_stage,
+        'closed_wins':    wins['cnt']    if wins  else 0,
+        'activities_week': acts['cnt']   if acts  else 0,
+        'period': period, 'since': since, 'until': until,
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

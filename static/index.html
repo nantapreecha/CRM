@@ -3518,6 +3518,113 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
   );
 }
 
+// ── Sales Dashboard ───────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, color }) {
+  return (
+    <div className="card" style={{padding:'18px 20px'}}>
+      <div style={{fontSize:11,color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:8}}>{label}</div>
+      <div style={{fontSize:30,fontWeight:700,color,lineHeight:1,marginBottom:4}}>{value}</div>
+      <div style={{fontSize:11,color:'#9ca3af'}}>{sub}</div>
+    </div>
+  );
+}
+
+function SalesDashboard({ user }) {
+  const [period, setPeriod]       = useState('30d');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate]     = useState('');
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    if (period === 'custom' && (!startDate || !endDate)) return;
+    setLoading(true);
+    const p = new URLSearchParams({ period });
+    if (period === 'custom') { p.append('start_date', startDate); p.append('end_date', endDate); }
+    api('/api/sales-dashboard?' + p)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [period, startDate, endDate]);
+
+  const STAGE_ORDER = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost'];
+  const byStage = (data?.by_stage || []).slice().sort((a,b) =>
+    STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
+  const total   = data?.total_leads || 0;
+  const periodLabel = period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
+
+  return (
+    <div style={{padding:24,overflowY:'auto',height:'100%'}}>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:12}}>
+        <div>
+          <h1 style={{fontSize:20,fontWeight:700,color:'#111827',margin:0}}>Sales Dashboard</h1>
+          <p style={{fontSize:13,color:'#6b7280',marginTop:3}}>
+            {user.role==='admin' ? 'ข้อมูลทั้งทีม' : `ข้อมูลของคุณ — ${user.display_name}`}
+          </p>
+        </div>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          {[['7d','7 วัน'],['30d','30 วัน'],['custom','กำหนดเอง']].map(([v,l])=>(
+            <button key={v} onClick={()=>setPeriod(v)}
+              style={{padding:'5px 14px',fontSize:12,borderRadius:6,border:'1px solid',cursor:'pointer',
+                background:period===v?'#111827':'#fff', color:period===v?'#fff':'#6b7280',
+                borderColor:period===v?'#111827':'#e5e7eb'}}>
+              {l}
+            </button>
+          ))}
+          {period==='custom' && (
+            <>
+              <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}
+                style={{fontSize:12,padding:'4px 8px',border:'1px solid #e5e7eb',borderRadius:6,width:130}}/>
+              <span style={{fontSize:12,color:'#9ca3af'}}>–</span>
+              <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)}
+                style={{fontSize:12,padding:'4px 8px',border:'1px solid #e5e7eb',borderRadius:6,width:130}}/>
+            </>
+          )}
+        </div>
+      </div>
+
+      {loading ? <div style={{display:'flex',justifyContent:'center',padding:48}}><Spinner/></div> : (
+        <>
+          {/* Stat Cards */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
+            <StatCard label="Total Leads" value={total} sub="ทั้งหมด" color="#3b82f6"/>
+            <StatCard label="Closed Win" value={data?.closed_wins||0} sub={periodLabel} color="#22c55e"/>
+            <StatCard label="Activities" value={data?.activities_week||0} sub="7 วันที่ผ่านมา" color="#f59e0b"/>
+            <StatCard label="Win Rate" value={total>0?Math.round((data?.closed_wins||0)/total*100)+'%':'—'} sub="Closed Win / Total" color="#8b5cf6"/>
+          </div>
+
+          {/* Leads by Stage */}
+          <div className="card" style={{padding:20}}>
+            <div style={{fontWeight:600,fontSize:14,color:'#111827',marginBottom:16}}>Leads by Stage</div>
+            {byStage.length === 0
+              ? <p style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>ยังไม่มีข้อมูล</p>
+              : <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                  {byStage.map(s => {
+                    const c   = STAGE_COLORS[s.stage] || {bg:'#f3f4f6',border:'#9ca3af',text:'#374151'};
+                    const pct = total > 0 ? Math.round(s.cnt/total*100) : 0;
+                    return (
+                      <div key={s.stage}>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}>
+                          <span style={{color:c.text,fontWeight:500}}>{s.stage}</span>
+                          <span style={{color:'#374151',fontWeight:600}}>
+                            {s.cnt} <span style={{color:'#9ca3af',fontWeight:400}}>({pct}%)</span>
+                          </span>
+                        </div>
+                        <div style={{height:8,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
+                          <div style={{height:'100%',background:c.border,borderRadius:4,width:pct+'%',transition:'width .4s'}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+            }
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(null);
@@ -3577,7 +3684,7 @@ function App() {
   const navItems = moduleChoice === 'leads'
     ? [
         { id:'leads', label:'Leads', icon:'trending-up' },
-        { id:'dashboard', label:'Dashboard', icon:'grid' },
+        { id:'sales-dashboard', label:'Dashboard', icon:'grid' },
       ]
     : [
         { id:'dashboard', label:'Dashboard', icon:'grid' },
@@ -3594,6 +3701,7 @@ function App() {
     if (creating) return <CreateTicket user={user} onCreated={id=>{ setCreating(false); setSelectedTicket(id); }}/>;
     switch(page) {
       case 'dashboard': return <Dashboard/>;
+      case 'sales-dashboard': return <SalesDashboard user={user}/>;
       case 'leads': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
