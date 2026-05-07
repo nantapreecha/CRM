@@ -443,25 +443,31 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # Create all tables
+    # Create all tables — commit immediately so migrations can't roll these back
     for stmt in SCHEMA_BASE.strip().split(';'):
         stmt = stmt.strip()
         if stmt:
             cur.execute(stmt)
 
     # Outlets unique constraint
-    cur.execute("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'outlets_account_id_name_key'
-            ) THEN
-                ALTER TABLE outlets ADD CONSTRAINT outlets_account_id_name_key UNIQUE (account_id, name);
-            END IF;
-        END$$;
-    """)
+    try:
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'outlets_account_id_name_key'
+                ) THEN
+                    ALTER TABLE outlets ADD CONSTRAINT outlets_account_id_name_key UNIQUE (account_id, name);
+                END IF;
+            END$$;
+        """)
+    except Exception as e:
+        conn.rollback()
+        print(f"[init_db] outlets constraint: {e}")
 
-    # Migrate tickets table — add new columns if not exist
+    conn.commit()  # commit table creation before running migrations
+
+    # Migrations — each runs in its own transaction
     migrations = [
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS case_subtype TEXT",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS root_cause TEXT",
@@ -476,12 +482,12 @@ def init_db():
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claim_items TEXT",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
         "ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS image_url TEXT",
-        # leads sequence for lead_no
         "CREATE SEQUENCE IF NOT EXISTS leads_lead_no_seq START 1",
     ]
     for m in migrations:
         try:
             cur.execute(m)
+            conn.commit()
         except Exception:
             conn.rollback()
 
