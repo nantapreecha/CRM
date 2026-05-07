@@ -1670,11 +1670,10 @@ function TicketList({ user, onSelect }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // filter in frontend
-  const filtered = allTickets.filter(t => {
-    if (statusFilter && t.status !== statusFilter) return false;
+  // base filter: date + search only (no statusFilter, no typeFilter)
+  const baseFiltered = allTickets.filter(t => {
     if (dateFrom && t.created_at && t.created_at.slice(0,10) < dateFrom) return false;
-    if (dateTo && t.created_at && t.created_at.slice(0,10) > dateTo) return false;
+    if (dateTo   && t.created_at && t.created_at.slice(0,10) > dateTo)   return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!(t.description||'').toLowerCase().includes(q)
@@ -1686,25 +1685,28 @@ function TicketList({ user, onSelect }) {
     return true;
   });
 
-  // counts respect date+search+type filter but NOT statusFilter (so all tabs show their own count)
-  const filteredForCount = allTickets.filter(t => {
-    if (dateFrom && t.created_at && t.created_at.slice(0,10) < dateFrom) return false;
-    if (dateTo && t.created_at && t.created_at.slice(0,10) > dateTo) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      if (!(t.description||'').toLowerCase().includes(q)
-        && !(t.outlet_name||'').toLowerCase().includes(q)
-        && !(t.account_name||'').toLowerCase().includes(q)
-        && !(t.ticket_no||'').toLowerCase().includes(q)
-        && !String(t.id).includes(q)) return false;
-    }
+  // actual displayed list: base + both filters
+  const filtered = baseFiltered.filter(t => {
+    if (statusFilter && t.status    !== statusFilter) return false;
+    if (typeFilter   && t.case_type !== typeFilter)   return false;
     return true;
   });
-  const allCounts = filteredForCount.reduce((acc, t) => {
+
+  // status tab counts: base + typeFilter (so tabs reflect selected case type)
+  const forStatusCount = typeFilter
+    ? baseFiltered.filter(t => t.case_type === typeFilter)
+    : baseFiltered;
+  const allCounts = forStatusCount.reduce((acc, t) => {
     acc[t.status] = (acc[t.status]||0)+1;
     acc[''] = (acc['']||0)+1;
     return acc;
   }, {});
+
+  // case type pill counts: base + statusFilter (so pills reflect selected status)
+  const forTypeCount = statusFilter
+    ? baseFiltered.filter(t => t.status === statusFilter)
+    : baseFiltered;
+  // (used inline in the pill render below)
 
 
   return (
@@ -1735,8 +1737,8 @@ function TicketList({ user, onSelect }) {
       <div className="flex gap-2 mb-3 flex-wrap">
         {[{key:'',label:'ทุกประเภท'}, ...CASE_TYPES.map(t=>({key:t,label:t}))].map(({key,label}) => {
           const cnt = key === ''
-            ? filteredForCount.length
-            : filteredForCount.filter(t => t.case_type === key).length;
+            ? forTypeCount.length
+            : forTypeCount.filter(t => t.case_type === key).length;
           const active = typeFilter === key;
           return (
             <button key={key} onClick={()=>setTypeFilter(key)}
