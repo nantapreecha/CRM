@@ -2193,19 +2193,24 @@ def get_leads():
 def create_lead():
     d = request.json
     conn = get_db()
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    lead_no = next_lead_no(cur)
-    cur.execute("""
-        INSERT INTO leads (lead_no, company_name, contact_name, contact_phone,
-                           contact_email, stage, owner_user_id, description, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-    """, (lead_no, d['company_name'], d.get('contact_name'), d.get('contact_phone'),
-          d.get('contact_email'), d.get('stage','Cold Call/Email'),
-          d.get('owner_user_id'), d.get('description'), g.user['display_name']))
-    new_id = cur.fetchone()['id']
-    conn.commit()
-    conn.close()
-    return jsonify({'id': new_id, 'lead_no': lead_no}), 201
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        lead_no = next_lead_no(cur)
+        cur.execute("""
+            INSERT INTO leads (lead_no, company_name, contact_name, contact_phone,
+                               contact_email, stage, owner_user_id, description, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (lead_no, d['company_name'], d.get('contact_name'), d.get('contact_phone'),
+              d.get('contact_email'), d.get('stage', 'Cold Call/Email'),
+              d.get('owner_user_id') or None, d.get('description'), g.user['display_name']))
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        conn.close()
+        return jsonify({'id': new_id, 'lead_no': lead_no}), 201
+    except Exception as e:
+        conn.rollback(); conn.close()
+        print(f"[create_lead] error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/leads/<int:lid>', methods=['GET'])
 @require_auth
