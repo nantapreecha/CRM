@@ -484,6 +484,7 @@ def init_db():
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
         "ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS image_url TEXT",
         "CREATE SEQUENCE IF NOT EXISTS leads_lead_no_seq START 1",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_from_stage TEXT",
     ]
     for m in migrations:
         try:
@@ -2238,16 +2239,43 @@ def get_lead(lid):
 @require_auth
 def update_lead(lid):
     d = request.json
-    now = 'to_char(now(), \'YYYY-MM-DD"T"HH24:MI:SS\')'
-    mutate(f"""
-        UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
-            contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
-            updated_at=({now})
-        WHERE id=%s
-    """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
-          d.get('contact_email'), d.get('stage'), d.get('owner_user_id'),
-          d.get('description'), lid))
-    return jsonify({'ok': True})
+    new_stage = d.get('stage')
+    conn = get_db()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        # Capture lost_from_stage when transitioning to Closed Lost
+        lost_from = None
+        if new_stage == 'Closed Lost':
+            cur.execute("SELECT stage FROM leads WHERE id=%s", (lid,))
+            row = cur.fetchone()
+            if row and row['stage'] not in ('Closed Lost', 'Closed Win'):
+                lost_from = row['stage']
+        now = "to_char(now(),'YYYY-MM-DD\"T\"HH24:MI:SS')"
+        if lost_from is not None:
+            cur.execute(f"""
+                UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
+                    contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
+                    lost_from_stage=%s, updated_at=({now})
+                WHERE id=%s
+            """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
+                  d.get('contact_email'), new_stage, d.get('owner_user_id'),
+                  d.get('description'), lost_from, lid))
+        else:
+            cur.execute(f"""
+                UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
+                    contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
+                    updated_at=({now})
+                WHERE id=%s
+            """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
+                  d.get('contact_email'), new_stage, d.get('owner_user_id'),
+                  d.get('description'), lid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/leads/<int:lid>', methods=['DELETE'])
 @require_auth

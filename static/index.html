@@ -3112,7 +3112,9 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
   const [showConvert, setShowConvert] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
-  const typeIcon = { call:'📞', email:'✉️', meeting:'📅', note:'📝' };
+  const typeIcon  = { call:'📞', email:'✉️', meeting:'📅', note:'📝' };
+  const typeColor = { call:'#2563eb', email:'#7c3aed', meeting:'#16a34a', note:'#d97706' };
+  const typeLabel = { call:'Call', email:'Email', meeting:'Meeting', note:'Note' };
 
   const reload = () => api(`/api/leads/${lead.id}`).then(d=>{ if(d&&d.id) setLead(d); });
   const reloadAct = () => api(`/api/leads/${lead.id}/activities`).then(d=>setActivities(d||[]));
@@ -3212,6 +3214,12 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
             <div><span className="text-gray-400">Owner:</span> <span className="text-gray-700 font-medium">{lead.owner_name||'-'}</span></div>
             <div><span className="text-gray-400">สร้างเมื่อ:</span> <span className="text-gray-700">{fmt(lead.created_at)}</span></div>
             {lead.converted_at && <div><span className="text-gray-400">Converted:</span> <span className="text-gray-700">{fmt(lead.converted_at)}</span></div>}
+            {isLost && lead.lost_from_stage && (
+              <div className="col-span-2">
+                <span className="text-gray-400">Lost ที่ stage:</span>{' '}
+                <span className="font-semibold text-red-600">{lead.lost_from_stage}</span>
+              </div>
+            )}
           </div>
           {lead.description && <p className="mt-3 text-sm text-gray-600 border-t pt-3">{lead.description}</p>}
           {isWon && lead.converted_account_id && (
@@ -3234,19 +3242,31 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
           <button onClick={()=>setShowAddActivity(true)} className="btn btn-primary" style={{fontSize:12,padding:'4px 12px'}}>+ Add Activity</button>
         </div>
         {activities.length === 0 && <p className="text-sm text-gray-400 text-center py-4">ยังไม่มี activity</p>}
-        <div className="space-y-3">
-          {activities.map(a=>(
-            <div key={a.id} style={{ display:'flex', gap:12, paddingBottom:12, borderBottom:'1px solid #f3f4f6' }}>
-              <div style={{ fontSize:18, minWidth:24 }}>{typeIcon[a.activity_type]||'📌'}</div>
-              <div className="flex-1">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-gray-800">{a.subject||a.activity_type}</span>
-                  <span className="text-xs text-gray-400">{fmt(a.created_at)} · {a.created_by}</span>
+        <div className="space-y-1">
+          {activities.map((a, i) => {
+            const color = typeColor[a.activity_type] || '#9ca3af';
+            return (
+              <div key={a.id} className="flex gap-3 relative">
+                {i < activities.length - 1 && <div className="timeline-line"/>}
+                <div className="tl-dot" style={{background: color+'22', border:`2px solid ${color}`}}>
+                  <span style={{fontSize:13}}>{typeIcon[a.activity_type]||'📌'}</span>
                 </div>
-                {a.description && <p className="text-sm text-gray-500 mt-0.5">{a.description}</p>}
+                <div className="flex-1 pb-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm" style={{color}}>{typeLabel[a.activity_type]||a.activity_type}</span>
+                    {a.subject && <span className="font-medium text-sm text-gray-800">{a.subject}</span>}
+                    <span className="text-xs text-gray-400 ml-auto">{fmt(a.created_at)}</span>
+                    {a.created_by && <span className="text-xs text-gray-400">· {a.created_by}</span>}
+                  </div>
+                  {a.description && (
+                    <div className="mt-1.5 text-sm text-gray-700 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                      {a.description}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -3354,7 +3374,14 @@ function KanbanView({ leads, user, onSelect, onStageChange, users }) {
                         <div style={{ fontWeight:500, color:'#1f2937', fontSize:13 }}>{lead.company_name}</div>
                         {untouched && <span style={{ fontSize:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'1px 5px', fontWeight:700, whiteSpace:'nowrap', marginLeft:4, flexShrink:0 }}>🔴 Untouched</span>}
                       </div>
-                      {lead.contact_name && <div style={{ fontSize:11, color:'#9ca3af', marginBottom:6 }}>{lead.contact_name}</div>}
+                      {lead.contact_name && <div style={{ fontSize:11, color:'#9ca3af', marginBottom:4 }}>{lead.contact_name}</div>}
+                      {stage === 'Closed Lost' && lead.lost_from_stage && (
+                        <div style={{ marginBottom:6 }}>
+                          <span style={{ fontSize:10, background:'#fef2f2', color:'#991b1b', border:'1px solid #fca5a5', borderRadius:4, padding:'1px 6px' }}>
+                            Lost @ {lead.lost_from_stage}
+                          </span>
+                        </div>
+                      )}
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
                         <span style={{ fontSize:11, color:'#6b7280' }}>{lead.owner_name||'—'}</span>
                         <span style={{ fontSize:11, color: untouched?'#dc2626':'#9ca3af' }}>{lastActivityLabel(lead)}</span>
@@ -3421,7 +3448,12 @@ function ListView({ leads, user, onSelect, onReassigned, users }) {
                     </div>
                   </td>
                   <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.contact_name||'-'}</td>
-                  <td style={{ padding:'10px 16px' }}><StageBadge stage={l.stage}/></td>
+                  <td style={{ padding:'10px 16px' }}>
+                    <StageBadge stage={l.stage}/>
+                    {l.stage === 'Closed Lost' && l.lost_from_stage && (
+                      <div style={{ fontSize:10, color:'#991b1b', marginTop:2 }}>@ {l.lost_from_stage}</div>
+                    )}
+                  </td>
                   <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.owner_name||'-'}</td>
                   <td style={{ padding:'10px 16px', fontSize:12, color: untouched?'#dc2626':'#9ca3af' }}>{lastActivityLabel(l)}</td>
                   {isAdmin && <td onClick={e=>e.stopPropagation()} style={{ padding:'6px 16px' }}>
