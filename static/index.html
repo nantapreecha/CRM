@@ -2971,7 +2971,7 @@ function ReassignModal({ lead, users, onClose, onReassigned }) {
         <p style={{fontSize:13,color:'#6b7280',marginBottom:14}}><strong>{lead.company_name}</strong> — เปลี่ยน owner ใหม่</p>
         <select value={newOwner} onChange={e=>setNewOwner(e.target.value)} style={{width:'100%',marginBottom:16}}>
           <option value="">— เลือก owner —</option>
-          {users.map(u=><option key={u.id} value={String(u.id)}>{u.display_name}</option>)}
+          {users.filter(u=>u.role==='sales'||u.role==='admin').map(u=><option key={u.id} value={String(u.id)}>{u.display_name}</option>)}
         </select>
         <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -3443,6 +3443,7 @@ function ListView({ leads, user, onSelect, onReassigned, users }) {
 function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
   const myId = currentUser.id || currentUser.user_id;
   const isAdmin = currentUser.role === 'admin';
+  const salesUsers = users.filter(u => u.role === 'sales' || u.role === 'admin');
   const [form, setForm] = useState({
     company_name:'', contact_name:'', contact_phone:'', contact_email:'',
     stage:'Cold Call/Email', owner_user_id: myId, description:''
@@ -3496,7 +3497,7 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
               {isAdmin
                 ? <select value={form.owner_user_id} onChange={e=>set('owner_user_id',e.target.value)} className="w-full">
                     <option value="">— ไม่ระบุ —</option>
-                    {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
+                    {salesUsers.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
                   </select>
                 : <input value={currentUser.display_name||currentUser.username} disabled style={{background:'#f9fafb',color:'#6b7280'}}/>
               }
