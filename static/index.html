@@ -271,6 +271,42 @@ function Login({ onLogin }) {
   );
 }
 
+// ── Landing Page ──────────────────────────────────────────────────────────────
+function LandingPage({ user, onChoose, onLogout }) {
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f9fafb'}}>
+      <div style={{textAlign:'center',maxWidth:500,padding:'0 16px'}}>
+        <div style={{marginBottom:36}}>
+          <div style={{width:44,height:44,background:'#dc2626',borderRadius:10,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:14,fontWeight:700,marginBottom:16}}>SMM</div>
+          <h1 style={{fontSize:24,fontWeight:700,color:'#111827',margin:0}}>SMM CRM</h1>
+          <p style={{fontSize:14,color:'#6b7280',marginTop:8}}>สวัสดี <strong>{user.display_name}</strong> — เลือก module ที่ต้องการ</p>
+        </div>
+        <div style={{display:'flex',gap:20,justifyContent:'center'}}>
+          <button onClick={()=>onChoose('leads')}
+            style={{background:'#fff',border:'2px solid #e5e7eb',borderRadius:16,padding:'28px 40px',cursor:'pointer',
+              transition:'all .15s',display:'flex',flexDirection:'column',alignItems:'center',gap:10,minWidth:160}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='#111827';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.boxShadow='none';}}>
+            <span style={{fontSize:40}}>🎯</span>
+            <span style={{fontSize:17,fontWeight:700,color:'#111827'}}>Leads</span>
+            <span style={{fontSize:12,color:'#9ca3af'}}>Pipeline & Sales</span>
+          </button>
+          <button onClick={()=>onChoose('cases')}
+            style={{background:'#fff',border:'2px solid #e5e7eb',borderRadius:16,padding:'28px 40px',cursor:'pointer',
+              transition:'all .15s',display:'flex',flexDirection:'column',alignItems:'center',gap:10,minWidth:160}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='#111827';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.boxShadow='none';}}>
+            <span style={{fontSize:40}}>🎫</span>
+            <span style={{fontSize:17,fontWeight:700,color:'#111827'}}>Cases</span>
+            <span style={{fontSize:12,color:'#9ca3af'}}>Tickets & Support</span>
+          </button>
+        </div>
+        <button onClick={onLogout} style={{marginTop:32,background:'none',border:'none',color:'#9ca3af',fontSize:12,cursor:'pointer',textDecoration:'underline'}}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
 
@@ -2899,6 +2935,53 @@ function Employees() {
   );
 }
 
+// ── Pipeline helpers ──────────────────────────────────────────────────────────
+function isUntouched(lead) {
+  const baseline = lead.last_activity_date || lead.created_at;
+  if (!baseline) return false;
+  return (Date.now() - new Date(baseline).getTime()) / 86400000 >= 30;
+}
+
+function lastActivityLabel(lead) {
+  if (lead.last_activity_date) return (lead.last_activity_date||'').slice(0,10);
+  return (lead.created_at||'').slice(0,10) + ' (created)';
+}
+
+function ReassignModal({ lead, users, onClose, onReassigned }) {
+  const [newOwner, setNewOwner] = useState(String(lead.owner_user_id||''));
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!newOwner) return;
+    setSaving(true);
+    await api(`/api/leads/${lead.id}`, { method:'PUT', body: JSON.stringify({
+      company_name: lead.company_name, contact_name: lead.contact_name,
+      contact_phone: lead.contact_phone, contact_email: lead.contact_email,
+      stage: lead.stage, owner_user_id: newOwner, description: lead.description
+    })});
+    setSaving(false);
+    onReassigned();
+  };
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:'#fff',borderRadius:12,padding:24,width:380,boxShadow:'0 20px 40px rgba(0,0,0,0.15)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <h3 style={{fontSize:15,fontWeight:600,color:'#111827',margin:0}}>Reassign Lead</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:20,lineHeight:1}}>&times;</button>
+        </div>
+        <p style={{fontSize:13,color:'#6b7280',marginBottom:14}}><strong>{lead.company_name}</strong> — เปลี่ยน owner ใหม่</p>
+        <select value={newOwner} onChange={e=>setNewOwner(e.target.value)} style={{width:'100%',marginBottom:16}}>
+          <option value="">— เลือก owner —</option>
+          {users.map(u=><option key={u.id} value={String(u.id)}>{u.display_name}</option>)}
+        </select>
+        <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={save} className="btn btn-primary" disabled={saving||!newOwner}>{saving?<Spinner/>:'Reassign'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 const LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost'];
 const STAGE_COLORS = {
@@ -3173,22 +3256,23 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
 function Pipeline({ user }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('kanban'); // 'kanban' | 'list'
+  const [view, setView] = useState('kanban');
   const [filterStage, setFilterStage] = useState('');
   const [filterOwner, setFilterOwner] = useState('');
   const [users, setUsers] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const isAdmin = user.role === 'admin';
 
   const reload = () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (filterStage) params.append('stage', filterStage);
-    if (filterOwner) params.append('owner_user_id', filterOwner);
+    if (isAdmin && filterOwner) params.append('owner_user_id', filterOwner);
     api('/api/leads?' + params).then(d=>{ setLeads(Array.isArray(d)?d:[]); setLoading(false); }).catch(()=>setLoading(false));
   };
 
-  useEffect(()=>{ api('/api/users').then(d=>setUsers(d||[])); },[]);
+  useEffect(()=>{ if (isAdmin) api('/api/users').then(d=>setUsers(d||[])); },[]);
   useEffect(()=>{ reload(); }, [filterStage, filterOwner]);
 
   if (selectedLead) return <LeadDetail lead={selectedLead} user={user} onBack={()=>setSelectedLead(null)} onUpdated={reload}/>;
@@ -3199,7 +3283,7 @@ function Pipeline({ user }) {
 
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold text-gray-800">Pipeline</h1>
+        <h1 className="text-xl font-bold text-gray-800">Leads</h1>
         <div className="flex gap-2 items-center">
           <div style={{ display:'flex', border:'1px solid #e5e7eb', borderRadius:8, overflow:'hidden' }}>
             <button onClick={()=>setView('kanban')} style={{ padding:'5px 14px', fontSize:13, background:view==='kanban'?'#1e40af':'#fff', color:view==='kanban'?'#fff':'#6b7280', border:'none', cursor:'pointer' }}>⊞ Kanban</button>
@@ -3215,21 +3299,26 @@ function Pipeline({ user }) {
           <option value="">All Stages</option>
           {LEAD_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={filterOwner} onChange={e=>setFilterOwner(e.target.value)} style={{ fontSize:13, padding:'5px 10px', border:'1px solid #e5e7eb', borderRadius:7 }}>
-          <option value="">All Owners</option>
-          {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
-        </select>
+        {isAdmin && (
+          <select value={filterOwner} onChange={e=>setFilterOwner(e.target.value)} style={{ fontSize:13, padding:'5px 10px', border:'1px solid #e5e7eb', borderRadius:7 }}>
+            <option value="">All Owners</option>
+            {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
+          </select>
+        )}
       </div>
 
       {loading ? <div className="flex justify-center py-12"><Spinner/></div> : view === 'kanban'
-        ? <KanbanView leads={leads} onSelect={setSelectedLead} onStageChange={reload}/>
-        : <ListView leads={leads} onSelect={setSelectedLead}/>
+        ? <KanbanView leads={leads} user={user} onSelect={setSelectedLead} onStageChange={reload} users={users}/>
+        : <ListView leads={leads} user={user} onSelect={setSelectedLead} onReassigned={reload} users={users}/>
       }
     </div>
   );
 }
 
-function KanbanView({ leads, onSelect, onStageChange }) {
+function KanbanView({ leads, user, onSelect, onStageChange, users }) {
+  const [reassignLead, setReassignLead] = useState(null);
+  const isAdmin = user.role === 'admin';
+
   const changeStage = async (lead, newStage) => {
     await api(`/api/leads/${lead.id}`, { method:'PUT', body: JSON.stringify({
       company_name: lead.company_name, contact_name: lead.contact_name,
@@ -3240,76 +3329,114 @@ function KanbanView({ leads, onSelect, onStageChange }) {
   };
 
   return (
-    <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:16, alignItems:'flex-start' }}>
-      {LEAD_STAGES.map(stage => {
-        const c = STAGE_COLORS[stage];
-        const stageLeads = leads.filter(l=>l.stage===stage);
-        return (
-          <div key={stage} style={{ minWidth:220, flex:'0 0 220px' }}>
-            <div style={{ background:c.bg, border:`1px solid ${c.border}`, borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
-              <div style={{ fontWeight:700, color:c.text, fontSize:13 }}>{stage}</div>
-              <div style={{ fontSize:11, color:c.text, opacity:0.7 }}>{stageLeads.length} lead{stageLeads.length!==1?'s':''}</div>
+    <>
+      {reassignLead && <ReassignModal lead={reassignLead} users={users} onClose={()=>setReassignLead(null)} onReassigned={()=>{ setReassignLead(null); onStageChange(); }}/>}
+      <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:16, alignItems:'flex-start' }}>
+        {LEAD_STAGES.map(stage => {
+          const c = STAGE_COLORS[stage];
+          const stageLeads = leads.filter(l=>l.stage===stage);
+          return (
+            <div key={stage} style={{ minWidth:220, flex:'0 0 220px' }}>
+              <div style={{ background:c.bg, border:`1px solid ${c.border}`, borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+                <div style={{ fontWeight:700, color:c.text, fontSize:13 }}>{stage}</div>
+                <div style={{ fontSize:11, color:c.text, opacity:0.7 }}>{stageLeads.length} lead{stageLeads.length!==1?'s':''}</div>
+              </div>
+              <div className="space-y-2">
+                {stageLeads.map(lead=>{
+                  const untouched = isUntouched(lead);
+                  return (
+                    <div key={lead.id} onClick={()=>onSelect(lead)}
+                      style={{ background:'#fff', border:`1px solid ${untouched?'#fca5a5':'#e5e7eb'}`, borderRadius:10, padding:12,
+                        cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.05)', transition:'box-shadow 0.15s' }}
+                      onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'}
+                      onMouseLeave={e=>e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
+                        <div style={{ fontWeight:500, color:'#1f2937', fontSize:13 }}>{lead.company_name}</div>
+                        {untouched && <span style={{ fontSize:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'1px 5px', fontWeight:700, whiteSpace:'nowrap', marginLeft:4, flexShrink:0 }}>🔴 Untouched</span>}
+                      </div>
+                      {lead.contact_name && <div style={{ fontSize:11, color:'#9ca3af', marginBottom:6 }}>{lead.contact_name}</div>}
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                        <span style={{ fontSize:11, color:'#6b7280' }}>{lead.owner_name||'—'}</span>
+                        <span style={{ fontSize:11, color: untouched?'#dc2626':'#9ca3af' }}>{lastActivityLabel(lead)}</span>
+                      </div>
+                      {isAdmin && untouched && (
+                        <div onClick={e=>e.stopPropagation()} style={{ marginBottom:6 }}>
+                          <button onClick={()=>setReassignLead(lead)}
+                            style={{ fontSize:11, padding:'2px 8px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer', width:'100%' }}>
+                            Reassign
+                          </button>
+                        </div>
+                      )}
+                      <div onClick={e=>e.stopPropagation()}>
+                        <select value={lead.stage} onChange={e=>changeStage(lead,e.target.value)}
+                          style={{ fontSize:11, padding:'2px 6px', border:'1px solid #e5e7eb', borderRadius:5, width:'100%', color:'#6b7280' }}>
+                          {LEAD_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+                {stageLeads.length===0 && <div style={{ border:'1px dashed #e5e7eb', borderRadius:10, padding:'16px 0', textAlign:'center', fontSize:12, color:'#d1d5db' }}>ไม่มี lead</div>}
+              </div>
             </div>
-            <div className="space-y-2">
-              {stageLeads.map(lead=>(
-                <div key={lead.id} onClick={()=>onSelect(lead)}
-                  style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, padding:12,
-                    cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.05)', transition:'box-shadow 0.15s' }}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'}>
-                  <div className="font-medium text-gray-800 text-sm mb-1">{lead.company_name}</div>
-                  {lead.contact_name && <div className="text-xs text-gray-500 mb-2">{lead.contact_name}</div>}
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-400">{lead.owner_name||'—'}</span>
-                    <span className="text-xs text-gray-400">{(lead.created_at||'').slice(0,10)}</span>
-                  </div>
-                  <div onClick={e=>e.stopPropagation()} className="mt-2">
-                    <select value={lead.stage} onChange={e=>changeStage(lead,e.target.value)}
-                      style={{ fontSize:11, padding:'2px 6px', border:'1px solid #e5e7eb', borderRadius:5, width:'100%', color:'#6b7280' }}>
-                      {LEAD_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-              ))}
-              {stageLeads.length===0 && <div style={{ border:'1px dashed #e5e7eb', borderRadius:10, padding:'16px 0', textAlign:'center', fontSize:12, color:'#d1d5db' }}>ไม่มี lead</div>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
-function ListView({ leads, onSelect }) {
+function ListView({ leads, user, onSelect, onReassigned, users }) {
+  const [reassignLead, setReassignLead] = useState(null);
+  const isAdmin = user.role === 'admin';
+  const cols = ['Lead No','บริษัท/ร้านค้า','ผู้ติดต่อ','Stage','Owner','Last Activity', ...(isAdmin?['']:[] )];
   return (
-    <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, overflow:'hidden' }}>
-      <table style={{ width:'100%', borderCollapse:'collapse' }}>
-        <thead>
-          <tr style={{ background:'#f9fafb', borderBottom:'1px solid #e5e7eb' }}>
-            {['Lead No','บริษัท/ร้านค้า','ผู้ติดต่อ','Stage','Owner','วันที่'].map(h=>(
-              <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontSize:12, fontWeight:600, color:'#6b7280' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {leads.length===0 && (
-            <tr><td colSpan={6} style={{ padding:32, textAlign:'center', color:'#9ca3af', fontSize:14 }}>ไม่มี lead</td></tr>
-          )}
-          {leads.map(l=>(
-            <tr key={l.id} onClick={()=>onSelect(l)} style={{ borderBottom:'1px solid #f3f4f6', cursor:'pointer' }}
-              onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'}
-              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-              <td style={{ padding:'10px 16px', fontSize:13, fontFamily:'monospace', color:'#6b7280' }}>{l.lead_no}</td>
-              <td style={{ padding:'10px 16px', fontSize:13, fontWeight:500, color:'#1f2937' }}>{l.company_name}</td>
-              <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.contact_name||'-'}</td>
-              <td style={{ padding:'10px 16px' }}><StageBadge stage={l.stage}/></td>
-              <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.owner_name||'-'}</td>
-              <td style={{ padding:'10px 16px', fontSize:12, color:'#9ca3af' }}>{(l.created_at||'').slice(0,10)}</td>
+    <>
+      {reassignLead && <ReassignModal lead={reassignLead} users={users} onClose={()=>setReassignLead(null)} onReassigned={()=>{ setReassignLead(null); onReassigned(); }}/>}
+      <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, overflow:'hidden' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse' }}>
+          <thead>
+            <tr style={{ background:'#f9fafb', borderBottom:'1px solid #e5e7eb' }}>
+              {cols.map(h=>(
+                <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontSize:12, fontWeight:600, color:'#6b7280' }}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {leads.length===0 && (
+              <tr><td colSpan={cols.length} style={{ padding:32, textAlign:'center', color:'#9ca3af', fontSize:14 }}>ไม่มี lead</td></tr>
+            )}
+            {leads.map(l=>{
+              const untouched = isUntouched(l);
+              return (
+                <tr key={l.id} onClick={()=>onSelect(l)}
+                  style={{ borderBottom:'1px solid #f3f4f6', cursor:'pointer', background: untouched?'#fffbfb':'transparent' }}
+                  onMouseEnter={e=>e.currentTarget.style.background=untouched?'#fef2f2':'#f9fafb'}
+                  onMouseLeave={e=>e.currentTarget.style.background=untouched?'#fffbfb':'transparent'}>
+                  <td style={{ padding:'10px 16px', fontSize:13, fontFamily:'monospace', color:'#6b7280' }}>{l.lead_no}</td>
+                  <td style={{ padding:'10px 16px', fontSize:13, fontWeight:500, color:'#1f2937' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      {l.company_name}
+                      {untouched && <span style={{ fontSize:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'1px 5px', fontWeight:700, whiteSpace:'nowrap' }}>🔴 Untouched</span>}
+                    </div>
+                  </td>
+                  <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.contact_name||'-'}</td>
+                  <td style={{ padding:'10px 16px' }}><StageBadge stage={l.stage}/></td>
+                  <td style={{ padding:'10px 16px', fontSize:13, color:'#6b7280' }}>{l.owner_name||'-'}</td>
+                  <td style={{ padding:'10px 16px', fontSize:12, color: untouched?'#dc2626':'#9ca3af' }}>{lastActivityLabel(l)}</td>
+                  {isAdmin && <td onClick={e=>e.stopPropagation()} style={{ padding:'6px 16px' }}>
+                    {untouched && <button onClick={()=>setReassignLead(l)}
+                      style={{ fontSize:11, padding:'3px 10px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer', whiteSpace:'nowrap' }}>
+                      Reassign
+                    </button>}
+                  </td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -3384,6 +3511,7 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
 function App() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
+  const [moduleChoice, setModuleChoice] = useState(null); // 'leads' | 'cases'
   const [page, setPage] = useState('tickets');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -3394,41 +3522,77 @@ function App() {
     api('/api/auth/me').then(d => {
       if (d && d.id) {
         setUser(d);
-        if (d.role === 'sales') setPage('pipeline');
+        const saved = localStorage.getItem('crm_module_choice');
+        if (saved) {
+          setModuleChoice(saved);
+          setPage(saved === 'leads' ? 'leads' : 'tickets');
+        }
       } else clearToken();
       setChecking(false);
     }).catch(() => { clearToken(); setChecking(false); });
   }, []);
 
-  const logout = () => { clearToken(); setUser(null); setPage('tickets'); };
+  const logout = () => {
+    clearToken(); setUser(null); setModuleChoice(null); setPage('tickets');
+  };
+
+  const handleLogin = (u) => {
+    setUser(u);
+    const saved = localStorage.getItem('crm_module_choice');
+    if (saved) {
+      setModuleChoice(saved);
+      setPage(saved === 'leads' ? 'leads' : 'tickets');
+    }
+  };
+
+  const chooseModule = (m) => {
+    localStorage.setItem('crm_module_choice', m);
+    setModuleChoice(m);
+    setPage(m === 'leads' ? 'leads' : 'tickets');
+  };
+
+  const switchToOther = () => {
+    const other = moduleChoice === 'leads' ? 'cases' : 'leads';
+    localStorage.setItem('crm_module_choice', other);
+    setModuleChoice(other);
+    setPage(other === 'leads' ? 'leads' : 'tickets');
+    setSelectedTicket(null); setCreating(false);
+  };
 
   if (checking) return <div className="min-h-screen flex items-center justify-center text-gray-400"><Spinner/></div>;
-  if (!user) return <Login onLogin={u => { setUser(u); if (u.role === 'sales') setPage('pipeline'); }}/>;
+  if (!user) return <Login onLogin={handleLogin}/>;
+  if (!moduleChoice) return <LandingPage user={user} onChoose={chooseModule} onLogout={logout}/>;
 
-  const navItems = [
-    { id:'dashboard', label:'Dashboard', icon:'grid' },
-    { id:'pipeline', label:'Pipeline', icon:'trending-up' },
-    { id:'tickets', label:'Cases', icon:'file-text' },
-    { id:'accounts', label:'Account', icon:'building' },
-    { id:'suppliers', label:'Supplier', icon:'factory' },
-    { id:'employees', label:'Employees', icon:'hard-hat' },
-    { id:'import', label:'Import ERP', icon:'upload' },
-    ...(user.role === 'admin' ? [{ id:'users', label:'Users', icon:'users' }] : []),
-  ];
+  const navItems = moduleChoice === 'leads'
+    ? [
+        { id:'leads', label:'Leads', icon:'trending-up' },
+        { id:'dashboard', label:'Dashboard', icon:'grid' },
+      ]
+    : [
+        { id:'dashboard', label:'Dashboard', icon:'grid' },
+        { id:'tickets', label:'Cases', icon:'file-text' },
+        { id:'accounts', label:'Account', icon:'building' },
+        { id:'suppliers', label:'Supplier', icon:'factory' },
+        { id:'employees', label:'Employees', icon:'hard-hat' },
+        { id:'import', label:'Import ERP', icon:'upload' },
+        ...(user.role === 'admin' ? [{ id:'users', label:'Users', icon:'users' }] : []),
+      ];
 
   const renderPage = () => {
     if (selectedTicket) return <TicketDetail ticketId={selectedTicket} user={user} onBack={()=>setSelectedTicket(null)}/>;
     if (creating) return <CreateTicket user={user} onCreated={id=>{ setCreating(false); setSelectedTicket(id); }}/>;
     switch(page) {
       case 'dashboard': return <Dashboard/>;
-      case 'pipeline': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
+      case 'leads': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'Name'},{key:'supplier_type',label:'Type'},{key:'contact_person',label:'Contact'},{key:'phone',label:'Phone'}]}/>;
       case 'employees': return <Employees/>;
       case 'import': return <ImportERP/>;
       case 'users': return <Users currentUser={user}/>;
-      default: return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
+      default: return moduleChoice === 'leads'
+        ? <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>
+        : <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
     }
   };
 
@@ -3453,11 +3617,21 @@ function App() {
               {n.label}
             </button>
           ))}
-          <div className="sidebar-section-label" style={{marginTop:8}}>Actions</div>
-          <button className="nav-btn" onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }}>
-            <Icon name="plus" size={15}/>
-            New Case
-          </button>
+          {moduleChoice === 'cases' && (
+            <>
+              <div className="sidebar-section-label" style={{marginTop:8}}>Actions</div>
+              <button className="nav-btn" onClick={()=>{ setCreating(true); setSelectedTicket(null); setPage('tickets'); }}>
+                <Icon name="plus" size={15}/>
+                New Case
+              </button>
+            </>
+          )}
+          <div style={{borderTop:'1px solid var(--sidebar-border)',marginTop:10,paddingTop:6}}>
+            <button className="nav-btn" onClick={switchToOther} style={{color:'var(--text-muted)',fontSize:12}}>
+              <Icon name={moduleChoice==='leads'?'file-text':'trending-up'} size={14}/>
+              Switch to {moduleChoice==='leads'?'Cases':'Leads'}
+            </button>
+          </div>
         </div>
 
         <div className="sidebar-footer">

@@ -2168,12 +2168,17 @@ def get_leads():
     params = []
     if stage:
         wheres.append("l.stage = %s"); params.append(stage)
-    if owner:
+    # Sales rep: enforce own-leads-only filter regardless of query params
+    if g.user['role'] == 'sales':
+        wheres.append("l.owner_user_id = %s"); params.append(g.user['user_id'])
+    elif owner:
         wheres.append("l.owner_user_id = %s"); params.append(owner)
     where_sql = ('WHERE ' + ' AND '.join(wheres)) if wheres else ''
     rows = query(f"""
         SELECT l.*, u.display_name AS owner_name,
-               a.name AS converted_account_name
+               a.name AS converted_account_name,
+               (SELECT MAX(la.created_at) FROM lead_activities la
+                WHERE la.lead_id = l.id) AS last_activity_date
         FROM leads l
         LEFT JOIN users u ON u.id = l.owner_user_id
         LEFT JOIN accounts a ON a.id = l.converted_account_id
