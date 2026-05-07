@@ -443,13 +443,15 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # Create all tables — commit immediately so migrations can't roll these back
+    # Create all tables — commit immediately so nothing below can roll these back
     for stmt in SCHEMA_BASE.strip().split(';'):
         stmt = stmt.strip()
         if stmt:
             cur.execute(stmt)
 
-    # Outlets unique constraint
+    conn.commit()  # commit table creation before anything that might rollback
+
+    # Outlets unique constraint (in its own transaction)
     try:
         cur.execute("""
             DO $$
@@ -461,11 +463,10 @@ def init_db():
                 END IF;
             END$$;
         """)
+        conn.commit()
     except Exception as e:
         conn.rollback()
         print(f"[init_db] outlets constraint: {e}")
-
-    conn.commit()  # commit table creation before running migrations
 
     # Migrations — each runs in its own transaction
     migrations = [
