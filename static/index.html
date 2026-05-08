@@ -3168,27 +3168,27 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
         <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:20, marginBottom:20 }}>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 block mb-1">บริษัท/ร้านค้า *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Company / Shop *</label>
               <input value={form.company_name} onChange={e=>set('company_name',e.target.value)} className="w-full" required/>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ติดต่อ</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Contact Name</label>
               <input value={form.contact_name} onChange={e=>set('contact_name',e.target.value)} className="w-full"/>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">เบอร์โทร</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Phone</label>
               <input value={form.contact_phone} onChange={e=>set('contact_phone',e.target.value)} className="w-full"/>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ตำแหน่ง</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Position</label>
               <select value={form.contact_position} onChange={e=>set('contact_position',e.target.value)} className="w-full">
-                <option value="">— เลือกตำแหน่ง —</option>
+                <option value="">— Select position —</option>
                 {POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">สาขา</label>
-              <input value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full"/>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Outlet(s)</label>
+              <input type="number" min="1" value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full"/>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Email</label>
@@ -3203,12 +3203,12 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Owner</label>
               <select value={form.owner_user_id} onChange={e=>set('owner_user_id',e.target.value)} className="w-full">
-                <option value="">— ไม่ระบุ —</option>
+                <option value="">— Unassigned —</option>
                 {users.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
               </select>
             </div>
             <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 block mb-1">หมายเหตุ</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Notes</label>
               <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full"/>
             </div>
           </div>
@@ -3221,13 +3221,13 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
         <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:20, marginBottom:20 }}>
           <h2 className="text-xl font-bold text-gray-800 mb-3">{lead.company_name}</h2>
           <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-            <div><span className="text-gray-400">ผู้ติดต่อ:</span> <span className="text-gray-700 font-medium">{lead.contact_name||'-'}</span></div>
-            <div><span className="text-gray-400">เบอร์:</span> <span className="text-gray-700 font-medium">{lead.contact_phone||'-'}</span></div>
-            <div><span className="text-gray-400">ตำแหน่ง:</span> <span className="text-gray-700 font-medium">{lead.contact_position||'-'}</span></div>
-            <div><span className="text-gray-400">สาขา:</span> <span className="text-gray-700 font-medium">{lead.branch||'-'}</span></div>
+            <div><span className="text-gray-400">Contact:</span> <span className="text-gray-700 font-medium">{lead.contact_name||'-'}</span></div>
+            <div><span className="text-gray-400">Phone:</span> <span className="text-gray-700 font-medium">{lead.contact_phone||'-'}</span></div>
+            <div><span className="text-gray-400">Position:</span> <span className="text-gray-700 font-medium">{lead.contact_position||'-'}</span></div>
+            <div><span className="text-gray-400">Outlet(s):</span> <span className="text-gray-700 font-medium">{lead.branch||'-'}</span></div>
             <div><span className="text-gray-400">Email:</span> <span className="text-gray-700 font-medium">{lead.contact_email||'-'}</span></div>
             <div><span className="text-gray-400">Owner:</span> <span className="text-gray-700 font-medium">{lead.owner_name||'-'}</span></div>
-            <div><span className="text-gray-400">สร้างเมื่อ:</span> <span className="text-gray-700">{fmt(lead.created_at)}</span></div>
+            <div><span className="text-gray-400">Created:</span> <span className="text-gray-700">{fmt(lead.created_at)}</span></div>
             {lead.converted_at && <div><span className="text-gray-400">Converted:</span> <span className="text-gray-700">{fmt(lead.converted_at)}</span></div>}
             {isLost && lead.lost_from_stage && (
               <div className="col-span-2">
@@ -3517,30 +3517,30 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">บริษัท/ร้านค้า *</label>
-            <input value={form.company_name} onChange={e=>set('company_name',e.target.value)} className="w-full" required placeholder="ชื่อบริษัทหรือร้านค้า"/>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Company / Shop *</label>
+            <input value={form.company_name} onChange={e=>set('company_name',e.target.value)} className="w-full" required placeholder="Company or shop name"/>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ติดต่อ *</label>
-              <input value={form.contact_name} onChange={e=>set('contact_name',e.target.value)} className="w-full" required placeholder="คุณ..."/>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Contact Name *</label>
+              <input value={form.contact_name} onChange={e=>set('contact_name',e.target.value)} className="w-full" required placeholder="Full name"/>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">เบอร์โทร *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Phone *</label>
               <input value={form.contact_phone} onChange={e=>set('contact_phone',e.target.value)} className="w-full" required placeholder="0xx-xxx-xxxx"/>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ตำแหน่ง *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Position *</label>
               <select value={form.contact_position} onChange={e=>set('contact_position',e.target.value)} className="w-full" required>
-                <option value="">— เลือกตำแหน่ง —</option>
+                <option value="">— Select position —</option>
                 {POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">สาขา *</label>
-              <input value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full" required placeholder="เช่น สาขาสีลม"/>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Outlet(s) *</label>
+              <input type="number" min="1" value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full" required placeholder="No. of outlets"/>
             </div>
           </div>
           <div>
@@ -3558,7 +3558,7 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
               <label className="text-sm font-medium text-gray-700 block mb-1">Owner</label>
               {isAdmin
                 ? <select value={form.owner_user_id} onChange={e=>set('owner_user_id',e.target.value)} className="w-full">
-                    <option value="">— ไม่ระบุ —</option>
+                    <option value="">— Unassigned —</option>
                     {salesUsers.map(u=><option key={u.id} value={u.id}>{u.display_name}</option>)}
                   </select>
                 : <input value={currentUser.display_name||currentUser.username} disabled style={{background:'#f9fafb',color:'#6b7280'}}/>
@@ -3566,8 +3566,8 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1">หมายเหตุ</label>
-            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full" placeholder="รายละเอียดเพิ่มเติม..."/>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Notes</label>
+            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full" placeholder="Additional details..."/>
           </div>
           {err && <div style={{color:'#dc2626',fontSize:12,background:'#fef2f2',padding:'8px 12px',borderRadius:6}}>{err}</div>}
           <div className="flex justify-end gap-2 pt-2">
