@@ -30,7 +30,7 @@ PRIORITIES = ['High', 'Medium']
 # ---------------------------------------------------------------------------
 
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL, options="-c timezone=Asia/Bangkok")
     return conn
 
 def query(sql, params=(), one=False):
@@ -485,6 +485,8 @@ def init_db():
         "ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS image_url TEXT",
         "CREATE SEQUENCE IF NOT EXISTS leads_lead_no_seq START 1",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_from_stage TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS contact_position TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS branch TEXT",
     ]
     for m in migrations:
         try:
@@ -2206,10 +2208,12 @@ def create_lead():
         lead_no = next_lead_no(cur)
         cur.execute("""
             INSERT INTO leads (lead_no, company_name, contact_name, contact_phone,
-                               contact_email, stage, owner_user_id, description, created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                               contact_email, contact_position, branch,
+                               stage, owner_user_id, description, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (lead_no, d['company_name'], d.get('contact_name'), d.get('contact_phone'),
-              d.get('contact_email'), d.get('stage', 'Cold Call/Email'),
+              d.get('contact_email'), d.get('contact_position'), d.get('branch'),
+              d.get('stage', 'Cold Call/Email'),
               d.get('owner_user_id') or None, d.get('description'), g.user['display_name']))
         new_id = cur.fetchone()['id']
         conn.commit()
@@ -2254,20 +2258,24 @@ def update_lead(lid):
         if lost_from is not None:
             cur.execute(f"""
                 UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
-                    contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
+                    contact_email=%s, contact_position=%s, branch=%s,
+                    stage=%s, owner_user_id=%s, description=%s,
                     lost_from_stage=%s, updated_at=({now})
                 WHERE id=%s
             """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
-                  d.get('contact_email'), new_stage, d.get('owner_user_id'),
+                  d.get('contact_email'), d.get('contact_position'), d.get('branch'),
+                  new_stage, d.get('owner_user_id'),
                   d.get('description'), lost_from, lid))
         else:
             cur.execute(f"""
                 UPDATE leads SET company_name=%s, contact_name=%s, contact_phone=%s,
-                    contact_email=%s, stage=%s, owner_user_id=%s, description=%s,
+                    contact_email=%s, contact_position=%s, branch=%s,
+                    stage=%s, owner_user_id=%s, description=%s,
                     updated_at=({now})
                 WHERE id=%s
             """, (d['company_name'], d.get('contact_name'), d.get('contact_phone'),
-                  d.get('contact_email'), new_stage, d.get('owner_user_id'),
+                  d.get('contact_email'), d.get('contact_position'), d.get('branch'),
+                  new_stage, d.get('owner_user_id'),
                   d.get('description'), lid))
         conn.commit()
         conn.close()

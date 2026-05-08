@@ -3124,9 +3124,11 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
     api('/api/users').then(d=>setUsers(d||[]));
   },[lead.id]);
 
+  const POSITIONS = ['พนักงานหน้าร้าน','ผู้จัดการร้าน','เจ้าของ','จัดซื้อ','เชฟ'];
   const startEdit = () => {
     setForm({ company_name:lead.company_name, contact_name:lead.contact_name||'',
       contact_phone:lead.contact_phone||'', contact_email:lead.contact_email||'',
+      contact_position:lead.contact_position||'', branch:lead.branch||'',
       stage:lead.stage, owner_user_id:lead.owner_user_id||'', description:lead.description||'' });
     setEditing(true);
   };
@@ -3178,6 +3180,17 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
               <input value={form.contact_phone} onChange={e=>set('contact_phone',e.target.value)} className="w-full"/>
             </div>
             <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">ตำแหน่ง</label>
+              <select value={form.contact_position} onChange={e=>set('contact_position',e.target.value)} className="w-full">
+                <option value="">— เลือกตำแหน่ง —</option>
+                {POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">สาขา</label>
+              <input value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full"/>
+            </div>
+            <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Email</label>
               <input value={form.contact_email} onChange={e=>set('contact_email',e.target.value)} className="w-full"/>
             </div>
@@ -3210,6 +3223,8 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
           <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
             <div><span className="text-gray-400">ผู้ติดต่อ:</span> <span className="text-gray-700 font-medium">{lead.contact_name||'-'}</span></div>
             <div><span className="text-gray-400">เบอร์:</span> <span className="text-gray-700 font-medium">{lead.contact_phone||'-'}</span></div>
+            <div><span className="text-gray-400">ตำแหน่ง:</span> <span className="text-gray-700 font-medium">{lead.contact_position||'-'}</span></div>
+            <div><span className="text-gray-400">สาขา:</span> <span className="text-gray-700 font-medium">{lead.branch||'-'}</span></div>
             <div><span className="text-gray-400">Email:</span> <span className="text-gray-700 font-medium">{lead.contact_email||'-'}</span></div>
             <div><span className="text-gray-400">Owner:</span> <span className="text-gray-700 font-medium">{lead.owner_name||'-'}</span></div>
             <div><span className="text-gray-400">สร้างเมื่อ:</span> <span className="text-gray-700">{fmt(lead.created_at)}</span></div>
@@ -3476,8 +3491,10 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
   const myId = currentUser.id || currentUser.user_id;
   const isAdmin = currentUser.role === 'admin';
   const salesUsers = users.filter(u => u.role === 'sales' || u.role === 'admin');
+  const POSITIONS = ['พนักงานหน้าร้าน','ผู้จัดการร้าน','เจ้าของ','จัดซื้อ','เชฟ'];
   const [form, setForm] = useState({
     company_name:'', contact_name:'', contact_phone:'', contact_email:'',
+    contact_position:'', branch:'',
     stage:'Cold Call/Email', owner_user_id: myId, description:''
   });
   const [saving, setSaving] = useState(false);
@@ -3505,12 +3522,25 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ติดต่อ</label>
-              <input value={form.contact_name} onChange={e=>set('contact_name',e.target.value)} className="w-full" placeholder="คุณ..."/>
+              <label className="text-sm font-medium text-gray-700 block mb-1">ชื่อผู้ติดต่อ *</label>
+              <input value={form.contact_name} onChange={e=>set('contact_name',e.target.value)} className="w-full" required placeholder="คุณ..."/>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">เบอร์โทร</label>
-              <input value={form.contact_phone} onChange={e=>set('contact_phone',e.target.value)} className="w-full" placeholder="0xx-xxx-xxxx"/>
+              <label className="text-sm font-medium text-gray-700 block mb-1">เบอร์โทร *</label>
+              <input value={form.contact_phone} onChange={e=>set('contact_phone',e.target.value)} className="w-full" required placeholder="0xx-xxx-xxxx"/>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">ตำแหน่ง *</label>
+              <select value={form.contact_position} onChange={e=>set('contact_position',e.target.value)} className="w-full" required>
+                <option value="">— เลือกตำแหน่ง —</option>
+                {POSITIONS.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">สาขา *</label>
+              <input value={form.branch} onChange={e=>set('branch',e.target.value)} className="w-full" required placeholder="เช่น สาขาสีลม"/>
             </div>
           </div>
           <div>
