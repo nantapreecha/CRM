@@ -43,6 +43,13 @@
   .sidebar-logout-btn { background:none; border:none; cursor:pointer; color:var(--text-muted); padding:4px; border-radius:4px; display:flex; align-items:center; margin-left:auto; flex-shrink:0; }
   .sidebar-logout-btn:hover { color:#ef4444; background:#fef2f2; }
 
+  /* ── Toast notifications ── */
+  @keyframes toastIn {
+    from { opacity:0; transform:translateX(40px); }
+    to   { opacity:1; transform:translateX(0); }
+  }
+  .toast-item { animation: toastIn .25s ease; }
+
   /* ── Buttons ── */
   .btn { padding:7px 14px; border-radius:6px; font-size:13px; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; display:inline-flex; align-items:center; gap:6px; }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
@@ -3777,6 +3784,65 @@ function App() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [creating, setCreating] = useState(false);
 
+  // ── Notification state ──────────────────────────────────────────────────────
+  const [myTeamCount, setMyTeamCount] = useState(0);
+  const [toasts, setToasts] = useState([]);
+  const knownCaseIds = useRef(null); // null = not initialised yet
+  const toastCounter = useRef(0);
+
+  const removeToast = (tid) => setToasts(prev => prev.filter(t => t.id !== tid));
+
+  // Poll for new team cases every 30 s
+  useEffect(() => {
+    if (!user || !user.team) return;
+
+    // Request browser notification permission once
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const poll = async () => {
+      try {
+        const data = await api('/api/my-team/active');
+        if (!data || !Array.isArray(data.cases)) return;
+
+        setMyTeamCount(data.count || 0);
+        const currentIds = new Set(data.cases.map(c => c.id));
+
+        if (knownCaseIds.current === null) {
+          // First poll — just record IDs, no notification
+          knownCaseIds.current = currentIds;
+          return;
+        }
+
+        const newCases = data.cases.filter(c => !knownCaseIds.current.has(c.id));
+        knownCaseIds.current = currentIds;
+
+        newCases.slice(0, 3).forEach(c => {
+          const tid = ++toastCounter.current;
+          const body = `${c.case_type}${c.outlet_name ? ' — ' + c.outlet_name : ''}`;
+
+          // In-app toast
+          setToasts(prev => [...prev, { id: tid, body, caseId: c.id, ticket_no: c.ticket_no }]);
+          setTimeout(() => removeToast(tid), 8000);
+
+          // Browser push notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const n = new Notification(`🔔 เคสใหม่เข้าทีม ${user.team}`, {
+              body,
+              tag: String(c.id), // dedup ถ้าเกิดซ้ำ
+            });
+            n.onclick = () => { window.focus(); setSelectedTicket(c.id); setPage('tickets'); n.close(); };
+          }
+        });
+      } catch(_) { /* silent fail */ }
+    };
+
+    poll();
+    const iv = setInterval(poll, 30000);
+    return () => clearInterval(iv);
+  }, [user]);
+
   useEffect(() => {
     const token = getToken();
     if (!token) { setChecking(false); return; }
@@ -3877,6 +3943,13 @@ function App() {
               onClick={()=>{ setPage(n.id); setSelectedTicket(null); setCreating(false); }}>
               <Icon name={n.icon} size={15}/>
               {n.label}
+              {n.id === 'tickets' && myTeamCount > 0 && (
+                <span style={{
+                  marginLeft:'auto', background:'#dc2626', color:'#fff',
+                  fontSize:10, fontWeight:700, borderRadius:10,
+                  padding:'1px 7px', minWidth:18, textAlign:'center', lineHeight:'16px',
+                }}>{myTeamCount > 99 ? '99+' : myTeamCount}</span>
+              )}
             </button>
           ))}
           {moduleChoice === 'cases' && (
@@ -3914,6 +3987,39 @@ function App() {
       <div style={{flex:1,overflow:'auto',background:'#f9fafb'}}>
         {renderPage()}
       </div>
+
+      {/* Toast container — top-right fixed */}
+      {toasts.length > 0 && (
+        <div style={{position:'fixed',top:16,right:16,zIndex:9999,display:'flex',flexDirection:'column',gap:8,maxWidth:320}}>
+          {toasts.map(t => (
+            <div key={t.id} className="toast-item" style={{
+              background:'#111827', color:'#fff', borderRadius:10,
+              boxShadow:'0 4px 16px rgba(0,0,0,0.25)',
+              display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px',
+            }}>
+              <span style={{fontSize:18,flexShrink:0}}>🔔</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>
+                  เคสใหม่เข้าทีม {user.team}
+                </div>
+                <div style={{fontSize:11,color:'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {t.ticket_no} · {t.body}
+                </div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}}>
+                <button onClick={()=>{ setSelectedTicket(t.caseId); setPage('tickets'); removeToast(t.id); }}
+                  style={{fontSize:11,color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'right'}}>
+                  ดูเคส →
+                </button>
+                <button onClick={()=>removeToast(t.id)}
+                  style={{fontSize:12,color:'#6b7280',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'right'}}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

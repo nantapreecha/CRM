@@ -1829,6 +1829,25 @@ def dashboard_fault_rate_trend():
         result.append(row)
     return jsonify(result)
 
+@app.route('/api/my-team/active', methods=['GET'])
+@require_auth
+def my_team_active():
+    """Lightweight endpoint for notification polling — returns active cases for current user's team."""
+    team = g.user.get('team') or g.user.get('team', '')
+    if not team:
+        return jsonify({'count': 0, 'cases': []})
+    rows = query("""
+        SELECT t.id, t.ticket_no, t.case_type, t.created_at,
+               COALESCE(o.name, '') AS outlet_name,
+               COALESCE(a.name, '') AS account_name
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        WHERE t.current_team = %s AND t.status NOT IN ('closed')
+        ORDER BY t.created_at DESC
+    """, (team,))
+    return jsonify({'count': len(rows), 'cases': rows})
+
 @app.route('/api/dashboard/fault-by-employee', methods=['GET'])
 @require_auth
 def dashboard_fault_employee():
