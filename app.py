@@ -386,6 +386,13 @@ CREATE TABLE IF NOT EXISTS ticket_workflow_log (
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)
 );
 
+CREATE TABLE IF NOT EXISTS case_reads (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    read_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, ticket_id)
+);
+
 CREATE TABLE IF NOT EXISTS ticket_fault_attribution (
     id SERIAL PRIMARY KEY,
     ticket_id INTEGER NOT NULL,
@@ -1045,19 +1052,21 @@ def get_tickets():
     team = request.args.get('team')
     status = request.args.get('status')
     outlet_id = request.args.get('outlet_id')
-    params = []
     wheres = []
 
+    current_user_id = g.user.get('user_id') or g.user.get('id')
     base = """
         SELECT DISTINCT t.*, o.name AS outlet_name, a.name AS account_name,
                (SELECT image_url FROM ticket_workflow_log
                 WHERE ticket_id = t.id AND image_url IS NOT NULL AND image_url != ''
-                ORDER BY created_at DESC LIMIT 1) AS latest_image_url
+                ORDER BY created_at DESC LIMIT 1) AS latest_image_url,
+               EXISTS(SELECT 1 FROM case_reads cr WHERE cr.user_id=%s AND cr.ticket_id=t.id) AS is_read
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id
         LEFT JOIN ticket_assignments ta ON ta.ticket_id = t.id AND ta.acknowledged_at IS NULL
     """
+    params = [current_user_id]
 
     if team and team != 'Management':
         wheres.append("(t.current_team=%s OR (ta.team=%s AND t.case_type='Complain'))")
@@ -1834,19 +1843,33 @@ def dashboard_fault_rate_trend():
 def my_team_active():
     """Lightweight endpoint for notification polling — returns active cases for current user's team."""
     team = g.user.get('team') or g.user.get('team', '')
+    uid  = g.user.get('user_id') or g.user.get('id')
     if not team:
-        return jsonify({'count': 0, 'cases': []})
+        return jsonify({'count': 0, 'unread_count': 0, 'cases': []})
     rows = query("""
         SELECT t.id, t.ticket_no, t.case_type, t.created_at,
                COALESCE(o.name, '') AS outlet_name,
-               COALESCE(a.name, '') AS account_name
+               COALESCE(a.name, '') AS account_name,
+               NOT EXISTS(SELECT 1 FROM case_reads cr WHERE cr.user_id=%s AND cr.ticket_id=t.id) AS is_unread
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id
         WHERE t.current_team = %s AND t.status NOT IN ('closed')
         ORDER BY t.created_at DESC
-    """, (team,))
-    return jsonify({'count': len(rows), 'cases': rows})
+    """, (uid, team))
+    unread_count = sum(1 for r in rows if r.get('is_unread'))
+    return jsonify({'count': len(rows), 'unread_count': unread_count, 'cases': rows})
+
+@app.route('/api/tickets/<int:tid>/read', methods=['POST'])
+@require_auth
+def mark_ticket_read(tid):
+    uid = g.user.get('user_id') or g.user.get('id')
+    mutate("""
+        INSERT INTO case_reads (user_id, ticket_id)
+        VALUES (%s, %s)
+        ON CONFLICT (user_id, ticket_id) DO NOTHING
+    """, (uid, tid))
+    return jsonify({'ok': True})
 
 @app.route('/api/dashboard/fault-by-employee', methods=['GET'])
 @require_auth

@@ -1835,8 +1835,13 @@ function TicketList({ user, onSelect }) {
           : <div className="space-y-3">
               {filtered.map(t => (
                 <div key={t.id} className="card cursor-pointer hover:shadow-md transition-all hover:border-teal-200 border border-transparent"
+                  style={!t.is_read ? {borderLeft:'3px solid #2563eb'} : {}}
                   onClick={()=>onSelect(t.id)}>
                   <div className="p-4 flex items-start gap-3">
+                    {/* Unread dot */}
+                    {!t.is_read && (
+                      <div style={{width:8,height:8,borderRadius:'50%',background:'#2563eb',marginTop:6,flexShrink:0}} title="ยังไม่ได้อ่าน"/>
+                    )}
                     <div className="flex-1 min-w-0">
                       {/* Top row: id + type + priority + date */}
                       <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -1849,7 +1854,7 @@ function TicketList({ user, onSelect }) {
                       {/* Outlet + Account — prominent */}
                       {(t.outlet_name || t.account_name) && (
                         <div className="mb-1">
-                          {t.outlet_name && <span className="font-semibold text-sm text-gray-900">{t.outlet_name}</span>}
+                          {t.outlet_name && <span className={`text-sm ${!t.is_read ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'}`}>{t.outlet_name}</span>}
                           {t.account_name && <span className="text-xs text-gray-400 ml-2">({t.account_name})</span>}
                         </div>
                       )}
@@ -2011,6 +2016,8 @@ function TicketDetail({ ticketId, user, onBack }) {
       setEmployees(e || []);
       setAssignments(a || []);
       setLoading(false);
+      // Mark as read (fire-and-forget)
+      api(`/api/tickets/${ticketId}/read`, { method: 'POST', body: '{}' }).catch(() => {});
     });
   };
 
@@ -3786,6 +3793,7 @@ function App() {
 
   // ── Notification state ──────────────────────────────────────────────────────
   const [myTeamCount, setMyTeamCount] = useState(0);
+  const [myTeamUnread, setMyTeamUnread] = useState(0);
   const [toasts, setToasts] = useState([]);
   const knownCaseIds = useRef(null); // null = not initialised yet
   const toastCounter = useRef(0);
@@ -3807,6 +3815,7 @@ function App() {
         if (!data || !Array.isArray(data.cases)) return;
 
         setMyTeamCount(data.count || 0);
+        setMyTeamUnread(data.unread_count || 0);
         const currentIds = new Set(data.cases.map(c => c.id));
 
         if (knownCaseIds.current === null) {
@@ -3943,12 +3952,12 @@ function App() {
               onClick={()=>{ setPage(n.id); setSelectedTicket(null); setCreating(false); }}>
               <Icon name={n.icon} size={15}/>
               {n.label}
-              {n.id === 'tickets' && myTeamCount > 0 && (
+              {n.id === 'tickets' && myTeamUnread > 0 && (
                 <span style={{
-                  marginLeft:'auto', background:'#dc2626', color:'#fff',
+                  marginLeft:'auto', background:'#2563eb', color:'#fff',
                   fontSize:10, fontWeight:700, borderRadius:10,
                   padding:'1px 7px', minWidth:18, textAlign:'center', lineHeight:'16px',
-                }}>{myTeamCount > 99 ? '99+' : myTeamCount}</span>
+                }} title={`${myTeamUnread} เคสยังไม่ได้อ่าน`}>{myTeamUnread > 99 ? '99+' : myTeamUnread}</span>
               )}
             </button>
           ))}
