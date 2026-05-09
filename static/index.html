@@ -1690,7 +1690,7 @@ const STATUS_TABS = [
   { key: 'closed', label: 'Closed' },
 ];
 
-function TicketList({ user, onSelect }) {
+function TicketList({ user, onSelect, onUnreadCount }) {
   const [allTickets, setAllTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myTeamOnly, setMyTeamOnly] = useState(false);
@@ -1708,8 +1708,11 @@ function TicketList({ user, onSelect }) {
     // In byTeam mode always load all tickets so we can compute team stats
     if (myTeamOnly && user.team && viewMode === 'list') params.set('team', user.team);
     api('/api/tickets?' + params).then(d => {
-      setAllTickets(d || []);
+      const tickets = d || [];
+      setAllTickets(tickets);
       setLoading(false);
+      // Bubble unread count up to App for sidebar badge
+      if (onUnreadCount) onUnreadCount(tickets.filter(t => !t.is_read).length);
     });
   }, [myTeamOnly, viewMode, user.team]);
 
@@ -4000,7 +4003,6 @@ function App() {
         if (!data || !Array.isArray(data.cases)) return;
 
         setMyTeamCount(data.count || 0);
-        setMyTeamUnread(data.unread_count || 0);
         const currentIds = new Set(data.cases.map(c => c.id));
 
         if (knownCaseIds.current === null) {
@@ -4106,7 +4108,7 @@ function App() {
       case 'dashboard': return <Dashboard/>;
       case 'sales-dashboard': return <SalesDashboard user={user}/>;
       case 'leads': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
-      case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
+      case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)} onUnreadCount={setMyTeamUnread}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
       case 'suppliers': return <SimpleList title="🏭 Supplier" endpoint="/api/suppliers" columns={[{key:'name',label:'Name'},{key:'supplier_type',label:'Type'},{key:'contact_person',label:'Contact'},{key:'phone',label:'Phone'}]}/>;
       case 'employees': return <Employees/>;
@@ -4114,7 +4116,7 @@ function App() {
       case 'users': return <Users currentUser={user}/>;
       default: return moduleChoice === 'leads'
         ? <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>
-        : <TicketList user={user} onSelect={id=>setSelectedTicket(id)}/>;
+        : <TicketList user={user} onSelect={id=>setSelectedTicket(id)} onUnreadCount={setMyTeamUnread}/>;
     }
   };
 
