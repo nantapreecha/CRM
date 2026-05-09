@@ -2255,37 +2255,27 @@ function TicketDetail({ ticketId, user, onBack }) {
             </div>
           )}
 
-          {/* 2b. Forward / Complete (sequential, in_progress/open) */}
+          {/* 2b. Forward to team (all active teams) */}
           {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isMyTeam && (
             <div className="card p-4 border-l-4 border-blue-400">
-              <h4 className="font-semibold text-gray-700 mb-3">📤 Actions</h4>
-              <div className="flex gap-3 flex-wrap">
-                {/* Complete → back to opener */}
-                {ticket.opener_team !== ticket.current_team && (
-                  <button className="btn btn-secondary flex-1" disabled={saving}
-                    onClick={()=>act('complete',{note:'',image_url:''})}>
-                    {saving?<Spinner/>:`✅ Return to ${ticket.opener_team}`}
-                  </button>
-                )}
-                {/* Forward to another team */}
-                <div className="flex gap-2 flex-1">
-                  <select value={forwardTeam} onChange={e=>setForwardTeam(e.target.value)} style={{flex:1}}>
-                    <option value="">-- Forward to team --</option>
-                    {TEAMS.filter(t=>t!==ticket.current_team).map(t=>(
-                      <option key={t} value={t}>{TEAM_ICONS[t]} {t}</option>
-                    ))}
-                  </select>
-                  <button className="btn btn-primary" disabled={saving||!forwardTeam}
-                    onClick={()=>act('forward',{note:'',image_url:serializeImages(imageUrls),to_team:forwardTeam})}>
-                    {saving?<Spinner/>:'Forward →'}
-                  </button>
-                </div>
+              <h4 className="font-semibold text-gray-700 mb-3">📤 Forward to Team</h4>
+              <div className="flex gap-2">
+                <select value={forwardTeam} onChange={e=>setForwardTeam(e.target.value)} style={{flex:1}}>
+                  <option value="">-- เลือกทีมที่ต้องการส่ง --</option>
+                  {TEAMS.filter(t=>t!==ticket.current_team).map(t=>(
+                    <option key={t} value={t}>{TEAM_ICONS[t]} {t}</option>
+                  ))}
+                </select>
+                <button className="btn btn-primary" disabled={saving||!forwardTeam}
+                  onClick={()=>act('forward',{note:'',image_url:serializeImages(imageUrls),to_team:forwardTeam})}>
+                  {saving?<Spinner/>:'Forward →'}
+                </button>
               </div>
             </div>
           )}
 
-          {/* 3. Close case (opener team only, not Complain — Complain auto-closes) */}
-          {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isOpenerTeam && ticket.case_type !== 'Complain' && (
+          {/* 3. Close case (CX only — CX เป็นคนปิดทุกเคส) */}
+          {!isPendingAck && !isPendingFault && ticket.status !== 'closed' && isCX && ticket.case_type !== 'Complain' && (
             <div className="card p-4 border-l-4 border-red-400">
               <h4 className="font-semibold text-gray-700 mb-3">🔒 Close Case</h4>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Closing note *" className="mb-3"/>
