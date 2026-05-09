@@ -2028,6 +2028,46 @@ function TicketDetail({ ticketId, user, onBack }) {
   const isMyTeam = user.team === ticket.current_team;
   const isCX = user.team === 'CX';
   const isOpenerTeam = user.team === ticket.opener_team;
+
+  const WORKFLOW_GUIDE = {
+    'CX': {
+      items: [
+        { when: 'ลง Claim ในระบบ ERP เรียบร้อยแล้ว',                            then: 'ส่งต่อ Merchandise' },
+        { when: 'กรณีเปิดบิลผิด',                                                then: 'ส่งต่อ Sales Co' },
+        { when: 'ได้รับงานคืนจาก Merchandise (คืน Supplier แล้ว)',              then: 'ระบุทีมรับผิดชอบ แล้วกด Close Case' },
+      ],
+      notes: ['หากต้องให้นำสินค้ากลับ กรุณาระบุรายละเอียดสินค้าและเหตุผลในช่องหมายเหตุด้วย'],
+    },
+    'Sales Co': {
+      items: [
+        { when: 'แก้ไขใบกำกับภาษี แนบเอกสาร และมีการส่งสินค้า',               then: 'ส่งต่อ Merchandise' },
+        { when: 'ตัดบิล / แก้ไขบิลอย่างเดียว (ไม่มีส่งสินค้า)',               then: 'ส่งต่อ Outbound' },
+      ],
+      notes: [],
+    },
+    'Merchandise': {
+      items: [
+        { when: 'จัดซื้อสินค้าและสินค้าถึง DC เรียบร้อยแล้ว',                  then: 'ส่งต่อ Inbound' },
+        { when: 'รับสินค้าคืนจาก Inbound และคืน Supplier เรียบร้อยแล้ว',       then: 'ส่งต่อ CX' },
+      ],
+      notes: ['หากต้องให้นำสินค้ากลับ กรุณาระบุรายละเอียดสินค้าและเหตุผลในช่องหมายเหตุด้วย'],
+    },
+    'Inbound': {
+      items: [
+        { when: 'QC สินค้าใหม่เรียบร้อยแล้ว',                                   then: 'ส่งต่อ Outbound' },
+        { when: 'QC สินค้าคืน (รับจาก Outbound) เรียบร้อยแล้ว',               then: 'ส่งต่อ Merchandise' },
+      ],
+      notes: [],
+    },
+    'Outbound': {
+      items: [
+        { when: 'จัดส่งสินค้าใหม่ให้ลูกค้าเรียบร้อยแล้ว',                     then: 'ส่งต่อ CX เพื่อปิดงาน' },
+        { when: 'รับสินค้าคืนจากลูกค้า',                                        then: 'ส่งต่อ Inbound' },
+        { when: 'ส่งสินค้าไม่ได้ (ลูกค้าปฏิเสธ / ไม่มีคนรับ)',               then: 'ส่งต่อ CX' },
+      ],
+      notes: [],
+    },
+  };
   const isPendingAck = ticket.status === 'pending_ack' || ticket.current_team === 'pending_ack';
   const isPendingFault = ticket.status === 'pending_fault';
   // For Complain: check if this user's team has an unacknowledged assignment
@@ -2129,6 +2169,27 @@ function TicketDetail({ ticketId, user, onBack }) {
           </button>
         )}
       </div>
+
+      {/* Invoice strip (Style B) */}
+      {ticket.invoice_number && (
+        <div style={{
+          display:'flex', alignItems:'center', gap:16, flexWrap:'wrap',
+          background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
+          padding:'8px 16px', marginBottom:12, fontSize:13,
+        }}>
+          <span style={{display:'flex',alignItems:'center',gap:6,fontWeight:700,color:'#0f172a',fontFamily:'monospace',fontSize:14}}>
+            🧾 {ticket.invoice_number}
+          </span>
+          <span style={{color:'#cbd5e1'}}>|</span>
+          <span style={{color:'#64748b'}}>📅 {ticket.created_at?.slice(0,10)}</span>
+          <span style={{color:'#cbd5e1'}}>|</span>
+          <span style={{color:'#64748b'}}>
+            {TEAM_ICONS[ticket.opener_team]||''} {ticket.opener_team}
+            <span style={{margin:'0 6px',color:'#94a3b8'}}>→</span>
+            <strong style={{color:'#0f172a'}}>{TEAM_ICONS[ticket.current_team]||''} {ticket.current_team}</strong>
+          </span>
+        </div>
+      )}
 
       {/* Header card */}
       <div className="card p-5 mb-4">
@@ -2252,6 +2313,36 @@ function TicketDetail({ ticketId, user, onBack }) {
                 </button>
               </div>
               {msg && <p className="text-xs text-red-500 mt-1">{msg}</p>}
+            </div>
+          )}
+
+          {/* 2a. Workflow guidance info box */}
+          {!isPendingAck && !isPendingFault && ticket.status !== 'closed'
+            && isMyTeam && ticket.case_type !== 'Complain'
+            && WORKFLOW_GUIDE[user.team] && (
+            <div style={{
+              background:'#fffbeb', border:'1px solid #fcd34d',
+              borderLeft:'4px solid #f59e0b', borderRadius:8, padding:'12px 16px', marginBottom:4,
+            }}>
+              <div style={{fontSize:12,fontWeight:700,color:'#92400e',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                📋 แนะนำขั้นตอนสำหรับทีม {user.team}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                {WORKFLOW_GUIDE[user.team].items.map((item, i) => (
+                  <div key={i} style={{display:'flex',gap:8,fontSize:12,alignItems:'baseline'}}>
+                    <span style={{color:'#78716c',flexShrink:0}}>•</span>
+                    <span style={{color:'#44403c'}}>
+                      {item.when}
+                      <span style={{color:'#92400e',fontWeight:600,marginLeft:6}}>→ {item.then}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {WORKFLOW_GUIDE[user.team].notes.map((note, i) => (
+                <div key={i} style={{marginTop:8,fontSize:11,color:'#78716c',fontStyle:'italic',display:'flex',gap:6}}>
+                  <span>📝</span><span>{note}</span>
+                </div>
+              ))}
             </div>
           )}
 
