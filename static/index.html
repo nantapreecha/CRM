@@ -1696,24 +1696,26 @@ function TicketList({ user, onSelect }) {
   const [myTeamOnly, setMyTeamOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'byTeam'
 
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (myTeamOnly && user.team) params.set('team', user.team);
-    if (typeFilter) params.set('case_type', typeFilter);
+    // In byTeam mode always load all tickets so we can compute team stats
+    if (myTeamOnly && user.team && viewMode === 'list') params.set('team', user.team);
     api('/api/tickets?' + params).then(d => {
       setAllTickets(d || []);
       setLoading(false);
     });
-  }, [myTeamOnly, typeFilter, user.team]);
+  }, [myTeamOnly, viewMode, user.team]);
 
   useEffect(() => { load(); }, [load]);
 
-  // base filter: date + search only (no statusFilter, no typeFilter)
+  // base filter: date + search only (no statusFilter, no typeFilter, no teamFilter)
   const baseFiltered = allTickets.filter(t => {
     if (dateFrom && t.created_at && t.created_at.slice(0,10) < dateFrom) return false;
     if (dateTo   && t.created_at && t.created_at.slice(0,10) > dateTo)   return false;
@@ -1728,10 +1730,11 @@ function TicketList({ user, onSelect }) {
     return true;
   });
 
-  // actual displayed list: base + both filters
+  // actual displayed list: base + all active filters
   const filtered = baseFiltered.filter(t => {
     if (statusFilter && t.status    !== statusFilter) return false;
     if (typeFilter   && t.case_type !== typeFilter)   return false;
+    if (teamFilter   && t.current_team !== teamFilter) return false;
     return true;
   });
 
@@ -1757,8 +1760,34 @@ function TicketList({ user, onSelect }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold" style={{color:'var(--text)'}}>All Cases</h2>
-        <button className="btn btn-secondary text-sm" onClick={load}><Icon name="refresh" size={13}/> Refresh</button>
+        <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div style={{display:'flex',border:'1px solid #e5e7eb',borderRadius:8,overflow:'hidden'}}>
+            {[{id:'list',icon:'list',label:'List'},{id:'byTeam',icon:'grid',label:'By Team'}].map(v=>(
+              <button key={v.id} onClick={()=>{setViewMode(v.id); if(v.id==='byTeam'){setTeamFilter('');setStatusFilter('');setTypeFilter('');}}}
+                style={{
+                  padding:'6px 14px', fontSize:12, fontWeight:600, cursor:'pointer',
+                  background: viewMode===v.id ? '#111827' : '#fff',
+                  color: viewMode===v.id ? '#fff' : '#6b7280',
+                  border:'none', display:'flex', alignItems:'center', gap:5,
+                }}>
+                <Icon name={v.icon} size={12}/> {v.label}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-secondary text-sm" onClick={load}><Icon name="refresh" size={13}/> Refresh</button>
+        </div>
       </div>
+
+      {/* ── By Team board view ── */}
+      {viewMode === 'byTeam' && (
+        <ByTeamBoard tickets={allTickets} loading={loading}
+          onSelectTeam={team => { setTeamFilter(team); setViewMode('list'); }}
+          onSelectTicket={onSelect}/>
+      )}
+
+      {/* ── List view ── */}
+      {viewMode === 'list' && <>
 
       {/* Status tabs */}
       <div className="flex border-b mb-3 overflow-x-auto">
@@ -1825,6 +1854,14 @@ function TicketList({ user, onSelect }) {
           <span>{myTeamOnly?'✓':''}</span>
           My team only ({user.team})
         </label>
+        {/* Team filter chip (set from By Team board) */}
+        {teamFilter && (
+          <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,
+            background: TEAM_COLORS[teamFilter]||'#6b7280', color:'#fff', fontSize:12, fontWeight:600}}>
+            {TEAM_ICONS[teamFilter]||''} {teamFilter}
+            <button onClick={()=>setTeamFilter('')} style={{background:'none',border:'none',color:'#fff',cursor:'pointer',padding:0,lineHeight:1,marginLeft:2}}>✕</button>
+          </div>
+        )}
       </div>
 
       {/* Cards */}
@@ -1880,6 +1917,154 @@ function TicketList({ user, onSelect }) {
               ))}
             </div>
       }
+      </>}
+    </div>
+  );
+}
+
+// ── By Team board ──────────────────────────────────────────────────────────────
+const STATUS_BOARD_ORDER = ['open','in_progress','pending_ack','pending_fault','closed'];
+const STATUS_BOARD_COLORS = {
+  open:'#6b7280', in_progress:'#2563eb', pending_ack:'#d97706',
+  pending_fault:'#ea580c', closed:'#16a34a',
+};
+const STATUS_BOARD_SHORT = {
+  open:'Open', in_progress:'In Progress', pending_ack:'Pend. Ack',
+  pending_fault:'Pend. Fault', closed:'Closed',
+};
+
+function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
+  const [expandedTeam, setExpandedTeam] = useState(null);
+
+  if (loading) return <div className="py-16 text-center text-gray-400"><Spinner/></div>;
+
+  // Build team stats from all tickets (not closed)
+  const active = tickets.filter(t => t.status !== 'closed');
+  const teamMap = {};
+
+  // Seed all known teams
+  TEAMS.forEach(t => { teamMap[t] = { total:0, byStatus:{}, tickets:[] }; });
+
+  active.forEach(t => {
+    const team = t.current_team || 'ยังไม่ระบุ';
+    if (!teamMap[team]) teamMap[team] = { total:0, byStatus:{}, tickets:[] };
+    teamMap[team].total++;
+    teamMap[team].byStatus[t.status] = (teamMap[team].byStatus[t.status]||0)+1;
+    teamMap[team].tickets.push(t);
+  });
+
+  // Sort by total desc, then by TEAMS order for ties
+  const teamEntries = Object.entries(teamMap).sort((a,b) => b[1].total - a[1].total || TEAMS.indexOf(a[0]) - TEAMS.indexOf(b[0]));
+  const totalActive = active.length;
+
+  return (
+    <div>
+      {/* Summary bar */}
+      <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
+        <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 18px',display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <span style={{fontSize:22,fontWeight:800,color:'#111827'}}>{totalActive}</span>
+          <span style={{fontSize:11,color:'#6b7280'}}>เคสค้างทั้งหมด</span>
+        </div>
+        {STATUS_BOARD_ORDER.filter(s=>s!=='closed').map(s=>{
+          const cnt = active.filter(t=>t.status===s).length;
+          if (!cnt) return null;
+          return (
+            <div key={s} style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 18px',display:'flex',flexDirection:'column',alignItems:'center'}}>
+              <span style={{fontSize:22,fontWeight:800,color:STATUS_BOARD_COLORS[s]}}>{cnt}</span>
+              <span style={{fontSize:11,color:'#6b7280'}}>{STATUS_BOARD_SHORT[s]}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Team grid */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:14}}>
+        {teamEntries.map(([team, info]) => {
+          const color = TEAM_COLORS[team] || '#9ca3af';
+          const isExpanded = expandedTeam === team;
+          const recentTickets = [...info.tickets].sort((a,b)=>b.id-a.id).slice(0,5);
+          return (
+            <div key={team} style={{background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',
+              boxShadow:'0 1px 4px rgba(0,0,0,.06)',overflow:'hidden',
+              borderLeft:`4px solid ${color}`}}>
+              {/* Card header */}
+              <div style={{padding:'14px 16px',cursor:'pointer'}}
+                onClick={()=>setExpandedTeam(isExpanded ? null : team)}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:18}}>{TEAM_ICONS[team]||'👥'}</span>
+                    <span style={{fontWeight:700,fontSize:14,color:'#111827'}}>{team}</span>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:24,fontWeight:800,color: info.total>0 ? color : '#d1d5db'}}>{info.total}</span>
+                    <span style={{color:'#9ca3af',fontSize:12}}>{isExpanded?'▲':'▼'}</span>
+                  </div>
+                </div>
+                {/* Status breakdown bar */}
+                {info.total > 0 && (
+                  <div>
+                    <div style={{display:'flex',height:6,borderRadius:3,overflow:'hidden',marginBottom:6}}>
+                      {STATUS_BOARD_ORDER.filter(s=>s!=='closed').map(s=>{
+                        const cnt = info.byStatus[s]||0;
+                        if (!cnt) return null;
+                        return <div key={s} style={{flex:cnt,background:STATUS_BOARD_COLORS[s]}} title={`${STATUS_BOARD_SHORT[s]}: ${cnt}`}/>;
+                      })}
+                    </div>
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                      {STATUS_BOARD_ORDER.filter(s=>s!=='closed').map(s=>{
+                        const cnt = info.byStatus[s]||0;
+                        if (!cnt) return null;
+                        return (
+                          <span key={s} style={{fontSize:10,padding:'1px 7px',borderRadius:10,
+                            background: STATUS_BOARD_COLORS[s]+'22', color:STATUS_BOARD_COLORS[s], fontWeight:600}}>
+                            {STATUS_BOARD_SHORT[s]} {cnt}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {info.total === 0 && <div style={{fontSize:12,color:'#9ca3af'}}>ไม่มีเคสค้าง</div>}
+              </div>
+
+              {/* Expanded: recent tickets + action buttons */}
+              {isExpanded && info.total > 0 && (
+                <div style={{borderTop:'1px solid #f1f5f9',padding:'0 0 12px'}}>
+                  {recentTickets.map(t=>(
+                    <div key={t.id} style={{padding:'8px 16px',cursor:'pointer',borderBottom:'1px solid #f9fafb'}}
+                      onClick={()=>onSelectTicket(t.id)}
+                      className="hover:bg-gray-50">
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{fontSize:11,color:'#9ca3af',fontFamily:'monospace'}}>#{t.id}</span>
+                        <span style={{fontSize:11,background:'#f3f4f6',color:'#374151',padding:'1px 7px',borderRadius:10}}>{t.case_type}</span>
+                        <span style={{fontSize:11,padding:'1px 6px',borderRadius:8,
+                          background:STATUS_BOARD_COLORS[t.status]+'22',color:STATUS_BOARD_COLORS[t.status],fontWeight:600}}>
+                          {STATUS_BOARD_SHORT[t.status]}
+                        </span>
+                      </div>
+                      <div style={{fontSize:12,color:'#374151',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                        {t.outlet_name || t.description || '—'}
+                      </div>
+                    </div>
+                  ))}
+                  {info.tickets.length > 5 && (
+                    <div style={{padding:'4px 16px',fontSize:11,color:'#6b7280'}}>
+                      +{info.tickets.length - 5} เคสอื่นๆ
+                    </div>
+                  )}
+                  <div style={{padding:'10px 16px 0',display:'flex',gap:8}}>
+                    <button onClick={()=>onSelectTeam(team)}
+                      style={{flex:1,padding:'6px 0',fontSize:12,fontWeight:600,borderRadius:8,
+                        border:`1px solid ${color}`,color:color,background:'#fff',cursor:'pointer'}}>
+                      ดูทั้งหมด ({info.total})
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
