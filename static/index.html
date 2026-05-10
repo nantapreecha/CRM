@@ -139,7 +139,7 @@ async function apiUpload(path, formData) {
 const TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound'];
 const FAULT_TEAMS = [...TEAMS, 'Customer'];
 const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล'];
-const CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)'];
+const CLAIM_SUBTYPES = ['Express (same day)', 'Next delivery (date TBD)', 'Next delivery (date confirmed)'];
 const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'อื่นๆ'];
 const PRIORITIES = ['High', 'Medium'];
 
@@ -161,17 +161,21 @@ const STATUS_LABELS = {
 
 function fmtDuration(sec) {
   if (!sec && sec !== 0) return '';
-  if (sec < 60) return `${sec}วิ`;
-  if (sec < 3600) return `${Math.floor(sec/60)}น.`;
-  if (sec < 86400) return `${Math.floor(sec/3600)}ชม.${Math.floor((sec%3600)/60)}น.`;
-  return `${Math.floor(sec/86400)}วัน ${Math.floor((sec%86400)/3600)}ชม.`;
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}h${Math.floor((sec%3600)/60)}m`;
+  return `${Math.floor(sec/86400)}d ${Math.floor((sec%86400)/3600)}h`;
 }
 
 function fmtDt(s) {
   if (!s) return '';
   const d = new Date(s);
-  return d.toLocaleDateString('th-TH', { day:'2-digit', month:'short' }) + ' ' +
-    d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mon = months[d.getMonth()];
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${dd} ${mon} ${hh}:${mm}`;
 }
 
 // ── Icon ─────────────────────────────────────────────────────────────────────
@@ -286,7 +290,7 @@ function LandingPage({ user, onChoose, onLogout }) {
         <div style={{marginBottom:36}}>
           <div style={{width:44,height:44,background:'#dc2626',borderRadius:10,display:'inline-flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:14,fontWeight:700,marginBottom:16}}>SMM</div>
           <h1 style={{fontSize:24,fontWeight:700,color:'#111827',margin:0}}>SMM CRM</h1>
-          <p style={{fontSize:14,color:'#6b7280',marginTop:8}}>สวัสดี <strong>{user.display_name}</strong> — เลือก module ที่ต้องการ</p>
+          <p style={{fontSize:14,color:'#6b7280',marginTop:8}}>Welcome <strong>{user.display_name}</strong> — Select module</p>
         </div>
         <div style={{display:'flex',gap:20,justifyContent:'center'}}>
           <button onClick={()=>onChoose('leads')}
@@ -330,7 +334,7 @@ function TeamBadge({ team, size='sm' }) {
 }
 
 function LineChart({ data, xKey, yKey, color='var(--primary)' }) {
-  if (!data || data.length === 0) return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p>;
+  if (!data || data.length === 0) return <p style={{color:'var(--text-muted)',fontSize:13}}>No data yet</p>;
   const max = Math.max(...data.map(d => d[yKey]||0)) || 1;
   const W=560, H=100, pt={top:8,bottom:20,left:28,right:8};
   const cw=W-pt.left-pt.right, ch=H-pt.top-pt.bottom;
@@ -364,9 +368,9 @@ function LineChart({ data, xKey, yKey, color='var(--primary)' }) {
 
 function StackedBar({ teams, totalInvoices }) {
   if (!totalInvoices)
-    return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก)</p>;
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>No data (no invoices in selected period)</p>;
   if (!teams || teams.length===0)
-    return <p style={{color:'var(--text-muted)',fontSize:13}}>✅ ไม่มีเคสผิดพลาดใน {totalInvoices} invoice ช่วงนี้</p>;
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>✅ No error cases in {totalInvoices} invoices this period</p>;
   const total = teams.reduce((s,t)=>s+t.pct,0);
   return (
     <div>
@@ -384,13 +388,13 @@ function StackedBar({ teams, totalInvoices }) {
         {teams.map(t=>(
           <div key={t.team} style={{display:'flex',alignItems:'center',gap:6}}>
             <div style={{width:10,height:10,borderRadius:2,background:TEAM_COLORS[t.team]||'#747474',flexShrink:0}}/>
-            <span><strong>{t.team}</strong>: {t.pct}% ({t.cnt} เคส)</span>
+            <span><strong>{t.team}</strong>: {t.pct}% ({t.cnt} cases)</span>
           </div>
         ))}
       </div>
       <p style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
-        {totalInvoices} invoice ที่ส่งในช่วงนี้ — error rate: {teams.filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.pct,0).toFixed(2)}%
-        {teams.find(t=>t.team==='ยังไม่ระบุ') && <> · <span style={{color:'#9e9e9e'}}>pending: {teams.find(t=>t.team==='ยังไม่ระบุ').cnt} เคส</span></>}
+        {totalInvoices} invoices delivered — error rate: {teams.filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.pct,0).toFixed(2)}%
+        {teams.find(t=>t.team==='ยังไม่ระบุ') && <> · <span style={{color:'#9e9e9e'}}>pending: {teams.find(t=>t.team==='ยังไม่ระบุ').cnt} cases</span></>}
       </p>
     </div>
   );
@@ -439,7 +443,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
 
   if (!ratio || !ratio.total_invoices) return (
     <p style={{color:'var(--text-muted)',fontSize:13,padding:'8px 0'}}>
-      ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก — กรุณา Import ERP ก่อน)
+      No data (no invoices in selected period — please Import ERP first)
     </p>
   );
 
@@ -466,9 +470,9 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
         {[
-          {label:'Invoice ที่ส่งในช่วงนี้', value: total_invoices.toLocaleString(), color:'#111827'},
+          {label:'Invoices Delivered', value: total_invoices.toLocaleString(), color:'#111827'},
           {label:'Cases (Claim+Complain)', value: totalFaults, color:'#dc2626'},
-          {label:'Error Rate รวม', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
+          {label:'Overall Error Rate', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
         ].map(({label,value,color})=>(
           <div key={label} className="card" style={{padding:'14px 16px'}}>
             <div style={{fontSize:22,fontWeight:700,color}}>{value}</div>
@@ -478,7 +482,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       </div>
       {pendingCnt > 0 && (
         <div style={{fontSize:12,color:'#9ca3af',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:6,padding:'6px 12px'}}>
-          ⏳ รวม <strong>{pendingCnt} เคส</strong> ที่ยังรอระบุทีมรับผิดชอบ (แถบสีเทา)
+          ⏳ <strong>{pendingCnt} cases</strong> pending responsibility assignment (grey bar)
         </div>
       )}
 
@@ -591,7 +595,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                   onMouseLeave={()=>setHoveredLine(null)}>
                   <div style={{width: li===0?22:16, height: li===0?3:2, background:ln.color, borderRadius:2}}/>
                   <span style={{fontSize:11,color:li===0?'var(--text)':'var(--text-muted)',fontWeight:li===0?600:400}}>
-                    {li===0 ? 'รวมทุกทีม' : trendTeams[li-1]}
+                    {li===0 ? 'All Teams' : trendTeams[li-1]}
                   </span>
                 </div>
               ))}
@@ -599,13 +603,13 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
           </div>
         );
       })() : (
-        <div style={{fontSize:12,color:'var(--text-muted)'}}>ไม่มีข้อมูล trend (ต้องมีข้อมูลอย่างน้อย 2 วัน)</div>
+        <div style={{fontSize:12,color:'var(--text-muted)'}}>No trend data (need at least 2 data points)</div>
       )}
 
       {/* Weekly Stacked Bar Chart */}
       {weeklyLoading ? (
         <div className="card" style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:8}}>
-          <Spinner size={14}/> <span style={{fontSize:12,color:'var(--text-muted)'}}>กำลังโหลด weekly trend...</span>
+          <Spinner size={14}/> <span style={{fontSize:12,color:'var(--text-muted)'}}>Loading weekly trend...</span>
         </div>
       ) : weeklyData && weeklyData.length > 0 ? (() => {
         const W=1000, H=300, pad={t:28,b:52,l:48,r:20};
@@ -636,8 +640,8 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
 
         return (
           <div className="card" style={{padding:'16px 20px'}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>Error Rate รายสัปดาห์ (แยกตามทีม)</div>
-            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:12}}>1 แท่ง = 1 สัปดาห์ (อา–ส) · hover ที่แท่งเพื่อดูสัดส่วนแต่ละทีม</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>Weekly Error Rate (by Team)</div>
+            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:12}}>1 bar = 1 week (Sun–Sat) · hover a bar to see team breakdown</div>
             <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'default'}}
               onMouseLeave={()=>setHoveredBar(null)}>
 
@@ -716,7 +720,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                     <rect x={tx} y={ty} width={TW} height={TH} rx={6} fill="white" stroke="#e5e7eb" strokeWidth="1"/>
                     {/* header */}
                     <text x={tx+10} y={ty+16} fontSize={10} fontWeight="700" fill="#111827">
-                      {weekLabel(w.date)} · รวม {w.rate.toFixed(1)}% ({w.faults}/{w.invoices})
+                      {weekLabel(w.date)} · total {w.rate.toFixed(1)}% ({w.faults}/{w.invoices})
                     </text>
                     {/* divider */}
                     <line x1={tx+6} y1={ty+22} x2={tx+TW-6} y2={ty+22} stroke="#e5e7eb" strokeWidth="0.5"/>
@@ -729,7 +733,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                           {t.team}:
                         </text>
                         <text x={tx+TW-10} y={ty+37+ti*lineH} textAnchor="end" fontSize={9} fontWeight="600" fill="#111827">
-                          {t.rate.toFixed(1)}% · {t.faults} เคส
+                          {t.rate.toFixed(1)}% · {t.faults} cases
                         </text>
                       </g>
                     ))}
@@ -749,13 +753,13 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
           </div>
         );
       })() : weeklyData && weeklyData.length === 0 ? (
-        <div style={{fontSize:12,color:'var(--text-muted)',padding:'4px 0'}}>ไม่มีข้อมูล weekly trend ในช่วงที่เลือก</div>
+        <div style={{fontSize:12,color:'var(--text-muted)',padding:'4px 0'}}>No weekly trend data for selected period</div>
       ) : null}
 
       {/* Per-team bars — รวม ยังไม่ระบุ (สีเทา) */}
       {(teams||[]).length > 0 && (
         <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:12}}>Error Rate แยกตาม Team</div>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:12}}>Error Rate by Team</div>
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {(teams||[]).map(t=>{
               const isPending = t.team === 'ยังไม่ระบุ';
@@ -764,13 +768,13 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
               return (
                 <div key={t.team} style={{display:'flex',alignItems:'center',gap:10}}>
                   <div style={{width:100,fontSize:12,color:labelColor,flexShrink:0,fontWeight:500,fontStyle:isPending?'italic':'normal'}}>
-                    {isPending ? '(ยังไม่ระบุ)' : t.team}
+                    {isPending ? '(Unassigned)' : t.team}
                   </div>
                   <div style={{flex:1,height:18,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
                     <div style={{width:(t.pct/maxPct*100)+'%',height:'100%',background:barColor,borderRadius:4,transition:'width .4s'}}/>
                   </div>
                   <div style={{width:80,fontSize:12,color:'var(--text-muted)',flexShrink:0,textAlign:'right'}}>
-                    {t.pct}% · {t.cnt} เคส
+                    {t.pct}% · {t.cnt} cases
                   </div>
                 </div>
               );
@@ -782,9 +786,9 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       {/* Debug: ทำไมเคสถึงไม่ขึ้น */}
       <div className="card" style={{padding:'14px 16px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom: showDebug ? 12 : 0}}>
-          <div style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>🔍 วิเคราะห์เคสทั้งหมด — ทำไมถึงนับ/ไม่นับใน Case/Invoice %</div>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>🔍 Case Analysis — why cases are included/excluded in Case/Invoice %</div>
           <button className="btn btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={loadDebug} disabled={loadingDebug}>
-            {loadingDebug ? <Spinner size={12}/> : showDebug ? 'ซ่อน' : 'ดูรายละเอียด'}
+            {loadingDebug ? <Spinner size={12}/> : showDebug ? 'Hide' : 'View Details'}
           </button>
         </div>
         {showDebug && debug && (() => {
@@ -805,12 +809,12 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                     background: reason.startsWith('✓') ? '#d1fae5' : '#fee2e2',
                     color: reason.startsWith('✓') ? '#065f46' : '#991b1b',
                     border: '1px solid ' + (reason.startsWith('✓') ? '#a7f3d0' : '#fca5a5')
-                  }}>{reason}: {cnt} เคส</span>
+                  }}>{reason}: {cnt} cases</span>
                 ))}
               </div>
               {/* filter tabs */}
               <div style={{display:'flex',gap:6,marginBottom:10}}>
-                {[['all','ทั้งหมด ('+rows.length+')'],['included','นับแล้ว ('+debug.included+')'],['excluded','ไม่นับ ('+(rows.length-debug.included)+')']].map(([v,l])=>(
+                {[['all','All ('+rows.length+')'],['included','Included ('+debug.included+')'],['excluded','Excluded ('+(rows.length-debug.included)+')']].map(([v,l])=>(
                   <button key={v} onClick={()=>setFilterDebug(v)}
                     style={{fontSize:11,padding:'3px 10px',borderRadius:4,border:'1px solid var(--border)',
                       background: filterDebug===v?'#111827':'#fff', color: filterDebug===v?'#fff':'var(--text)', cursor:'pointer'}}>
@@ -824,10 +828,10 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                   <thead style={{position:'sticky',top:0,background:'#f9fafb'}}>
                     <tr style={{color:'var(--text-muted)',textAlign:'left'}}>
                       <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Ticket</th>
-                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>ประเภท</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Type</th>
                       <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Invoice</th>
-                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>วันที่เปิด</th>
-                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>เหตุผล</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Opened</th>
+                      <th style={{padding:'6px 8px',fontWeight:600,borderBottom:'1px solid var(--border)'}}>Reason</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -863,7 +867,7 @@ function FilePreview({ url, className = '' }) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer"
         className={`inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm hover:bg-red-100 ${className}`}>
-        <Icon name="file-text" size={14}/> ดู PDF
+        <Icon name="file-text" size={14}/> View PDF
       </a>
     );
   }
@@ -956,7 +960,7 @@ function DateRangeFilter({ value, onChange }) {
       <input type="date" value={value.end}
         onChange={e=>{ if(e.target.value.length===10) onChange({...value,end:e.target.value}); }}
         style={{width:140,fontSize:13}}/>
-      {[{l:'7 วัน',s:d7},{l:'30 วัน',s:d30}].map(({l,s})=>(
+      {[{l:'7 days',s:d7},{l:'30 days',s:d30}].map(({l,s})=>(
         <button type="button" key={l} onClick={()=>onChange({start:s,end:today})}
           style={{fontSize:12,padding:'4px 10px',border:'1px solid var(--border)',borderRadius:4,
             background:'#fff',cursor:'pointer',color:'var(--text)'}}>{l}</button>
@@ -1086,8 +1090,8 @@ function Dashboard() {
         {overview.by_team_backlog && overview.by_team_backlog.length > 0 && (
           <div className="card p-4">
             <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:14}}>
-              <h3 className="font-semibold text-gray-700">🔄 เคสค้างแต่ละทีม</h3>
-              <span style={{fontSize:11,color:'var(--text-muted)'}}>เรียงจากมากไปน้อย · ไม่นับเคสที่ปิดแล้ว</span>
+              <h3 className="font-semibold text-gray-700">🔄 Backlog by Team</h3>
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>Sorted most to least · Excludes closed cases</span>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {overview.by_team_backlog.map((r, i) => {
@@ -1272,10 +1276,10 @@ function Dashboard() {
         <div className="card overflow-hidden">
           <div className="card-header">Responsibility by Employee</div>
           <div className="p-4">
-          {byEmp.length === 0 ? <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p> : (
+          {byEmp.length === 0 ? <p style={{color:'var(--text-muted)',fontSize:13}}>No data yet</p> : (
             <table style={{width:'100%'}}>
               <thead><tr>
-                <th>Employee</th><th>Team</th><th>Cases</th><th>% ของ Total</th>
+                <th>Employee</th><th>Team</th><th>Cases</th><th>% of Total</th>
               </tr></thead>
               <tbody>
                 {byEmp.map((r,i) => (
@@ -1299,12 +1303,12 @@ function Dashboard() {
 
       {false && tab === 'trend' && (
         <div className="card overflow-hidden">
-          <div className="card-header">จำนวนเคสต่อวัน</div>
+          <div className="card-header">Cases per Day</div>
           <div className="p-4">
             <LineChart data={trend} xKey="day" yKey="cnt" color="var(--primary)"/>
             {trend.length > 0 && (
               <p style={{fontSize:11,color:'var(--text-muted)',marginTop:8}}>
-                รวม {trend.reduce((s,d)=>s+(d.cnt||0),0)} เคส ใน {trend.length} วัน
+                {trend.reduce((s,d)=>s+(d.cnt||0),0)} cases in {trend.length} days
               </p>
             )}
           </div>
@@ -1316,7 +1320,7 @@ function Dashboard() {
           <div className="card-header">Open Cases Aging</div>
           <div className="p-4">
             {aging.length === 0
-              ? <p style={{color:'var(--text-muted)',fontSize:13}}>ไม่มีเคสค้างอยู่</p>
+              ? <p style={{color:'var(--text-muted)',fontSize:13}}>No pending cases</p>
               : (
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12}}>
                   {aging.map(a => {
@@ -1613,9 +1617,9 @@ function CreateTicket({ user, onCreated }) {
               <label className="text-sm font-medium text-gray-700 block mb-1">Claim Type *</label>
               <select value={form.resolution_type} onChange={e=>set('resolution_type',e.target.value)}>
                 <option value="">-- Select resolution --</option>
-                <option value="ส่งด่วน">🚚 ส่งด่วน (Express delivery)</option>
-                <option value="ส่งพร้อมออเดอร์ถัดไป">📦 ส่งพร้อมออเดอร์ถัดไป (Next order)</option>
-                <option value="อื่นๆ">📝 อื่นๆ (Other)</option>
+                <option value="ส่งด่วน">🚚 Express delivery</option>
+                <option value="ส่งพร้อมออเดอร์ถัดไป">📦 Next order</option>
+                <option value="อื่นๆ">📝 Other</option>
               </select>
             </div>
           )}
@@ -1667,7 +1671,7 @@ function CreateTicket({ user, onCreated }) {
             <p className="text-xs text-gray-400 mt-2">* Update Invoice is usually sent to Sales/KAM or Sales Co</p>
           )}
           {isWangBil && (
-            <p className="text-xs text-gray-400 mt-2">* วางบิล — เลือกทีมที่รับผิดชอบดำเนินการ</p>
+            <p className="text-xs text-gray-400 mt-2">* วางบิล — select the responsible team to handle</p>
           )}
         </div>
 
@@ -1810,7 +1814,7 @@ function TicketList({ user, onSelect, onUnreadCount }) {
 
       {/* Case Type filter pills */}
       <div className="flex gap-2 mb-3 flex-wrap">
-        {[{key:'',label:'ทุกประเภท'}, ...CASE_TYPES.map(t=>({key:t,label:t}))].map(({key,label}) => {
+        {[{key:'',label:'All Types'}, ...CASE_TYPES.map(t=>({key:t,label:t}))].map(({key,label}) => {
           const cnt = key === ''
             ? forTypeCount.length
             : forTypeCount.filter(t => t.case_type === key).length;
@@ -1837,15 +1841,15 @@ function TicketList({ user, onSelect, onUnreadCount }) {
         <div className="flex-1 min-w-48 relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="ค้นหา outlet, description, case #..."
+            placeholder="Search outlet, description, case #..."
             style={{paddingLeft:32}}/>
         </div>
         <div className="flex items-center gap-1">
           <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
-            style={{width:140}} title="จากวันที่"/>
+            style={{width:140}} title="From date"/>
           <span className="text-gray-400 text-sm">—</span>
           <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
-            style={{width:140}} title="ถึงวันที่"/>
+            style={{width:140}} title="To date"/>
           {(dateFrom||dateTo) && (
             <button className="text-xs text-gray-400 hover:text-red-500 px-1" title="Clear dates"
               onClick={()=>{setDateFrom('');setDateTo('');}}>✕</button>
@@ -1880,7 +1884,7 @@ function TicketList({ user, onSelect, onUnreadCount }) {
                   <div className="p-4 flex items-start gap-3">
                     {/* Unread dot */}
                     {!t.is_read && (
-                      <div style={{width:8,height:8,borderRadius:'50%',background:'#2563eb',marginTop:6,flexShrink:0}} title="ยังไม่ได้อ่าน"/>
+                      <div style={{width:8,height:8,borderRadius:'50%',background:'#2563eb',marginTop:6,flexShrink:0}} title="Unread"/>
                     )}
                     <div className="flex-1 min-w-0">
                       {/* Top row: id + type + priority + date */}
@@ -1966,7 +1970,7 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
       <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
         <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 18px',display:'flex',flexDirection:'column',alignItems:'center'}}>
           <span style={{fontSize:22,fontWeight:800,color:'#111827'}}>{totalActive}</span>
-          <span style={{fontSize:11,color:'#6b7280'}}>เคสค้างทั้งหมด</span>
+          <span style={{fontSize:11,color:'#6b7280'}}>Total Active Cases</span>
         </div>
         {STATUS_BOARD_ORDER.filter(s=>s!=='closed').map(s=>{
           const cnt = active.filter(t=>t.status===s).length;
@@ -2027,7 +2031,7 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
                     </div>
                   </div>
                 )}
-                {info.total === 0 && <div style={{fontSize:12,color:'#9ca3af'}}>ไม่มีเคสค้าง</div>}
+                {info.total === 0 && <div style={{fontSize:12,color:'#9ca3af'}}>No active cases</div>}
               </div>
 
               {/* Expanded: recent tickets + action buttons */}
@@ -2052,14 +2056,14 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
                   ))}
                   {info.tickets.length > 5 && (
                     <div style={{padding:'4px 16px',fontSize:11,color:'#6b7280'}}>
-                      +{info.tickets.length - 5} เคสอื่นๆ
+                      +{info.tickets.length - 5} more cases
                     </div>
                   )}
                   <div style={{padding:'10px 16px 0',display:'flex',gap:8}}>
                     <button onClick={()=>onSelectTeam(team)}
                       style={{flex:1,padding:'6px 0',fontSize:12,fontWeight:600,borderRadius:8,
                         border:`1px solid ${color}`,color:color,background:'#fff',cursor:'pointer'}}>
-                      ดูทั้งหมด ({info.total})
+                      See all ({info.total})
                     </button>
                   </div>
                 </div>
@@ -2097,7 +2101,7 @@ function Timeline({ ticketId, user, isClosed }) {
         method: 'POST', body: JSON.stringify({ note: noteText, image_url: serializeImages(noteImages) })
       });
       if (res && res.ok) { setNoteText(''); setNoteImages([]); loadLogs(); }
-      else setNoteMsg(res?.error || 'เกิดข้อผิดพลาด');
+      else setNoteMsg(res?.error || 'An error occurred');
     } catch(ex) { setNoteMsg('Error: ' + ex.message); }
     finally { setSaving(false); }
   };
@@ -2159,7 +2163,7 @@ function Timeline({ ticketId, user, isClosed }) {
         <div className="card p-4 mt-4 border-l-4 border-amber-400">
           <h4 className="font-semibold text-sm text-gray-700 mb-2">💬 Add note</h4>
           <textarea rows={2} value={noteText} onChange={e=>setNoteText(e.target.value)}
-            placeholder="พิมข้อความ..." className="mb-2 text-sm"/>
+            placeholder="Type a message..." className="mb-2 text-sm"/>
           <ImageUploader urls={noteImages} onAdd={addNoteImg} onRemove={removeNoteImg}/>
           <div className="flex items-center justify-between mt-2">
             <div/>
@@ -2305,7 +2309,7 @@ function TicketDetail({ ticketId, user, onBack }) {
       </tr>`).join('');
     const dateStr = ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('th-TH') : '';
     const win = window.open('', '_blank');
-    if (!win) { alert('กรุณาอนุญาต popup ในเบราว์เซอร์ก่อน แล้วลองใหม่อีกครั้ง'); return; }
+    if (!win) { alert('Please allow popups in your browser and try again.'); return; }
     win.document.write(`<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
       <title>claim-${ticket.ticket_no || ticketId}</title>
@@ -2451,7 +2455,7 @@ function TicketDetail({ ticketId, user, onBack }) {
         })()}
         {ticket.fault_team && (
           <div className="mt-3 text-xs text-orange-700 bg-orange-50 px-3 py-1.5 rounded-lg">
-            👤 ทีมรับผิดชอบ: <strong>{ticket.fault_team}</strong>
+            👤 Responsible Team: <strong>{ticket.fault_team}</strong>
             {ticket.fault_employee_name && <> → {ticket.fault_employee_name}</>}
           </div>
         )}
@@ -2498,7 +2502,7 @@ function TicketDetail({ ticketId, user, onBack }) {
           {ticket.status !== 'closed' && (
             <div className="card p-4 border-l-4 border-amber-400">
               <h4 className="font-semibold text-gray-700 mb-2">💬 Save note</h4>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="บันทึกข้อความ..." className="mb-2"/>
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Write a note..." className="mb-2"/>
               <ImageUploader urls={imageUrls} onAdd={addImage} onRemove={removeImage}/>
               <div className="flex items-center justify-between mt-2">
                 <div/>
@@ -2508,7 +2512,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                     try {
                       const res = await api(`/api/tickets/${ticketId}/note`, {method:'POST', body:JSON.stringify({note,image_url:serializeImages(imageUrls)})});
                       if(res&&res.ok){setNote('');setImageUrls([]);}
-                      else setMsg(res?.error||'เกิดข้อผิดพลาด');
+                      else setMsg(res?.error||'An error occurred');
                     } catch(ex){setMsg('Error: '+ex.message);}
                     finally{setSaving(false);}
                   }}>
@@ -2528,7 +2532,7 @@ function TicketDetail({ ticketId, user, onBack }) {
               borderLeft:'4px solid #f59e0b', borderRadius:8, padding:'12px 16px', marginBottom:4,
             }}>
               <div style={{fontSize:12,fontWeight:700,color:'#92400e',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
-                📋 แนะนำขั้นตอนสำหรับทีม {user.team}
+                📋 Recommended steps for team {user.team}
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:5}}>
                 {WORKFLOW_GUIDE[user.team].items.map((item, i) => (
@@ -2555,7 +2559,7 @@ function TicketDetail({ ticketId, user, onBack }) {
               <h4 className="font-semibold text-gray-700 mb-3">📤 Forward to Team</h4>
               <div className="flex gap-2">
                 <select value={forwardTeam} onChange={e=>setForwardTeam(e.target.value)} style={{flex:1}}>
-                  <option value="">-- เลือกทีมที่ต้องการส่ง --</option>
+                  <option value="">-- Select team to forward to --</option>
                   {TEAMS.filter(t=>t!==ticket.current_team).map(t=>(
                     <option key={t} value={t}>{TEAM_ICONS[t]} {t}</option>
                   ))}
@@ -2601,7 +2605,7 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 4. Attribute fault (fault team, pending_fault) */}
           {isPendingFault && ticket.fault_team === user.team && (
             <div className="card p-4 border-l-4 border-pink-500">
-              <h4 className="font-semibold text-gray-700 mb-3">👤 ระบุทีมรับผิดชอบ</h4>
+              <h4 className="font-semibold text-gray-700 mb-3">👤 Assign Responsible Team</h4>
 
               {/* Info box */}
               <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:8,padding:'10px 14px',marginBottom:14}}>
@@ -2614,12 +2618,12 @@ function TicketDetail({ ticketId, user, onBack }) {
 
               {/* Confirm section */}
               <div style={{marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:6}}>เลือกพนักงานที่เกี่ยวข้อง</div>
+                <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:6}}>Select responsible employee</div>
                 <select value={faultEmployee} onChange={e=>setFaultEmployee(e.target.value)} className="mb-2">
-                  <option value="">-- เลือกพนักงาน --</option>
+                  <option value="">-- Select employee --</option>
                   {faultTeamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
-                <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="หมายเหตุเพิ่มเติม (optional)" className="mb-2"/>
+                <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Additional note (optional)" className="mb-2"/>
                 <button className="btn btn-primary w-full" disabled={saving||!faultEmployee}
                   onClick={()=>act('attribute-fault',{employee_id:faultEmployee,note})}>
                   {saving?<Spinner/>:'✅ Confirm'}
@@ -2629,13 +2633,13 @@ function TicketDetail({ ticketId, user, onBack }) {
               {/* Divider */}
               <div style={{display:'flex',alignItems:'center',gap:8,margin:'14px 0'}}>
                 <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
-                <span style={{fontSize:11,color:'#9ca3af',flexShrink:0}}>หรือหากไม่ใช่ทีมที่รับผิดชอบ</span>
+                <span style={{fontSize:11,color:'#9ca3af',flexShrink:0}}>or if your team is not responsible</span>
                 <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
               </div>
 
               {/* Dispute section */}
               <div>
-                <div style={{fontSize:12,fontWeight:600,color:'#b91c1c',marginBottom:6}}>เหตุผลในการโต้แย้ง (บังคับระบุ)</div>
+                <div style={{fontSize:12,fontWeight:600,color:'#b91c1c',marginBottom:6}}>Dispute reason (required)</div>
                 <textarea rows={2} value={disputeNote} onChange={e=>setDisputeNote(e.target.value)}
                   placeholder="เช่น ข้อผิดพลาดนี้เกิดจากทีม Outbound ไม่ใช่ทีมของเรา..."
                   style={{borderColor: disputeNote ? '#e5e7eb' : undefined}}
@@ -2650,7 +2654,7 @@ function TicketDetail({ ticketId, user, onBack }) {
                     color: disputeNote.trim() ? '#dc2626' : '#9ca3af',
                     transition:'all .15s',
                   }}>
-                  {saving ? <Spinner/> : '🔄 Dispute — ส่งกลับ CX'}
+                  {saving ? <Spinner/> : '🔄 Dispute — Send back to CX'}
                 </button>
               </div>
             </div>
@@ -2704,7 +2708,7 @@ function Users({ currentUser }) {
   };
 
   const deleteUser = async (uid, name) => {
-    if (!window.confirm(`ลบ user "${name}" ออกจากระบบ?\nการกระทำนี้ไม่สามารถยกเลิกได้`)) return;
+    if (!window.confirm(`Delete user "${name}"?\nThis action cannot be undone.`)) return;
     try {
       const token = localStorage.getItem('crm_token');
       const r = await fetch(`/api/users/${uid}`, {
@@ -2715,9 +2719,9 @@ function Users({ currentUser }) {
       let data;
       try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
       if (r.ok && data.ok) { load(); setMsg(''); }
-      else setMsg('ลบไม่สำเร็จ: ' + (data.error || r.status));
+      else setMsg('Delete failed: ' + (data.error || r.status));
     } catch(err) {
-      setMsg('ลบไม่สำเร็จ: ' + err.message);
+      setMsg('Delete failed: ' + err.message);
     }
   };
 
@@ -2833,7 +2837,7 @@ function Users({ currentUser }) {
                   <td className="p-3">
                     <button type="button" className="btn btn-secondary text-xs" onClick={()=>startEdit(u)}>Edit</button>
                     {u.id !== currentUser.id && (
-                      <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id, u.display_name)}>ลบ</button>
+                      <button type="button" className="btn btn-danger text-xs" onClick={()=>deleteUser(u.id, u.display_name)}>Delete</button>
                     )}
                   </td>
                 </tr>
@@ -2845,18 +2849,18 @@ function Users({ currentUser }) {
 
       {/* Seed data */}
       <div className="card p-5 mt-5" style={{borderColor:'#d1d5db'}}>
-        <h3 style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:8}}>ข้อมูลตัวอย่าง (Seed)</h3>
+        <h3 style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:8}}>Sample Data (Seed)</h3>
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
           <div style={{flex:1,minWidth:200}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>สร้างเคสตัวอย่าง</div>
-            <div style={{fontSize:12,color:'var(--text-muted)'}}>สร้าง fake tickets กระจาย 30 วันย้อนหลัง — ลบทิ้งได้ด้วยปุ่ม "ล้างข้อมูลเคส" ด้านล่าง</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>Generate Sample Cases</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>Generate fake tickets spread over 30 days — can be removed with the "Clear Cases" button below</div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <select value={seedCount} onChange={e=>setSeedCount(Number(e.target.value))} style={{width:80,fontSize:13}}>
-              {[30,60,100,200].map(n=><option key={n} value={n}>{n} เคส</option>)}
+              {[30,60,100,200].map(n=><option key={n} value={n}>{n} cases</option>)}
             </select>
             <button type="button" className="btn btn-primary" onClick={seedTickets} disabled={seeding}>
-              {seeding ? <Spinner size={13}/> : 'สร้างข้อมูล'}
+              {seeding ? <Spinner size={13}/> : 'Generate Data'}
             </button>
           </div>
         </div>
@@ -2868,19 +2872,19 @@ function Users({ currentUser }) {
         <h3 style={{fontSize:13,fontWeight:700,color:'#dc2626',marginBottom:8}}>Danger Zone</h3>
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
           <div style={{flex:1,minWidth:200}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>ล้างข้อมูลเคสทั้งหมด</div>
-            <div style={{fontSize:12,color:'var(--text-muted)'}}>ลบ tickets, logs, comments, ประวัติรับผิดชอบทั้งหมด — ไม่สามารถกู้คืนได้</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>Clear All Cases</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>Delete all tickets, logs, comments, responsibility history — cannot be undone</div>
           </div>
           {clearConfirm ? (
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              <span style={{fontSize:12,color:'#dc2626',fontWeight:600}}>แน่ใจแล้วหรือ?</span>
+              <span style={{fontSize:12,color:'#dc2626',fontWeight:600}}>Are you sure?</span>
               <button type="button" className="btn btn-danger" onClick={clearTickets} disabled={clearing}>
-                {clearing ? <Spinner size={13}/> : 'ยืนยัน ลบทั้งหมด'}
+                {clearing ? <Spinner size={13}/> : 'Confirm Delete All'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={()=>setClearConfirm(false)}>ยกเลิก</button>
+              <button type="button" className="btn btn-secondary" onClick={()=>setClearConfirm(false)}>Cancel</button>
             </div>
           ) : (
-            <button type="button" className="btn btn-danger" onClick={clearTickets}>ล้างข้อมูลเคส</button>
+            <button type="button" className="btn btn-danger" onClick={clearTickets}>Clear Cases</button>
           )}
         </div>
         {msg && <div style={{marginTop:8,fontSize:12,color:'#2e844a',fontWeight:600}}>{msg}</div>}
@@ -3139,14 +3143,14 @@ function Employees() {
 
   const save = async e => {
     e.preventDefault();
-    if (!form.name.trim()) return setMsg('กรุณาใส่ชื่อ');
+    if (!form.name.trim()) return setMsg('Please enter a name');
     setSaving(true); setMsg('');
     const method = editId ? 'PUT' : 'POST';
     const path = editId ? `/api/employees/${editId}` : '/api/employees';
     const res = await api(path, { method, body: JSON.stringify(form) });
     setSaving(false);
     if (res && (res.id || res.ok)) { setForm(EMPTY); setEditId(null); load(); }
-    else setMsg(res?.error || 'เกิดข้อผิดพลาด');
+    else setMsg(res?.error || 'An error occurred');
   };
 
   const startEdit = emp => {
@@ -3156,10 +3160,10 @@ function Employees() {
   };
 
   const deleteEmp = async (emp) => {
-    if (!window.confirm(`ลบพนักงาน "${emp.name}" ออกจากระบบ?\nประวัติการรับผิดชอบจะยังคงอยู่ แต่ชื่อพนักงานจะหลุดออก`)) return;
+    if (!window.confirm(`Delete employee "${emp.name}"?\nResponsibility history will remain but the employee name will be removed.`)) return;
     const res = await api(`/api/employees/${emp.id}`, { method: 'DELETE' });
     if (res && res.ok) { load(); setMsg(''); }
-    else setMsg('ลบไม่สำเร็จ: ' + (res?.error || 'Unknown error'));
+    else setMsg('Delete failed: ' + (res?.error || 'Unknown error'));
   };
 
   return (
@@ -3171,11 +3175,11 @@ function Employees() {
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Name *</label>
-            <input value={form.name} onChange={e=>set('name',e.target.value)} required placeholder="ชื่อ-นามสกุล"/>
+            <input value={form.name} onChange={e=>set('name',e.target.value)} required placeholder="Full Name"/>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Employee Code</label>
-            <input value={form.employee_code} onChange={e=>set('employee_code',e.target.value)} placeholder="รหัสพนักงาน"/>
+            <input value={form.employee_code} onChange={e=>set('employee_code',e.target.value)} placeholder="Employee ID"/>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Team *</label>
@@ -3189,11 +3193,11 @@ function Employees() {
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Department</label>
-            <input value={form.department} onChange={e=>set('department',e.target.value)} placeholder="แผนก"/>
+            <input value={form.department} onChange={e=>set('department',e.target.value)} placeholder="Department"/>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Phone</label>
-            <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="เบอร์โทร"/>
+            <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="Phone"/>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Email</label>
@@ -3245,7 +3249,7 @@ function Employees() {
                     <div className="flex gap-2">
                       <button className="btn btn-secondary text-xs" onClick={()=>startEdit(emp)}>Edit</button>
                       <button className="btn text-xs" style={{background:'#fef2f2',color:'#dc2626',border:'1px solid #fca5a5'}}
-                        onClick={()=>deleteEmp(emp)}>ลบ</button>
+                        onClick={()=>deleteEmp(emp)}>Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -3291,9 +3295,9 @@ function ReassignModal({ lead, users, onClose, onReassigned }) {
           <h3 style={{fontSize:15,fontWeight:600,color:'#111827',margin:0}}>Reassign Lead</h3>
           <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:20,lineHeight:1}}>&times;</button>
         </div>
-        <p style={{fontSize:13,color:'#6b7280',marginBottom:14}}><strong>{lead.company_name}</strong> — เปลี่ยน owner ใหม่</p>
+        <p style={{fontSize:13,color:'#6b7280',marginBottom:14}}><strong>{lead.company_name}</strong> — Change owner</p>
         <select value={newOwner} onChange={e=>setNewOwner(e.target.value)} style={{width:'100%',marginBottom:16}}>
-          <option value="">— เลือก owner —</option>
+          <option value="">— Select owner —</option>
           {users.filter(u=>u.role==='sales'||u.role==='admin').map(u=><option key={u.id} value={String(u.id)}>{u.display_name}</option>)}
         </select>
         <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
@@ -3368,11 +3372,11 @@ function AddActivityModal({ leadId, onClose, onSaved }) {
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Subject</label>
-            <input value={form.subject} onChange={e=>set('subject',e.target.value)} placeholder="e.g. โทรนัด meeting" className="w-full" required/>
+            <input value={form.subject} onChange={e=>set('subject',e.target.value)} placeholder="e.g. Call to schedule meeting" className="w-full" required/>
           </div>
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Detail</label>
-            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full" placeholder="รายละเอียด..."/>
+            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={3} className="w-full" placeholder="Details..."/>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -3403,8 +3407,8 @@ function ConvertModal({ lead, onClose, onConverted }) {
           <h3 className="text-base font-semibold text-gray-800">🎉 Convert Lead</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
-        <p className="text-sm text-gray-500 mb-3">Link กับ ERP Account ที่มีอยู่ (ถ้ายังไม่มีใน ERP กด Skip ได้)</p>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ค้นหา account..." className="w-full mb-2"/>
+        <p className="text-sm text-gray-500 mb-3">Link with an existing ERP Account (if not yet in ERP, click Skip)</p>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search account..." className="w-full mb-2"/>
         <div style={{ maxHeight:200, overflowY:'auto', border:'1px solid #e5e7eb', borderRadius:8 }}>
           {filtered.slice(0,30).map(a=>(
             <div key={a.id} onClick={()=>setSelected(a.id===selected?null:a.id)}
@@ -3413,11 +3417,11 @@ function ConvertModal({ lead, onClose, onConverted }) {
               {selected===a.id && '✓ '}{a.name}
             </div>
           ))}
-          {filtered.length===0 && <div className="p-3 text-sm text-gray-400 text-center">ไม่พบ account</div>}
+          {filtered.length===0 && <div className="p-3 text-sm text-gray-400 text-center">No account found</div>}
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={()=>confirm(null)} className="btn btn-secondary" disabled={saving}>Skip (ยังไม่ link)</button>
+          <button onClick={()=>confirm(null)} className="btn btn-secondary" disabled={saving}>Skip (not linked yet)</button>
           <button onClick={()=>confirm(selected)} className="btn btn-primary" disabled={saving||!selected}>{saving?<Spinner/>:'Confirm & Link'}</button>
         </div>
       </div>
@@ -3447,7 +3451,7 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
     api('/api/users').then(d=>setUsers(d||[]));
   },[lead.id]);
 
-  const POSITIONS = ['พนักงานหน้าร้าน','ผู้จัดการร้าน','เจ้าของ','จัดซื้อ','เชฟ'];
+  const POSITIONS = ['Store Staff','Store Manager','Owner','Purchasing','Chef'];
   const startEdit = () => {
     setForm({ company_name:lead.company_name, contact_name:lead.contact_name||'',
       contact_phone:lead.contact_phone||'', contact_email:lead.contact_email||'',
@@ -3461,7 +3465,7 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
     setSaving(false); setEditing(false); reload(); onUpdated && onUpdated();
   };
   const deleteLead = async () => {
-    if (!confirm(`ลบ lead "${lead.company_name}" ?`)) return;
+    if (!confirm(`Delete lead "${lead.company_name}"?`)) return;
     await api(`/api/leads/${lead.id}`, { method:'DELETE' });
     onBack(); onUpdated && onUpdated();
   };
@@ -3554,7 +3558,7 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
             {lead.converted_at && <div><span className="text-gray-400">Converted:</span> <span className="text-gray-700">{fmt(lead.converted_at)}</span></div>}
             {isLost && lead.lost_from_stage && (
               <div className="col-span-2">
-                <span className="text-gray-400">Lost ที่ stage:</span>{' '}
+                <span className="text-gray-400">Lost at stage:</span>{' '}
                 <span className="font-semibold text-red-600">{lead.lost_from_stage}</span>
               </div>
             )}
@@ -3567,7 +3571,7 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
           )}
           {isWon && !lead.converted_account_id && (
             <div className="mt-3 flex items-center gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-              <span>⚠️ ยังไม่ได้ link ERP Account</span>
+              <span>⚠️ ERP Account not linked</span>
             </div>
           )}
         </div>
@@ -3579,7 +3583,7 @@ function LeadDetail({ lead: initLead, user, onBack, onUpdated }) {
           <h3 className="text-base font-semibold text-gray-800">Activity Log</h3>
           <button onClick={()=>setShowAddActivity(true)} className="btn btn-primary" style={{fontSize:12,padding:'4px 12px'}}>+ Add Activity</button>
         </div>
-        {activities.length === 0 && <p className="text-sm text-gray-400 text-center py-4">ยังไม่มี activity</p>}
+        {activities.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No activities yet</p>}
         <div className="space-y-1">
           {activities.map((a, i) => {
             const color = typeColor[a.activity_type] || '#9ca3af';
@@ -3741,7 +3745,7 @@ function KanbanView({ leads, user, onSelect, onStageChange, users }) {
                     </div>
                   );
                 })}
-                {stageLeads.length===0 && <div style={{ border:'1px dashed #e5e7eb', borderRadius:10, padding:'16px 0', textAlign:'center', fontSize:12, color:'#d1d5db' }}>ไม่มี lead</div>}
+                {stageLeads.length===0 && <div style={{ border:'1px dashed #e5e7eb', borderRadius:10, padding:'16px 0', textAlign:'center', fontSize:12, color:'#d1d5db' }}>No leads</div>}
               </div>
             </div>
           );
@@ -3754,7 +3758,7 @@ function KanbanView({ leads, user, onSelect, onStageChange, users }) {
 function ListView({ leads, user, onSelect, onReassigned, users }) {
   const [reassignLead, setReassignLead] = useState(null);
   const isAdmin = user.role === 'admin';
-  const cols = ['Lead No','บริษัท/ร้านค้า','ผู้ติดต่อ','Stage','Owner','Last Activity', ...(isAdmin?['']:[] )];
+  const cols = ['Lead No','Company/Store','Contact','Stage','Owner','Last Activity', ...(isAdmin?['']:[] )];
   return (
     <>
       {reassignLead && <ReassignModal lead={reassignLead} users={users} onClose={()=>setReassignLead(null)} onReassigned={()=>{ setReassignLead(null); onReassigned(); }}/>}
@@ -3769,7 +3773,7 @@ function ListView({ leads, user, onSelect, onReassigned, users }) {
           </thead>
           <tbody>
             {leads.length===0 && (
-              <tr><td colSpan={cols.length} style={{ padding:32, textAlign:'center', color:'#9ca3af', fontSize:14 }}>ไม่มี lead</td></tr>
+              <tr><td colSpan={cols.length} style={{ padding:32, textAlign:'center', color:'#9ca3af', fontSize:14 }}>No leads</td></tr>
             )}
             {leads.map(l=>{
               const untouched = isUntouched(l);
@@ -3814,7 +3818,7 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
   const myId = currentUser.id || currentUser.user_id;
   const isAdmin = currentUser.role === 'admin';
   const salesUsers = users.filter(u => u.role === 'sales' || u.role === 'admin');
-  const POSITIONS = ['พนักงานหน้าร้าน','ผู้จัดการร้าน','เจ้าของ','จัดซื้อ','เชฟ'];
+  const POSITIONS = ['Store Staff','Store Manager','Owner','Purchasing','Chef'];
   const [form, setForm] = useState({
     company_name:'', contact_name:'', contact_phone:'', contact_email:'',
     contact_position:'', branch:'',
@@ -3828,8 +3832,8 @@ function CreateLeadModal({ users, currentUser, onClose, onCreated }) {
     try {
       const res = await api('/api/leads', { method:'POST', body: JSON.stringify(form) });
       if (res && res.id) { onCreated(); }
-      else { setErr(res?.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่'); setSaving(false); }
-    } catch(e) { setErr('ไม่สามารถเชื่อมต่อ server ได้ กรุณาลองใหม่'); setSaving(false); }
+      else { setErr(res?.error || 'An error occurred. Please try again.'); setSaving(false); }
+    } catch(e) { setErr('Unable to connect to server. Please try again.'); setSaving(false); }
   };
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -3944,11 +3948,11 @@ function SalesDashboard({ user }) {
         <div>
           <h1 style={{fontSize:20,fontWeight:700,color:'#111827',margin:0}}>Sales Dashboard</h1>
           <p style={{fontSize:13,color:'#6b7280',marginTop:3}}>
-            {user.role==='admin' ? 'ข้อมูลทั้งทีม' : `ข้อมูลของคุณ — ${user.display_name}`}
+            {user.role==='admin' ? 'All team data' : `Your data — ${user.display_name}`}
           </p>
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          {[['7d','7 วัน'],['30d','30 วัน'],['custom','กำหนดเอง']].map(([v,l])=>(
+          {[['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               style={{padding:'5px 14px',fontSize:12,borderRadius:6,border:'1px solid',cursor:'pointer',
                 background:period===v?'#111827':'#fff', color:period===v?'#fff':'#6b7280',
@@ -3972,9 +3976,9 @@ function SalesDashboard({ user }) {
         <>
           {/* Stat Cards */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
-            <StatCard label="Total Leads" value={total} sub="ทั้งหมด" color="#3b82f6"/>
+            <StatCard label="Total Leads" value={total} sub="all" color="#3b82f6"/>
             <StatCard label="Closed Win" value={data?.closed_wins||0} sub={periodLabel} color="#22c55e"/>
-            <StatCard label="Activities" value={data?.activities_week||0} sub="7 วันที่ผ่านมา" color="#f59e0b"/>
+            <StatCard label="Activities" value={data?.activities_week||0} sub="last 7 days" color="#f59e0b"/>
             <StatCard label="Win Rate" value={total>0?Math.round((data?.closed_wins||0)/total*100)+'%':'—'} sub="Closed Win / Total" color="#8b5cf6"/>
           </div>
 
@@ -3982,7 +3986,7 @@ function SalesDashboard({ user }) {
           <div className="card" style={{padding:20}}>
             <div style={{fontWeight:600,fontSize:14,color:'#111827',marginBottom:16}}>Leads by Stage</div>
             {byStage.length === 0
-              ? <p style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>ยังไม่มีข้อมูล</p>
+              ? <p style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>No data yet</p>
               : <div style={{display:'flex',flexDirection:'column',gap:12}}>
                   {byStage.map(s => {
                     const c   = STAGE_COLORS[s.stage] || {bg:'#f3f4f6',border:'#9ca3af',text:'#374151'};
@@ -4065,7 +4069,7 @@ function App() {
 
           // Browser push notification
           if ('Notification' in window && Notification.permission === 'granted') {
-            const n = new Notification(`🔔 เคสใหม่เข้าทีม ${user.team}`, {
+            const n = new Notification(`🔔 New case for team ${user.team}`, {
               body, tag: String(c.id),
             });
             n.onclick = () => { window.focus(); setSelectedTicket(c.id); setPage('tickets'); n.close(); };
@@ -4082,11 +4086,11 @@ function App() {
           knownDisputeLogIds.current = disputedLogIds;
           newDisputes.slice(0, 3).forEach(d => {
             const tid = ++toastCounter.current;
-            const body = `ทีม ${d.from_team} โต้แย้ง — ${d.outlet_name || d.case_type}`;
+            const body = `Team ${d.from_team} disputed — ${d.outlet_name || d.case_type}`;
             setToasts(prev => [...prev, { id: tid, body, caseId: d.ticket_id, ticket_no: d.ticket_no, isDispute: true }]);
             setTimeout(() => removeToast(tid), 10000);
             if ('Notification' in window && Notification.permission === 'granted') {
-              const n = new Notification(`🔄 มีการโต้แย้งทีมรับผิดชอบ`, { body, tag: 'dispute-' + d.log_id });
+              const n = new Notification(`🔄 Responsibility Disputed`, { body, tag: 'dispute-' + d.log_id });
               n.onclick = () => { window.focus(); setSelectedTicket(d.ticket_id); setPage('tickets'); n.close(); };
             }
           });
@@ -4204,7 +4208,7 @@ function App() {
                   marginLeft:'auto', background:'#2563eb', color:'#fff',
                   fontSize:10, fontWeight:700, borderRadius:10,
                   padding:'1px 7px', minWidth:18, textAlign:'center', lineHeight:'16px',
-                }} title={`${myTeamUnread} เคสยังไม่ได้อ่าน`}>{myTeamUnread > 99 ? '99+' : myTeamUnread}</span>
+                }} title={`${myTeamUnread} unread cases`}>{myTeamUnread > 99 ? '99+' : myTeamUnread}</span>
               )}
             </button>
           ))}
@@ -4256,7 +4260,7 @@ function App() {
               <span style={{fontSize:18,flexShrink:0}}>{t.isDispute ? '🔄' : '🔔'}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>
-                  {t.isDispute ? 'มีการโต้แย้งทีมรับผิดชอบ' : `เคสใหม่เข้าทีม ${user.team}`}
+                  {t.isDispute ? 'Responsibility Disputed' : `New case for team ${user.team}`}
                 </div>
                 <div style={{fontSize:11,color:'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                   {t.ticket_no} · {t.body}
@@ -4265,7 +4269,7 @@ function App() {
               <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}}>
                 <button onClick={()=>{ setSelectedTicket(t.caseId); setPage('tickets'); removeToast(t.id); }}
                   style={{fontSize:11,color:'#60a5fa',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'right'}}>
-                  ดูเคส →
+                  View case →
                 </button>
                 <button onClick={()=>removeToast(t.id)}
                   style={{fontSize:12,color:'#6b7280',background:'none',border:'none',cursor:'pointer',padding:0,textAlign:'right'}}>
