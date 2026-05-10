@@ -366,7 +366,7 @@ function StackedBar({ teams, totalInvoices }) {
   if (!totalInvoices)
     return <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล (ไม่มี invoice ในช่วงที่เลือก)</p>;
   if (!teams || teams.length===0)
-    return <p style={{color:'var(--text-muted)',fontSize:13}}>✅ ไม่มี fault case ใน {totalInvoices} invoice ช่วงนี้</p>;
+    return <p style={{color:'var(--text-muted)',fontSize:13}}>✅ ไม่มีเคสผิดพลาดใน {totalInvoices} invoice ช่วงนี้</p>;
   const total = teams.reduce((s,t)=>s+t.pct,0);
   return (
     <div>
@@ -389,7 +389,7 @@ function StackedBar({ teams, totalInvoices }) {
         ))}
       </div>
       <p style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
-        {totalInvoices} invoice ที่ส่งในช่วงนี้ — fault rate: {teams.filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.pct,0).toFixed(2)}%
+        {totalInvoices} invoice ที่ส่งในช่วงนี้ — error rate: {teams.filter(t=>t.team!=='ยังไม่ระบุ').reduce((s,t)=>s+t.pct,0).toFixed(2)}%
         {teams.find(t=>t.team==='ยังไม่ระบุ') && <> · <span style={{color:'#9e9e9e'}}>pending: {teams.find(t=>t.team==='ยังไม่ระบุ').cnt} เคส</span></>}
       </p>
     </div>
@@ -1137,7 +1137,7 @@ function Dashboard() {
                   {fault.length > 0 && (
                     <div>
                       <div style={{fontSize:11,fontWeight:600,color:'#0d9488',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                        Fault Cases — {faultTotal}
+                        Cases — {faultTotal}
                       </div>
                       <div className="space-y-2">
                         {fault.map((d,i)=><Bar key={i} d={d} color="#0d9488"/>)}
@@ -2869,7 +2869,7 @@ function Users({ currentUser }) {
         <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
           <div style={{flex:1,minWidth:200}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>ล้างข้อมูลเคสทั้งหมด</div>
-            <div style={{fontSize:12,color:'var(--text-muted)'}}>ลบ tickets, logs, comments, fault attribution ทั้งหมด — ไม่สามารถกู้คืนได้</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>ลบ tickets, logs, comments, ประวัติรับผิดชอบทั้งหมด — ไม่สามารถกู้คืนได้</div>
           </div>
           {clearConfirm ? (
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -3156,7 +3156,7 @@ function Employees() {
   };
 
   const deleteEmp = async (emp) => {
-    if (!window.confirm(`ลบพนักงาน "${emp.name}" ออกจากระบบ?\nประวัติ fault attribution จะยังคงอยู่ แต่ชื่อพนักงานจะหลุดออก`)) return;
+    if (!window.confirm(`ลบพนักงาน "${emp.name}" ออกจากระบบ?\nประวัติการรับผิดชอบจะยังคงอยู่ แต่ชื่อพนักงานจะหลุดออก`)) return;
     const res = await api(`/api/employees/${emp.id}`, { method: 'DELETE' });
     if (res && res.ok) { load(); setMsg(''); }
     else setMsg('ลบไม่สำเร็จ: ' + (res?.error || 'Unknown error'));
@@ -4086,7 +4086,7 @@ function App() {
             setToasts(prev => [...prev, { id: tid, body, caseId: d.ticket_id, ticket_no: d.ticket_no, isDispute: true }]);
             setTimeout(() => removeToast(tid), 10000);
             if ('Notification' in window && Notification.permission === 'granted') {
-              const n = new Notification(`🔄 มีการโต้แย้ง Fault Attribution`, { body, tag: 'dispute-' + d.log_id });
+              const n = new Notification(`🔄 มีการโต้แย้งทีมรับผิดชอบ`, { body, tag: 'dispute-' + d.log_id });
               n.onclick = () => { window.focus(); setSelectedTicket(d.ticket_id); setPage('tickets'); n.close(); };
             }
           });
@@ -4256,7 +4256,7 @@ function App() {
               <span style={{fontSize:18,flexShrink:0}}>{t.isDispute ? '🔄' : '🔔'}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>
-                  {t.isDispute ? 'มีการโต้แย้ง Fault Attribution' : `เคสใหม่เข้าทีม ${user.team}`}
+                  {t.isDispute ? 'มีการโต้แย้งทีมรับผิดชอบ' : `เคสใหม่เข้าทีม ${user.team}`}
                 </div>
                 <div style={{fontSize:11,color:'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                   {t.ticket_no} · {t.body}

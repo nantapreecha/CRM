@@ -1292,7 +1292,7 @@ def close_ticket(tid):
 
     is_wang_bil = ticket.get('case_type') == 'วางบิล'
     if not fault_team and not is_wang_bil:
-        return jsonify({'error': 'กรุณาเลือก Fault Team ก่อนปิดเคส'}), 400
+        return jsonify({'error': 'กรุณาเลือกทีมรับผิดชอบก่อนปิดเคส'}), 400
 
     my_team = g.user['team']
     is_admin = g.user['role'] == 'admin'
@@ -1337,7 +1337,7 @@ def attribute_fault(tid):
     my_team = g.user['team']
     is_admin = g.user['role'] == 'admin'
     if ticket['fault_team'] != my_team and not is_admin:
-        return jsonify({'error': 'เฉพาะ Fault Team เท่านั้นที่ระบุพนักงานได้'}), 403
+        return jsonify({'error': 'เฉพาะทีมรับผิดชอบเท่านั้นที่ระบุพนักงานได้'}), 403
 
     now = datetime.now().isoformat()
     mutate("""INSERT INTO ticket_fault_attribution
