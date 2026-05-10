@@ -948,6 +948,7 @@ function ImageUploader({ urls = [], onAdd, onRemove, onUploaded }) {
 // ── DateRangeFilter ───────────────────────────────────────────────────────────
 function DateRangeFilter({ value, onChange }) {
   const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const d7 = new Date(Date.now() - 6*86400000).toISOString().slice(0, 10);
   const d30 = new Date(Date.now() - 29*86400000).toISOString().slice(0, 10);
   return (
@@ -960,8 +961,8 @@ function DateRangeFilter({ value, onChange }) {
       <input type="date" value={value.end}
         onChange={e=>{ if(e.target.value.length===10) onChange({...value,end:e.target.value}); }}
         style={{width:140,fontSize:13}}/>
-      {[{l:'Today',s:today},{l:'7 days',s:d7},{l:'30 days',s:d30}].map(({l,s})=>(
-        <button type="button" key={l} onClick={()=>onChange({start:s,end:today})}
+      {[{l:'Today',s:today,e:today},{l:'Yesterday',s:yesterday,e:yesterday},{l:'7 days',s:d7,e:today},{l:'30 days',s:d30,e:today}].map(({l,s,e})=>(
+        <button type="button" key={l} onClick={()=>onChange({start:s,end:e})}
           style={{fontSize:12,padding:'4px 10px',border:'1px solid var(--border)',borderRadius:4,
             background:'#fff',cursor:'pointer',color:'var(--text)'}}>{l}</button>
       ))}
@@ -1847,9 +1848,10 @@ function TicketList({ user, onSelect, onUnreadCount }) {
         <div className="flex items-center gap-1">
           {(()=>{
             const _today = new Date().toISOString().slice(0,10);
+            const _yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
             const _d7 = new Date(Date.now()-6*86400000).toISOString().slice(0,10);
             const _d30 = new Date(Date.now()-29*86400000).toISOString().slice(0,10);
-            return [['Today',_today,_today],['7 days',_d7,_today],['30 days',_d30,_today]].map(([l,f,t])=>(
+            return [['Today',_today,_today],['Yesterday',_yesterday,_yesterday],['7 days',_d7,_today],['30 days',_d30,_today]].map(([l,f,t])=>(
               <button key={l} type="button" onClick={()=>{setDateFrom(f);setDateTo(t);}}
                 style={{fontSize:11,padding:'3px 8px',border:'1px solid #e5e7eb',borderRadius:4,
                   background: dateFrom===f&&dateTo===t?'#111827':'#fff',
@@ -3951,7 +3953,7 @@ function SalesDashboard({ user }) {
   const byStage = (data?.by_stage || []).slice().sort((a,b) =>
     STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
   const total   = data?.total_leads || 0;
-  const periodLabel = period === '1d' ? 'Today' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
+  const periodLabel = period === '1d' ? 'Today' : period === 'yesterday' ? 'Yesterday' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
 
   return (
     <div style={{padding:24,overflowY:'auto',height:'100%'}}>
@@ -3964,7 +3966,7 @@ function SalesDashboard({ user }) {
           </p>
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          {[['1d','Today'],['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
+          {[['1d','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               style={{padding:'5px 14px',fontSize:12,borderRadius:6,border:'1px solid',cursor:'pointer',
                 background:period===v?'#111827':'#fff', color:period===v?'#fff':'#6b7280',
