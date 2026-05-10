@@ -960,7 +960,7 @@ function DateRangeFilter({ value, onChange }) {
       <input type="date" value={value.end}
         onChange={e=>{ if(e.target.value.length===10) onChange({...value,end:e.target.value}); }}
         style={{width:140,fontSize:13}}/>
-      {[{l:'7 days',s:d7},{l:'30 days',s:d30}].map(({l,s})=>(
+      {[{l:'Today',s:today},{l:'7 days',s:d7},{l:'30 days',s:d30}].map(({l,s})=>(
         <button type="button" key={l} onClick={()=>onChange({start:s,end:today})}
           style={{fontSize:12,padding:'4px 10px',border:'1px solid var(--border)',borderRadius:4,
             background:'#fff',cursor:'pointer',color:'var(--text)'}}>{l}</button>
@@ -3939,7 +3939,7 @@ function SalesDashboard({ user }) {
   const byStage = (data?.by_stage || []).slice().sort((a,b) =>
     STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
   const total   = data?.total_leads || 0;
-  const periodLabel = period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
+  const periodLabel = period === '1d' ? 'Today' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
 
   return (
     <div style={{padding:24,overflowY:'auto',height:'100%'}}>
@@ -3952,7 +3952,7 @@ function SalesDashboard({ user }) {
           </p>
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          {[['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
+          {[['1d','Today'],['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               style={{padding:'5px 14px',fontSize:12,borderRadius:6,border:'1px solid',cursor:'pointer',
                 background:period===v?'#111827':'#fff', color:period===v?'#fff':'#6b7280',
