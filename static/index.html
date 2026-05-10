@@ -1845,11 +1845,23 @@ function TicketList({ user, onSelect, onUnreadCount }) {
             style={{paddingLeft:32}}/>
         </div>
         <div className="flex items-center gap-1">
+          {(()=>{
+            const _today = new Date().toISOString().slice(0,10);
+            const _d7 = new Date(Date.now()-6*86400000).toISOString().slice(0,10);
+            const _d30 = new Date(Date.now()-29*86400000).toISOString().slice(0,10);
+            return [['Today',_today,_today],['7 days',_d7,_today],['30 days',_d30,_today]].map(([l,f,t])=>(
+              <button key={l} type="button" onClick={()=>{setDateFrom(f);setDateTo(t);}}
+                style={{fontSize:11,padding:'3px 8px',border:'1px solid #e5e7eb',borderRadius:4,
+                  background: dateFrom===f&&dateTo===t?'#111827':'#fff',
+                  color: dateFrom===f&&dateTo===t?'#fff':'#6b7280',
+                  cursor:'pointer',whiteSpace:'nowrap'}}>{l}</button>
+            ));
+          })()}
           <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
-            style={{width:140}} title="From date"/>
+            style={{width:130}} title="From date"/>
           <span className="text-gray-400 text-sm">—</span>
           <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
-            style={{width:140}} title="To date"/>
+            style={{width:130}} title="To date"/>
           {(dateFrom||dateTo) && (
             <button className="text-xs text-gray-400 hover:text-red-500 px-1" title="Clear dates"
               onClick={()=>{setDateFrom('');setDateTo('');}}>✕</button>
