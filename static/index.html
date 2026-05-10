@@ -156,7 +156,7 @@ const TEAM_COLORS = {
 
 const STATUS_LABELS = {
   open: 'Open', in_progress: 'In Progress',
-  pending_ack: 'Pending Acknowledge', pending_fault: 'Pending Fault Attribution', closed: 'Closed'
+  pending_ack: 'Pending Acknowledge', pending_fault: 'Pending Responsibility', closed: 'Closed'
 };
 
 function fmtDuration(sec) {
@@ -467,8 +467,8 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
         {[
           {label:'Invoice ที่ส่งในช่วงนี้', value: total_invoices.toLocaleString(), color:'#111827'},
-          {label:'Fault Cases (Claim+Complain)', value: totalFaults, color:'#dc2626'},
-          {label:'Fault Rate รวม', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
+          {label:'Cases (Claim+Complain)', value: totalFaults, color:'#dc2626'},
+          {label:'Error Rate รวม', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
         ].map(({label,value,color})=>(
           <div key={label} className="card" style={{padding:'14px 16px'}}>
             <div style={{fontSize:22,fontWeight:700,color}}>{value}</div>
@@ -478,7 +478,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       </div>
       {pendingCnt > 0 && (
         <div style={{fontSize:12,color:'#9ca3af',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:6,padding:'6px 12px'}}>
-          ⏳ รวม <strong>{pendingCnt} เคส</strong> ที่ยังรอระบุ fault team (แถบสีเทา)
+          ⏳ รวม <strong>{pendingCnt} เคส</strong> ที่ยังรอระบุทีมรับผิดชอบ (แถบสีเทา)
         </div>
       )}
 
@@ -514,7 +514,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
         const isHovering = hoveredLine !== null;
         return (
           <div className="card" style={{padding:'16px 20px'}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:12}}>Fault Rate Trend</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:12}}>Error Rate Trend</div>
             <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'crosshair'}}
               onMouseLeave={()=>setHoveredLine(null)}>
               {/* grid */}
@@ -636,7 +636,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
 
         return (
           <div className="card" style={{padding:'16px 20px'}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>Fault Rate รายสัปดาห์ (แยกตามทีม)</div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>Error Rate รายสัปดาห์ (แยกตามทีม)</div>
             <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:12}}>1 แท่ง = 1 สัปดาห์ (อา–ส) · hover ที่แท่งเพื่อดูสัดส่วนแต่ละทีม</div>
             <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:'auto',display:'block',cursor:'default'}}
               onMouseLeave={()=>setHoveredBar(null)}>
@@ -755,7 +755,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       {/* Per-team bars — รวม ยังไม่ระบุ (สีเทา) */}
       {(teams||[]).length > 0 && (
         <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:12}}>Fault Rate แยกตาม Team</div>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text)',marginBottom:12}}>Error Rate แยกตาม Team</div>
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {(teams||[]).map(t=>{
               const isPending = t.team === 'ยังไม่ระบุ';
@@ -1045,7 +1045,7 @@ function Dashboard() {
     {id:'bottleneck', label:'Bottleneck'},
     {id:'sku', label:'Problem SKUs'},
     {id:'customer', label:'By Account'},
-    {id:'employee', label:'Fault by Employee'},
+    {id:'employee', label:'Responsible by Employee'},
   ];
 
   return (
@@ -1159,7 +1159,7 @@ function Dashboard() {
             })()}
           </div>
           <div className="card p-4">
-            <h3 className="font-semibold text-gray-700 mb-3">Fault Team</h3>
+            <h3 className="font-semibold text-gray-700 mb-3">Responsible Team</h3>
             <BarChart data={faultTeam} labelKey="fault_team" valueKey="cnt" color="#ef4444"/>
           </div>
           <div className="card p-4">
@@ -1270,7 +1270,7 @@ function Dashboard() {
 
       {tab === 'employee' && (
         <div className="card overflow-hidden">
-          <div className="card-header">Fault Attribution by Employee</div>
+          <div className="card-header">Responsibility by Employee</div>
           <div className="p-4">
           {byEmp.length === 0 ? <p style={{color:'var(--text-muted)',fontSize:13}}>ยังไม่มีข้อมูล</p> : (
             <table style={{width:'100%'}}>
@@ -1686,7 +1686,7 @@ const STATUS_TABS = [
   { key: 'open', label: 'Open' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'pending_ack', label: 'Pending Ack' },
-  { key: 'pending_fault', label: 'Pending Fault' },
+  { key: 'pending_fault', label: 'Pending Responsible' },
   { key: 'closed', label: 'Closed' },
 ];
 
@@ -1933,7 +1933,7 @@ const STATUS_BOARD_COLORS = {
 };
 const STATUS_BOARD_SHORT = {
   open:'Open', in_progress:'In Progress', pending_ack:'Pend. Ack',
-  pending_fault:'Pend. Fault', closed:'Closed',
+  pending_fault:'Pend. Responsible', closed:'Closed',
 };
 
 function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
@@ -2450,8 +2450,8 @@ function TicketDetail({ ticketId, user, onBack }) {
           } catch(e) { return null; }
         })()}
         {ticket.fault_team && (
-          <div className="mt-3 text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-            ⚠️ Fault attributed to: <strong>{ticket.fault_team}</strong>
+          <div className="mt-3 text-xs text-orange-700 bg-orange-50 px-3 py-1.5 rounded-lg">
+            👤 ทีมรับผิดชอบ: <strong>{ticket.fault_team}</strong>
             {ticket.fault_employee_name && <> → {ticket.fault_employee_name}</>}
           </div>
         )}
@@ -2601,20 +2601,20 @@ function TicketDetail({ ticketId, user, onBack }) {
           {/* 4. Attribute fault (fault team, pending_fault) */}
           {isPendingFault && ticket.fault_team === user.team && (
             <div className="card p-4 border-l-4 border-pink-500">
-              <h4 className="font-semibold text-gray-700 mb-3">⚠️ Attribute Fault</h4>
+              <h4 className="font-semibold text-gray-700 mb-3">👤 ระบุทีมรับผิดชอบ</h4>
 
               {/* Info box */}
               <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:8,padding:'10px 14px',marginBottom:14}}>
                 <div style={{fontWeight:600,fontSize:13,color:'#92400e',marginBottom:4}}>📋 ขั้นตอนการดำเนินการ</div>
                 <div style={{fontSize:12,color:'#78350f',lineHeight:1.7}}>
-                  <div>• ถ้าทีมของท่าน<strong>รับผิดชอบ</strong>ข้อผิดพลาดนี้ — เลือกพนักงานที่เกี่ยวข้องแล้วกด <strong>Confirm</strong></div>
-                  <div>• ถ้าทีมของท่าน<strong>ไม่ได้รับผิดชอบ</strong> — ระบุเหตุผลแล้วกด <strong>Dispute</strong> เพื่อส่งกลับ CX พิจารณาใหม่</div>
+                  <div>• ถ้าทีมของท่าน<strong>เป็นผู้รับผิดชอบ</strong>ในครั้งนี้ — เลือกพนักงานที่เกี่ยวข้องแล้วกด <strong>Confirm</strong></div>
+                  <div>• ถ้าทีมของท่าน<strong>ไม่ใช่ผู้รับผิดชอบ</strong> — ระบุเหตุผลแล้วกด <strong>Dispute</strong> เพื่อส่งกลับ CX พิจารณาใหม่</div>
                 </div>
               </div>
 
               {/* Confirm section */}
               <div style={{marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:6}}>เลือกพนักงานที่รับผิดชอบ</div>
+                <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:6}}>เลือกพนักงานที่เกี่ยวข้อง</div>
                 <select value={faultEmployee} onChange={e=>setFaultEmployee(e.target.value)} className="mb-2">
                   <option value="">-- เลือกพนักงาน --</option>
                   {faultTeamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
