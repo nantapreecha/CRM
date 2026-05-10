@@ -2190,6 +2190,7 @@ function TicketDetail({ ticketId, user, onBack }) {
   const [ackEmployee, setAckEmployee] = useState('');
   const [faultTeam, setFaultTeam] = useState('');
   const [faultEmployee, setFaultEmployee] = useState('');
+  const [disputeNote, setDisputeNote] = useState('');
   const addImage    = url => setImageUrls(u => [...u, url]);
   const removeImage = i   => setImageUrls(u => u.filter((_, j) => j !== i));
 
@@ -2601,18 +2602,57 @@ function TicketDetail({ ticketId, user, onBack }) {
           {isPendingFault && ticket.fault_team === user.team && (
             <div className="card p-4 border-l-4 border-pink-500">
               <h4 className="font-semibold text-gray-700 mb-3">⚠️ Attribute Fault</h4>
-              <p className="text-sm text-gray-500 mb-3">
-                Team <strong>{ticket.fault_team}</strong> has been identified as responsible. Please select the employee involved.
-              </p>
-              <select value={faultEmployee} onChange={e=>setFaultEmployee(e.target.value)} className="mb-3">
-                <option value="">-- Select employee --</option>
-                {faultTeamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="Additional note" className="mb-3"/>
-              <button className="btn btn-primary w-full" disabled={saving||!faultEmployee}
-                onClick={()=>act('attribute-fault',{employee_id:faultEmployee,note})}>
-                {saving?<Spinner/>:'✅ Confirm'}
-              </button>
+
+              {/* Info box */}
+              <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:8,padding:'10px 14px',marginBottom:14}}>
+                <div style={{fontWeight:600,fontSize:13,color:'#92400e',marginBottom:4}}>📋 ขั้นตอนการดำเนินการ</div>
+                <div style={{fontSize:12,color:'#78350f',lineHeight:1.7}}>
+                  <div>• ถ้าทีมของท่าน<strong>รับผิดชอบ</strong>ข้อผิดพลาดนี้ — เลือกพนักงานที่เกี่ยวข้องแล้วกด <strong>Confirm</strong></div>
+                  <div>• ถ้าทีมของท่าน<strong>ไม่ได้รับผิดชอบ</strong> — ระบุเหตุผลแล้วกด <strong>Dispute</strong> เพื่อส่งกลับ CX พิจารณาใหม่</div>
+                </div>
+              </div>
+
+              {/* Confirm section */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:6}}>เลือกพนักงานที่รับผิดชอบ</div>
+                <select value={faultEmployee} onChange={e=>setFaultEmployee(e.target.value)} className="mb-2">
+                  <option value="">-- เลือกพนักงาน --</option>
+                  {faultTeamEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+                <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} placeholder="หมายเหตุเพิ่มเติม (optional)" className="mb-2"/>
+                <button className="btn btn-primary w-full" disabled={saving||!faultEmployee}
+                  onClick={()=>act('attribute-fault',{employee_id:faultEmployee,note})}>
+                  {saving?<Spinner/>:'✅ Confirm'}
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div style={{display:'flex',alignItems:'center',gap:8,margin:'14px 0'}}>
+                <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
+                <span style={{fontSize:11,color:'#9ca3af',flexShrink:0}}>หรือหากไม่ใช่ทีมที่รับผิดชอบ</span>
+                <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
+              </div>
+
+              {/* Dispute section */}
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:'#b91c1c',marginBottom:6}}>เหตุผลในการโต้แย้ง (บังคับระบุ)</div>
+                <textarea rows={2} value={disputeNote} onChange={e=>setDisputeNote(e.target.value)}
+                  placeholder="เช่น ข้อผิดพลาดนี้เกิดจากทีม Outbound ไม่ใช่ทีมของเรา..."
+                  style={{borderColor: disputeNote ? '#e5e7eb' : undefined}}
+                  className="mb-2"/>
+                <button
+                  disabled={saving || !disputeNote.trim()}
+                  onClick={()=>act('dispute',{note:disputeNote})}
+                  style={{
+                    width:'100%', padding:'8px 0', borderRadius:8, fontSize:13, fontWeight:600,
+                    border:'1.5px solid #dc2626', cursor: disputeNote.trim() ? 'pointer' : 'not-allowed',
+                    background: disputeNote.trim() ? '#fef2f2' : '#f9fafb',
+                    color: disputeNote.trim() ? '#dc2626' : '#9ca3af',
+                    transition:'all .15s',
+                  }}>
+                  {saving ? <Spinner/> : '🔄 Dispute — ส่งกลับ CX'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -3984,6 +4024,7 @@ function App() {
   const [myTeamUnread, setMyTeamUnread] = useState(0);
   const [toasts, setToasts] = useState([]);
   const knownCaseIds = useRef(null); // null = not initialised yet
+  const knownDisputeLogIds = useRef(null);
   const toastCounter = useRef(0);
 
   const removeToast = (tid) => setToasts(prev => prev.filter(t => t.id !== tid));
@@ -4025,12 +4066,31 @@ function App() {
           // Browser push notification
           if ('Notification' in window && Notification.permission === 'granted') {
             const n = new Notification(`🔔 เคสใหม่เข้าทีม ${user.team}`, {
-              body,
-              tag: String(c.id), // dedup ถ้าเกิดซ้ำ
+              body, tag: String(c.id),
             });
             n.onclick = () => { window.focus(); setSelectedTicket(c.id); setPage('tickets'); n.close(); };
           }
         });
+
+        // Dispute notifications (CX only)
+        const disputed = data.disputed_cases || [];
+        const disputedLogIds = new Set(disputed.map(d => d.log_id));
+        if (knownDisputeLogIds.current === null) {
+          knownDisputeLogIds.current = disputedLogIds;
+        } else {
+          const newDisputes = disputed.filter(d => !knownDisputeLogIds.current.has(d.log_id));
+          knownDisputeLogIds.current = disputedLogIds;
+          newDisputes.slice(0, 3).forEach(d => {
+            const tid = ++toastCounter.current;
+            const body = `ทีม ${d.from_team} โต้แย้ง — ${d.outlet_name || d.case_type}`;
+            setToasts(prev => [...prev, { id: tid, body, caseId: d.ticket_id, ticket_no: d.ticket_no, isDispute: true }]);
+            setTimeout(() => removeToast(tid), 10000);
+            if ('Notification' in window && Notification.permission === 'granted') {
+              const n = new Notification(`🔄 มีการโต้แย้ง Fault Attribution`, { body, tag: 'dispute-' + d.log_id });
+              n.onclick = () => { window.focus(); setSelectedTicket(d.ticket_id); setPage('tickets'); n.close(); };
+            }
+          });
+        }
       } catch(_) { /* silent fail */ }
     };
 
@@ -4189,14 +4249,14 @@ function App() {
         <div style={{position:'fixed',top:16,right:16,zIndex:9999,display:'flex',flexDirection:'column',gap:8,maxWidth:320}}>
           {toasts.map(t => (
             <div key={t.id} className="toast-item" style={{
-              background:'#111827', color:'#fff', borderRadius:10,
+              background: t.isDispute ? '#7f1d1d' : '#111827', color:'#fff', borderRadius:10,
               boxShadow:'0 4px 16px rgba(0,0,0,0.25)',
               display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px',
             }}>
-              <span style={{fontSize:18,flexShrink:0}}>🔔</span>
+              <span style={{fontSize:18,flexShrink:0}}>{t.isDispute ? '🔄' : '🔔'}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>
-                  เคสใหม่เข้าทีม {user.team}
+                  {t.isDispute ? 'มีการโต้แย้ง Fault Attribution' : `เคสใหม่เข้าทีม ${user.team}`}
                 </div>
                 <div style={{fontSize:11,color:'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                   {t.ticket_no} · {t.body}

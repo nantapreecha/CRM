@@ -1355,6 +1355,43 @@ def attribute_fault(tid):
 
     return jsonify({'ok': True})
 
+@app.route('/api/tickets/<int:tid>/dispute', methods=['POST'])
+@require_auth
+def dispute_fault(tid):
+    d = request.json
+    note = (d.get('note') or '').strip()
+    if not note:
+        return jsonify({'error': 'กรุณาระบุเหตุผลในการโต้แย้ง'}), 400
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+
+    my_team = g.user['team']
+    is_admin = g.user['role'] == 'admin'
+
+    if ticket['status'] != 'pending_fault':
+        return jsonify({'error': 'ไม่สามารถโต้แย้งได้ในสถานะนี้'}), 400
+    if ticket['fault_team'] != my_team and not is_admin:
+        return jsonify({'error': 'เฉพาะทีมที่ถูกระบุเท่านั้นที่โต้แย้งได้'}), 403
+
+    # Send case back to CX, keep status = pending_fault
+    mutate("UPDATE tickets SET current_team='CX' WHERE id=%s", (tid,))
+
+    # Mark as unread for all CX users so badge + dot light up
+    mutate("""
+        DELETE FROM case_reads
+        WHERE ticket_id = %s
+          AND user_id IN (SELECT id FROM users WHERE team = 'CX')
+    """, (tid,))
+
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, my_team, 'CX', 'Dispute', note, g.user['user_id'], g.user['display_name']))
+
+    return jsonify({'ok': True})
+
 @app.route('/api/tickets/<int:tid>/note', methods=['POST'])
 @require_auth
 def add_ticket_note(tid):
@@ -1858,7 +1895,27 @@ def my_team_active():
         ORDER BY t.created_at DESC
     """, (uid, team))
     unread_count = sum(1 for r in rows if r.get('is_unread'))
-    return jsonify({'count': len(rows), 'unread_count': unread_count, 'cases': rows})
+
+    # For CX: also return active dispute cases so frontend can notify
+    disputed_cases = []
+    if team == 'CX':
+        disputed_cases = query("""
+            SELECT DISTINCT ON (wl.ticket_id)
+                   wl.id AS log_id, wl.ticket_id,
+                   wl.from_team, wl.note AS dispute_note, wl.created_at AS disputed_at,
+                   t.ticket_no, t.case_type,
+                   COALESCE(o.name,'') AS outlet_name
+            FROM ticket_workflow_log wl
+            JOIN tickets t ON t.id = wl.ticket_id
+            LEFT JOIN outlets o ON o.id = t.outlet_id
+            WHERE wl.action = 'Dispute'
+              AND t.current_team = 'CX'
+              AND t.status = 'pending_fault'
+            ORDER BY wl.ticket_id, wl.created_at DESC
+        """)
+
+    return jsonify({'count': len(rows), 'unread_count': unread_count,
+                    'cases': rows, 'disputed_cases': disputed_cases})
 
 @app.route('/api/tickets/<int:tid>/read', methods=['POST'])
 @require_auth
