@@ -472,7 +472,7 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
         {[
           {label:'Invoices Delivered', value: total_invoices.toLocaleString(), color:'#111827'},
-          {label:'Cases (Claim+Complain)', value: totalFaults, color:'#dc2626'},
+          {label:'Cases (Claim+Complain+Update Invoice)', value: totalFaults, color:'#dc2626'},
           {label:'Overall Error Rate', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
         ].map(({label,value,color})=>(
           <div key={label} className="card" style={{padding:'14px 16px'}}>
@@ -1139,7 +1139,7 @@ function Dashboard() {
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Case Type</h3>
             {(() => {
-              const FAULT_TYPES = ['Complain','Claim'];
+              const FAULT_TYPES = ['Complain','Claim','Update Invoice'];
               const all = overview.by_case_type || [];
               const fault = all.filter(d => FAULT_TYPES.includes(d.case_type));
               const service = all.filter(d => !FAULT_TYPES.includes(d.case_type));

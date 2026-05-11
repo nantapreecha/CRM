@@ -1705,7 +1705,7 @@ def dashboard_case_invoice_ratio():
         SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
         FROM tickets t
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
-        WHERE t.case_type IN ('Claim', 'Complain')
+        WHERE t.case_type IN ('Claim', 'Complain', 'Update Invoice')
           AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
           AND EXISTS (
               SELECT 1 FROM orders o
@@ -1747,8 +1747,8 @@ def dashboard_case_invoice_debug():
         included = False
         inv = t['invoice_number']
 
-        if t['case_type'] not in ('Claim', 'Complain'):
-            reason = f"ประเภท '{t['case_type']}' ไม่ใช่ Claim/Complain"
+        if t['case_type'] not in ('Claim', 'Complain', 'Update Invoice'):
+            reason = f"ประเภท '{t['case_type']}' ไม่ใช่ Claim/Complain/Update Invoice"
         elif not inv or inv.strip() == '':
             reason = 'ไม่มี Invoice Number'
         else:
@@ -1826,7 +1826,7 @@ def dashboard_fault_rate_trend():
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
         JOIN orders o ON o.invoice_number = t.invoice_number
-        WHERE t.case_type IN ('Claim','Complain')
+        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
           AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
           {date_extra}
         GROUP BY dt ORDER BY dt
@@ -1839,7 +1839,7 @@ def dashboard_fault_rate_trend():
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
         JOIN orders o ON o.invoice_number = t.invoice_number
-        WHERE t.case_type IN ('Claim','Complain')
+        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
           AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
           {date_extra}
         GROUP BY dt, team ORDER BY dt
