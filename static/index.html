@@ -320,6 +320,7 @@ function LandingPage({ user, onChoose, onLogout }) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
+const isImage = url => url && /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
 
 function TeamBadge({ team, size='sm' }) {
   const color = TEAM_COLORS[team] || '#747474';
@@ -871,8 +872,25 @@ function FilePreview({ url, className = '' }) {
       </a>
     );
   }
-  return <img src={url} alt="attachment" className={`rounded-lg border border-gray-200 cursor-pointer ${className}`}
-    onClick={()=>window.open(url,'_blank')}/>;
+  if (isImage(url)) {
+    return <img src={url} alt="attachment" className={`rounded-lg border border-gray-200 cursor-pointer ${className}`}
+      onClick={()=>window.open(url,'_blank')}/>;
+  }
+  // Other file types (Word, Excel, etc.) — show as a download link
+  const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]) || 'attachment';
+  const ext = fileName.split('.').pop().toUpperCase();
+  const extColors = { DOC:'#2b579a', DOCX:'#2b579a', XLS:'#217346', XLSX:'#217346', PPT:'#d04423', PPTX:'#d04423' };
+  const bgColor = extColors[ext] || '#6b7280';
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 10px',
+        background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,
+        textDecoration:'none',color:'#374151',fontSize:12}}
+      className={className}>
+      <span style={{background:bgColor,color:'#fff',borderRadius:4,padding:'1px 5px',fontSize:10,fontWeight:700,flexShrink:0}}>{ext||'FILE'}</span>
+      <span style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{fileName}</span>
+    </a>
+  );
 }
 
 // ── helpers: multi-image serialize / parse ────────────────────────────────────
