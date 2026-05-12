@@ -320,7 +320,10 @@ function LandingPage({ user, onChoose, onLogout }) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
-const isImage = url => url && /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
+const isImage = url => url && (
+  /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url) ||
+  /res\.cloudinary\.com\/.+\/image\/upload\//i.test(url)
+);
 
 function TeamBadge({ team, size='sm' }) {
   const color = TEAM_COLORS[team] || '#747474';
@@ -1946,9 +1949,9 @@ function TicketList({ user, onSelect, onUnreadCount }) {
                         </span>
                       </div>
                     </div>
-                    {t.latest_image_url && (
+                    {t.latest_image_url && parseImageUrls(t.latest_image_url)[0] && (
                       <div onClick={e=>e.stopPropagation()} className="shrink-0">
-                        <FilePreview url={t.latest_image_url} className="w-16 h-16 object-cover"/>
+                        <FilePreview url={parseImageUrls(t.latest_image_url)[0]} className="w-16 h-16 object-cover"/>
                       </div>
                     )}
                   </div>
@@ -2615,7 +2618,10 @@ function TicketDetail({ ticketId, user, onBack }) {
                   <label className="text-sm font-medium text-gray-700 block mb-2">Responsible team *</label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {FAULT_TEAMS.map(t => (
-                      <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
+                      <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>{
+                        setFaultTeam(t);
+                        if(t==='Customer') act('close',{note,image_url:serializeImages(imageUrls),fault_team:'Customer'});
+                      }}>
                         <div style={{width:28,height:28,borderRadius:'50%',background:TEAM_COLORS[t]||'#9ca3af',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 4px'}}>{t.substring(0,2).toUpperCase()}</div>
                         <div className="text-xs mt-1">{t}</div>
                       </div>
@@ -2626,11 +2632,12 @@ function TicketDetail({ ticketId, user, onBack }) {
               <ImageUploader urls={imageUrls} onAdd={addImage} onRemove={removeImage}/>
               <div className="flex items-center gap-2 mt-2">
                 <button className="btn btn-danger ml-auto"
-                  disabled={saving||!note||(ticket.case_type!=='วางบิล'&&!faultTeam)}
+                  disabled={saving||(faultTeam!=='Customer'&&!note)||(ticket.case_type!=='วางบิล'&&!faultTeam)}
                   onClick={()=>act('close',{note,image_url:serializeImages(imageUrls),fault_team:faultTeam})}>
-                  {saving?<Spinner/>:'🔒 Close Case'}
+                  {saving?<Spinner/>:faultTeam==='Customer'?'🔒 Close Case (Customer)':'🔒 Close Case'}
                 </button>
               </div>
+              {faultTeam==='Customer'&&<p className="text-xs text-gray-400 mt-1 text-right">Customer fault — case will close immediately, no employee assignment needed</p>}
             </div>
           )}
 
@@ -2712,12 +2719,12 @@ function TicketDetail({ ticketId, user, onBack }) {
               </div>
               <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
                 placeholder="Note for re-assignment..." className="mb-3"/>
-              <button className="btn btn-primary w-full" disabled={saving||!faultTeam||faultTeam===ticket.fault_team}
+              <button className="btn btn-primary w-full" disabled={saving||!faultTeam}
                 onClick={()=>act('close',{note,fault_team:faultTeam})}>
                 {saving?<Spinner/>:'✅ Re-assign & Send'}
               </button>
               {faultTeam === ticket.fault_team && faultTeam &&
-                <p className="text-xs text-amber-600 mt-2">⚠️ Please select a different team from the disputed one</p>}
+                <p className="text-xs text-amber-600 mt-2">⚠️ Re-assigning back to <strong>{faultTeam}</strong> — make sure this is correct</p>}
             </div>
           )}
 
