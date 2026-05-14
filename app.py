@@ -18,6 +18,11 @@ CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
 CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
 
+# ERP database (erp_sourcing) — synced by BI/Airflow every hour
+ERP_DATABASE_URL = os.environ.get('ERP_DATABASE_URL', '')
+if not ERP_DATABASE_URL and DATABASE_URL:
+    ERP_DATABASE_URL = DATABASE_URL.rsplit('/', 1)[0] + '/erp_sourcing'
+
 TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound']
 FAULT_TEAMS = TEAMS + ['Customer']
 CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล']
@@ -36,6 +41,17 @@ def get_db():
 def query(sql, params=(), one=False):
     sql = sql.replace('?', '%s')
     conn = get_db()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    conn.close()
+    result = [dict(r) for r in rows]
+    return result[0] if one and result else (None if one else result)
+
+def erp_query(sql, params=(), one=False):
+    """Query the ERP database (erp_sourcing.sourcing_erp_order_items)."""
+    sql = sql.replace('?', '%s')
+    conn = psycopg2.connect(ERP_DATABASE_URL, options="-c timezone=Asia/Bangkok")
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(sql, params)
     rows = cur.fetchall()
@@ -698,14 +714,13 @@ def seed_tickets():
         opener_id   = u['id']   if u else None
         opener_name = u['username'] if u else 'admin'
 
-        # pull real invoice numbers from orders so Case/Invoice % works
-        cur.execute("""
-            SELECT invoice_number FROM (
-                SELECT DISTINCT invoice_number FROM orders
-                WHERE invoice_number IS NOT NULL AND invoice_number != ''
-            ) t ORDER BY RANDOM() LIMIT 500
+        # pull real invoice numbers from ERP so Case/Invoice % works
+        erp_inv_rows = erp_query("""
+            SELECT DISTINCT invoice_number FROM sourcing_erp_order_items
+            WHERE invoice_number IS NOT NULL AND invoice_number != ''
+            ORDER BY RANDOM() LIMIT 500
         """)
-        real_invoices = [r['invoice_number'] for r in cur.fetchall()]
+        real_invoices = [r['invoice_number'] for r in erp_inv_rows]
 
         created = 0
         for i in range(n):
@@ -884,11 +899,14 @@ def get_outlet(oid):
 @app.route('/api/outlets/<int:oid>/invoices', methods=['GET'])
 @require_auth
 def get_outlet_invoices(oid):
-    rows = query("""
+    outlet = query("SELECT erp_outlet_id FROM outlets WHERE id=%s", (oid,), one=True)
+    if not outlet or not outlet.get('erp_outlet_id'):
+        return jsonify([])
+    rows = erp_query("""
         SELECT invoice_number, doc_date, COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
-        FROM orders WHERE outlet_id=%s
+        FROM sourcing_erp_order_items WHERE outlet_id=%s
         GROUP BY invoice_number, doc_date ORDER BY doc_date DESC
-    """, (oid,))
+    """, (outlet['erp_outlet_id'],))
     return jsonify(rows)
 
 @app.route('/api/outlets/<int:oid>/tickets', methods=['GET'])
@@ -913,9 +931,9 @@ def get_outlet_notes(oid):
 @app.route('/api/invoices/<invoice_number>/skus', methods=['GET'])
 @require_auth
 def get_invoice_skus(invoice_number):
-    rows = query("""
-        SELECT DISTINCT sku_code, product_name, qty, unit
-        FROM orders WHERE invoice_number=%s ORDER BY product_name
+    rows = erp_query("""
+        SELECT DISTINCT sku AS sku_code, product_name, qty, unit
+        FROM sourcing_erp_order_items WHERE invoice_number=%s ORDER BY product_name
     """, (invoice_number,))
     return jsonify(rows)
 
@@ -1684,35 +1702,39 @@ def dashboard_case_invoice_ratio():
     date_extra = ''
     date_params = []
     if start:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) >= %s"
         date_params.append(start)
     if end:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) <= %s"
         date_params.append(end)
 
-    # ตัวหาร: invoice ที่ส่งในช่วง delivery_date
-    inv_row = query(f"""
+    # ตัวหาร: invoice ที่ส่งในช่วง delivery_date (จาก ERP)
+    inv_row = erp_query(f"""
         SELECT COUNT(DISTINCT o.invoice_number) AS total_invoices
-        FROM orders o WHERE 1=1 {date_extra}
+        FROM sourcing_erp_order_items o WHERE 1=1 {date_extra}
     """, date_params, one=True)
     total_invoices = int(inv_row['total_invoices']) if inv_row and inv_row['total_invoices'] else 0
     if total_invoices == 0:
         return jsonify({'total_invoices': 0, 'teams': []})
 
     # ตัวตั้ง: Claim+Complain ที่ invoice ส่งในช่วงนั้น แยกตาม fault_team
-    # ใช้ EXISTS (ไม่ JOIN) เพื่อไม่ให้นับซ้ำตาม SKU
-    rows = query(f"""
+    # ดึง invoice list จาก ERP ก่อน แล้วค่อย query CRM
+    erp_invoices = erp_query(f"""
+        SELECT DISTINCT invoice_number FROM sourcing_erp_order_items o WHERE 1=1 {date_extra}
+    """, date_params)
+    inv_list = [r['invoice_number'] for r in erp_invoices if r.get('invoice_number')]
+
+    if not inv_list:
+        return jsonify({'total_invoices': total_invoices, 'teams': []})
+
+    rows = query("""
         SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
         FROM tickets t
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
         WHERE t.case_type IN ('Claim', 'Complain', 'Update Invoice')
-          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
-          AND EXISTS (
-              SELECT 1 FROM orders o
-              WHERE o.invoice_number = t.invoice_number {date_extra}
-          )
+          AND t.invoice_number = ANY(%s)
         GROUP BY COALESCE(tfa.fault_team, 'ยังไม่ระบุ') ORDER BY cnt DESC
-    """, date_params)
+    """, (inv_list,))
     teams = [{'team': r['fault_team'], 'cnt': int(r['cnt']),
                'pct': round(int(r['cnt']) / total_invoices * 100, 2)} for r in (rows or [])]
     return jsonify({'total_invoices': total_invoices, 'teams': teams})
@@ -1752,19 +1774,19 @@ def dashboard_case_invoice_debug():
         elif not inv or inv.strip() == '':
             reason = 'ไม่มี Invoice Number'
         else:
-            # check invoice exists in orders
-            in_orders = query(
-                "SELECT 1 FROM orders WHERE invoice_number=%s LIMIT 1", (inv,), one=True)
-            if not in_orders:
-                reason = f'Invoice {inv} ไม่มีในระบบ Orders'
+            # check invoice exists in ERP
+            in_erp = erp_query(
+                "SELECT 1 FROM sourcing_erp_order_items WHERE invoice_number=%s LIMIT 1", (inv,), one=True)
+            if not in_erp:
+                reason = f'Invoice {inv} ไม่มีในระบบ ERP'
             else:
                 # check delivery_date in range
                 if date_extra:
-                    in_range = query(
-                        f"SELECT 1 FROM orders o WHERE o.invoice_number=%s {date_extra} LIMIT 1",
+                    in_range = erp_query(
+                        f"SELECT 1 FROM sourcing_erp_order_items o WHERE o.invoice_number=%s {date_extra} LIMIT 1",
                         [inv] + date_params, one=True)
                     if not in_range:
-                        reason = f'Invoice {inv} อยู่นอกช่วงวันที่ที่เลือก (delivery_date ไม่ตรง)'
+                        reason = f'Invoice {inv} อยู่นอกช่วงวันที่ที่เลือก'
                     else:
                         included = True
                         reason = '✓ นับใน Case/Invoice %'
@@ -1797,53 +1819,75 @@ def dashboard_fault_rate_trend():
     date_extra = ''
     date_params = []
     if start:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) >= %s"
         date_params.append(start)
     if end:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) <= %s"
         date_params.append(end)
 
-    # For weekly: group by Sun-Sat week (week_start = Sunday of that week)
+    # For weekly: group by Sun-Sat week
     if group_by == 'week':
-        dt_expr = "(COALESCE(o.delivery_date, o.doc_date)::date - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_date, o.doc_date)::date) AS INT))"
+        dt_expr = "(COALESCE(o.delivery_started_at::date, o.doc_date) - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_started_at::date, o.doc_date)) AS INT))"
     else:
-        dt_expr = "COALESCE(o.delivery_date, o.doc_date)"
+        dt_expr = "COALESCE(o.delivery_started_at::date, o.doc_date)"
 
-    # Invoices per period
-    inv_rows = query(f"""
+    # Invoices per period — from ERP
+    inv_rows = erp_query(f"""
         SELECT {dt_expr} AS dt,
                COUNT(DISTINCT o.invoice_number) AS inv_cnt
-        FROM orders o WHERE 1=1 {date_extra}
+        FROM sourcing_erp_order_items o WHERE 1=1 {date_extra}
         GROUP BY dt ORDER BY dt
     """, date_params)
 
     if not inv_rows:
         return jsonify([])
 
-    # Fault cases per period — overall
-    fault_rows = query(f"""
-        SELECT {dt_expr} AS dt,
-               COUNT(DISTINCT t.id) AS fault_cnt
-        FROM tickets t
-        JOIN orders o ON o.invoice_number = t.invoice_number
-        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
-          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
-          {date_extra}
-        GROUP BY dt ORDER BY dt
+    # Get invoice list per period for CRM join
+    erp_inv_by_dt = erp_query(f"""
+        SELECT {dt_expr} AS dt, invoice_number
+        FROM sourcing_erp_order_items o WHERE 1=1 {date_extra}
     """, date_params)
+    dt_to_invoices = {}
+    for r in (erp_inv_by_dt or []):
+        dt_to_invoices.setdefault(r['dt'], set()).add(r['invoice_number'])
+    all_inv_list = list({inv for s in dt_to_invoices.values() for inv in s})
+
+    # Fault cases per period — overall
+    fault_rows = query("""
+        SELECT t.invoice_number, COUNT(DISTINCT t.id) AS fault_cnt
+        FROM tickets t
+        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
+          AND t.invoice_number = ANY(%s)
+        GROUP BY t.invoice_number
+    """, (all_inv_list,)) if all_inv_list else []
 
     # Fault cases per period per team
-    team_rows = query(f"""
-        SELECT {dt_expr} AS dt,
+    team_rows = query("""
+        SELECT t.invoice_number,
                COALESCE(t.fault_team, 'ยังไม่ระบุ') AS team,
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
-        JOIN orders o ON o.invoice_number = t.invoice_number
         WHERE t.case_type IN ('Claim','Complain','Update Invoice')
-          AND t.invoice_number IS NOT NULL AND t.invoice_number != ''
-          {date_extra}
-        GROUP BY dt, team ORDER BY dt
-    """, date_params)
+          AND t.invoice_number = ANY(%s)
+        GROUP BY t.invoice_number, team
+    """, (all_inv_list,)) if all_inv_list else []
+
+    # Build per-dt fault maps
+    inv_fault_map = {}
+    for r in (fault_rows or []):
+        inv_fault_map[r['invoice_number']] = int(r['fault_cnt'])
+    inv_team_map = {}
+    for r in (team_rows or []):
+        inv_team_map.setdefault(r['invoice_number'], {})[r['team']] = int(r['fault_cnt'])
+
+    fault_map = {}
+    team_map = {}
+    for dt, inv_set in dt_to_invoices.items():
+        fault_map[dt] = sum(inv_fault_map.get(inv, 0) for inv in inv_set)
+        for inv in inv_set:
+            for team, cnt in inv_team_map.get(inv, {}).items():
+                team_map.setdefault(team, {})
+                team_map[team][dt] = team_map[team].get(dt, 0) + cnt
 
     # build maps
     fault_map = {r['dt']: int(r['fault_cnt']) for r in (fault_rows or [])}
@@ -2225,8 +2269,7 @@ def debug_all_tickets_fault():
             t.fault_team AS tickets_fault_team,
             tfa.fault_team AS tfa_fault_team,
             CASE WHEN t.invoice_number IS NOT NULL AND t.invoice_number != ''
-                 THEN (SELECT COUNT(*) FROM orders o WHERE o.invoice_number = t.invoice_number)
-                 ELSE 0
+                 THEN 1 ELSE 0
             END AS invoice_in_orders,
             t.opener_team, t.description
         FROM tickets t
