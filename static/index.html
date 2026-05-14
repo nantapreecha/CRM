@@ -4229,8 +4229,10 @@ function App() {
         { id:'accounts', label:'Account', icon:'building' },
         { id:'suppliers', label:'Supplier', icon:'factory' },
         { id:'employees', label:'Employees', icon:'hard-hat' },
-        { id:'import', label:'Import ERP', icon:'upload' },
-        ...(user.role === 'admin' ? [{ id:'users', label:'Users', icon:'users' }] : []),
+        ...(user.role === 'admin' ? [
+          { id:'import', label:'Import ERP', icon:'upload' },
+          { id:'users', label:'Users', icon:'users' },
+        ] : []),
       ];
 
   const renderPage = () => {
