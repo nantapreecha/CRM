@@ -209,6 +209,7 @@ const ICON_PATHS = {
   'factory':         <><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></>,
   'hard-hat':        <><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/><path d="M10 10V5a2 2 0 0 1 4 0v5"/><path d="M4 15v-3a8 8 0 0 1 16 0v3"/></>,
   'pie-chart':       <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
+  'bar-chart-2':    <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
 };
 function Icon({ name, size = 16, className = '' }) {
   const paths = ICON_PATHS[name];
@@ -4245,6 +4246,188 @@ function SalesDashboard({ user }) {
   );
 }
 
+// ── RevenueBoard ─────────────────────────────────────────────────────────────
+const REP_COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#6366f1'];
+
+function RevenueBoard({ user }) {
+  const today = new Date().toISOString().slice(0,10);
+  const d30   = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const [start, setStart]   = useState(d30);
+  const [end,   setEnd]     = useState(today);
+  const [data,  setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expandedOwner, setExpandedOwner] = useState(null);
+  const [ownerAccounts, setOwnerAccounts] = useState([]);
+  const [acctLoading, setAcctLoading]     = useState(false);
+
+  const load = () => {
+    if (!start || !end) return;
+    setLoading(true);
+    api(`/api/revenue/owners?start=${start}&end=${end}`)
+      .then(d => { setData(d); setLoading(false); });
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleOwner = owner => {
+    if (expandedOwner === owner) { setExpandedOwner(null); setOwnerAccounts([]); return; }
+    setExpandedOwner(owner);
+    setAcctLoading(true);
+    api(`/api/revenue/owner-accounts?owner=${encodeURIComponent(owner)}&start=${start}&end=${end}`)
+      .then(d => { setOwnerAccounts(Array.isArray(d)?d:[]); setAcctLoading(false); });
+  };
+
+  const fmt฿  = n => '฿' + Math.round(n||0).toLocaleString('th-TH');
+  const fmtKg = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const fmtN  = n => (n||0).toLocaleString();
+
+  const rows = data?.rows || [];
+  const maxRev = rows.length > 0 ? rows[0].revenue : 1;
+
+  return (
+    <div style={{padding:24, overflowY:'auto', height:'100%'}}>
+      {/* Header */}
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12}}>
+        <div>
+          <h1 style={{fontSize:20, fontWeight:700, color:'#111827', margin:0}}>Revenue / ยอดขาย</h1>
+          <p style={{fontSize:13, color:'#6b7280', marginTop:3}}>ข้อมูลจาก ERP · คำนวณจาก delivery date</p>
+        </div>
+        <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+          <input type="date" value={start} onChange={e=>setStart(e.target.value)}
+            style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
+          <span style={{color:'#9ca3af', fontSize:13}}>–</span>
+          <input type="date" value={end} onChange={e=>setEnd(e.target.value)}
+            style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
+          <button onClick={load} className="btn btn-primary" style={{fontSize:12}}>Apply</button>
+        </div>
+      </div>
+
+      {loading ? <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={28}/></div> : rows.length === 0 ? (
+        <div style={{textAlign:'center', padding:60, color:'#9ca3af'}}>ไม่มีข้อมูลในช่วงเวลานี้</div>
+      ) : (<>
+
+        {/* ── Horizontal Bar Chart ─────────────────────────────────────── */}
+        <div className="card" style={{padding:'20px 24px', marginBottom:20}}>
+          <div style={{fontWeight:700, fontSize:14, color:'#111827', marginBottom:4}}>Revenue per Sales Rep / ยอดขายต่อเซลล์ (บาท)</div>
+          <div style={{fontSize:12, color:'#9ca3af', marginBottom:16}}>เรียงตามยอดขายสูง-ต่ำ</div>
+          {rows.map((row, i) => {
+            const color = REP_COLORS[i % REP_COLORS.length];
+            const pct   = maxRev > 0 ? row.revenue / maxRev * 100 : 0;
+            return (
+              <div key={row.owner} style={{display:'flex', alignItems:'center', gap:12, marginBottom:10}}>
+                <div style={{width:90, textAlign:'right', fontSize:13, color:'#374151', fontWeight:500, flexShrink:0}}>{row.owner}</div>
+                <div style={{flex:1, height:26, background:'#f3f4f6', borderRadius:4, overflow:'hidden'}}>
+                  <div style={{width:pct+'%', height:'100%', background:color, borderRadius:4, transition:'width .5s'}}/>
+                </div>
+                <div style={{width:100, fontSize:12, fontWeight:600, color:'#111827', flexShrink:0}}>{fmt฿(row.revenue)}</div>
+              </div>
+            );
+          })}
+          {/* X-axis labels */}
+          <div style={{display:'flex', justifyContent:'space-between', marginLeft:102, marginTop:6}}>
+            {[0,1,2,3,4].map(i => {
+              const val = Math.round(maxRev / 4 * i);
+              return <span key={i} style={{fontSize:10, color:'#9ca3af'}}>{'฿'+val.toLocaleString('th-TH')}</span>;
+            })}
+          </div>
+        </div>
+
+        {/* ── Performance Summary Table ─────────────────────────────────── */}
+        <div className="card" style={{padding:0, overflow:'hidden'}}>
+          <div style={{padding:'16px 20px', borderBottom:'1px solid #e5e7eb'}}>
+            <div style={{fontWeight:700, fontSize:14, color:'#111827'}}>Owner Performance Summary / ตารางสรุปผลเซลล์</div>
+            <div style={{fontSize:12, color:'#9ca3af', marginTop:2}}>รายละเอียดยอดขาย จำนวนสั่งซื้อ และลูกค้า · คลิกแถวเพื่อดู account</div>
+          </div>
+          <table style={{width:'100%', borderCollapse:'collapse'}}>
+            <thead>
+              <tr style={{background:'#111827'}}>
+                {['#','OWNER','REVENUE / ยอดขาย','% SHARE','VOLUME / QTY (KG)','ORDERS / ออเดอร์','ACCOUNTS / ลูกค้า','AVG/ORDER'].map(h => (
+                  <th key={h} style={{padding:'10px 14px', fontSize:11, fontWeight:600, color:'#9ca3af',
+                    textAlign: h==='#'||h==='OWNER' ? 'left':'right', whiteSpace:'nowrap', letterSpacing:'.04em'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const color  = REP_COLORS[i % REP_COLORS.length];
+                const isOpen = expandedOwner === row.owner;
+                const barPct = maxRev > 0 ? row.revenue / maxRev * 100 : 0;
+                return (<React.Fragment key={row.owner}>
+                  <tr onClick={() => toggleOwner(row.owner)}
+                    style={{borderBottom: isOpen?'none':'1px solid #f3f4f6', cursor:'pointer',
+                      background: isOpen?'#f0f9ff':'transparent'}}
+                    onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background='#f9fafb';}}
+                    onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background='transparent';}}>
+                    <td style={{padding:'12px 14px', fontSize:13, color:'#9ca3af', fontWeight:600}}>{i+1}</td>
+                    <td style={{padding:'12px 14px'}}>
+                      <span style={{background:color+'22', color, border:`1px solid ${color}55`,
+                        borderRadius:6, padding:'3px 10px', fontSize:12, fontWeight:600}}>
+                        {isOpen ? '▾ ' : ''}{row.owner}
+                      </span>
+                    </td>
+                    <td style={{padding:'12px 14px', textAlign:'right'}}>
+                      <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8}}>
+                        <div style={{width:70, height:5, background:'#f3f4f6', borderRadius:3, flexShrink:0}}>
+                          <div style={{width:barPct+'%', height:'100%', background:color, borderRadius:3}}/>
+                        </div>
+                        <span style={{fontSize:13, fontWeight:700, color:'#111827'}}>{fmt฿(row.revenue)}</span>
+                      </div>
+                    </td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{row.share}%</td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtKg(row.volume)}</td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtN(row.orders)}</td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{row.accounts}</td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151', fontWeight:500}}>{fmt฿(row.avg_order)}</td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={8} style={{padding:0, background:'#f0f9ff', borderBottom:'1px solid #e5e7eb'}}>
+                        {acctLoading
+                          ? <div style={{display:'flex',justifyContent:'center',padding:20}}><Spinner/></div>
+                          : ownerAccounts.length === 0
+                            ? <div style={{padding:'14px 24px', fontSize:13, color:'#9ca3af'}}>ไม่มีข้อมูล account</div>
+                            : <table style={{width:'100%', borderCollapse:'collapse'}}>
+                                <thead>
+                                  <tr style={{background:'#e0f2fe'}}>
+                                    {['Account','Outlets','Revenue','Volume (KG)','Orders','Avg/Order'].map(h=>(
+                                      <th key={h} style={{padding:'7px 16px', fontSize:11, fontWeight:600, color:'#0369a1',
+                                        textAlign: h==='Account'?'left':'right'}}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {ownerAccounts.map(a => (
+                                    <tr key={a.account_id} style={{borderBottom:'1px solid #e0f2fe'}}>
+                                      <td style={{padding:'8px 16px', fontSize:13, fontWeight:500, color:'#111827'}}>{a.account_name}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{a.outlet_count}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', fontWeight:600, color:'#111827'}}>{fmt฿(a.revenue)}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtKg(a.volume)}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtN(a.orders)}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmt฿(a.avg_order)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                        }
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>);
+              })}
+            </tbody>
+          </table>
+          {/* Footer total */}
+          <div style={{padding:'12px 14px', background:'#f9fafb', borderTop:'2px solid #e5e7eb',
+            display:'flex', justifyContent:'flex-end', gap:8, fontSize:13, fontWeight:700, color:'#111827'}}>
+            <span>Total:</span>
+            <span>{fmt฿(data?.total_revenue||0)}</span>
+          </div>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(null);
@@ -4385,6 +4568,7 @@ function App() {
     ? [
         { id:'leads', label:'Leads', icon:'trending-up' },
         { id:'sales-dashboard', label:'Dashboard', icon:'grid' },
+        { id:'revenue', label:'Revenue', icon:'bar-chart-2' },
       ]
     : [
         { id:'dashboard', label:'Dashboard', icon:'grid' },
@@ -4401,6 +4585,7 @@ function App() {
     switch(page) {
       case 'dashboard': return <Dashboard/>;
       case 'sales-dashboard': return <SalesDashboard user={user}/>;
+      case 'revenue': return <RevenueBoard user={user}/>;
       case 'leads': return <PipelineErrorBoundary><Pipeline user={user}/></PipelineErrorBoundary>;
       case 'tickets': return <TicketList user={user} onSelect={id=>setSelectedTicket(id)} onUnreadCount={setMyTeamUnread}/>;
       case 'accounts': return <Accounts onSelectTicket={id=>setSelectedTicket(id)}/>;
