@@ -2476,14 +2476,26 @@ def sales_dashboard():
     end_date   = request.args.get('end_date', '')
 
     now = datetime.now()
-    if period == '7d':
-        since = (now - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
+    if period == 'today':
+        since = now.strftime('%Y-%m-%dT00:00:00')
         until = now.strftime('%Y-%m-%dT23:59:59')
+    elif period == 'yesterday':
+        y = (now - timedelta(days=1))
+        since = y.strftime('%Y-%m-%dT00:00:00')
+        until = y.strftime('%Y-%m-%dT23:59:59')
+    elif period == 'this_month':
+        since = now.replace(day=1).strftime('%Y-%m-%dT00:00:00')
+        until = now.strftime('%Y-%m-%dT23:59:59')
+    elif period == 'last_month':
+        first_this = now.replace(day=1)
+        last_prev  = first_this - timedelta(days=1)
+        since = last_prev.replace(day=1).strftime('%Y-%m-%dT00:00:00')
+        until = last_prev.strftime('%Y-%m-%dT23:59:59')
     elif period == 'custom' and start_date and end_date:
         since = start_date + 'T00:00:00'
         until = end_date + 'T23:59:59'
     else:
-        since = (now - timedelta(days=30)).strftime('%Y-%m-%dT00:00:00')
+        since = now.replace(day=1).strftime('%Y-%m-%dT00:00:00')
         until = now.strftime('%Y-%m-%dT23:59:59')
 
     week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
@@ -2525,6 +2537,123 @@ def sales_dashboard():
         'activities_week': acts['cnt']   if acts  else 0,
         'period': period, 'since': since, 'until': until,
     })
+
+@app.route('/api/revenue/owners', methods=['GET'])
+@require_auth
+def revenue_owners():
+    now   = datetime.now()
+    start = request.args.get('start') or (now - timedelta(days=30)).strftime('%Y-%m-%d')
+    end   = request.args.get('end')   or now.strftime('%Y-%m-%d')
+
+    crm_rows = query("""
+        SELECT a.owner, a.id AS account_id, o.erp_outlet_id
+        FROM accounts a
+        JOIN outlets o ON o.account_id = a.id
+        WHERE a.owner IS NOT NULL AND trim(a.owner) != ''
+          AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id) != ''
+    """)
+    if not crm_rows:
+        return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end})
+
+    all_outlet_ids = list({r['erp_outlet_id'] for r in crm_rows})
+    erp_rows = erp_query("""
+        SELECT outlet_id,
+               COALESCE(SUM(total_sales), 0) AS revenue,
+               COALESCE(SUM(qty), 0)          AS volume,
+               COUNT(DISTINCT invoice_number) AS orders
+        FROM sourcing_erp_order_items
+        WHERE delivery_date >= %s AND delivery_date <= %s
+          AND outlet_id = ANY(%s)
+        GROUP BY outlet_id
+    """, (start, end, all_outlet_ids))
+    erp_map = {r['outlet_id']: r for r in (erp_rows or [])}
+
+    owner_data = {}
+    for row in crm_rows:
+        owner = row['owner']
+        erp   = erp_map.get(row['erp_outlet_id'], {})
+        if owner not in owner_data:
+            owner_data[owner] = {'revenue': 0, 'volume': 0, 'orders': 0, 'account_ids': set()}
+        owner_data[owner]['revenue']     += float(erp.get('revenue') or 0)
+        owner_data[owner]['volume']      += float(erp.get('volume')  or 0)
+        owner_data[owner]['orders']      += int(erp.get('orders')    or 0)
+        owner_data[owner]['account_ids'].add(row['account_id'])
+
+    total_revenue = sum(d['revenue'] for d in owner_data.values())
+    result = []
+    for owner, d in owner_data.items():
+        rev  = d['revenue']
+        ords = d['orders']
+        result.append({
+            'owner':     owner,
+            'revenue':   round(rev, 2),
+            'volume':    round(d['volume'], 2),
+            'orders':    ords,
+            'accounts':  len(d['account_ids']),
+            'avg_order': round(rev / ords, 2) if ords > 0 else 0,
+            'share':     round(rev / total_revenue * 100, 1) if total_revenue > 0 else 0,
+        })
+    result.sort(key=lambda x: -x['revenue'])
+    return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end})
+
+@app.route('/api/revenue/owner-accounts', methods=['GET'])
+@require_auth
+def revenue_owner_accounts():
+    owner = request.args.get('owner', '')
+    now   = datetime.now()
+    start = request.args.get('start') or (now - timedelta(days=30)).strftime('%Y-%m-%d')
+    end   = request.args.get('end')   or now.strftime('%Y-%m-%d')
+    if not owner:
+        return jsonify([])
+
+    crm_rows = query("""
+        SELECT a.id AS account_id, a.name AS account_name, o.erp_outlet_id
+        FROM accounts a
+        JOIN outlets o ON o.account_id = a.id
+        WHERE a.owner = %s
+          AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id) != ''
+    """, (owner,))
+    if not crm_rows:
+        return jsonify([])
+
+    outlet_ids = [r['erp_outlet_id'] for r in crm_rows]
+    erp_rows = erp_query("""
+        SELECT outlet_id,
+               COALESCE(SUM(total_sales), 0) AS revenue,
+               COALESCE(SUM(qty), 0)          AS volume,
+               COUNT(DISTINCT invoice_number) AS orders
+        FROM sourcing_erp_order_items
+        WHERE delivery_date >= %s AND delivery_date <= %s
+          AND outlet_id = ANY(%s)
+        GROUP BY outlet_id
+    """, (start, end, outlet_ids))
+    erp_map = {r['outlet_id']: r for r in (erp_rows or [])}
+
+    acc_data = {}
+    for row in crm_rows:
+        aid = row['account_id']
+        if aid not in acc_data:
+            acc_data[aid] = {'account_name': row['account_name'], 'revenue': 0, 'volume': 0, 'orders': 0, 'outlet_count': 0}
+        acc_data[aid]['outlet_count'] += 1
+        erp = erp_map.get(row['erp_outlet_id'], {})
+        acc_data[aid]['revenue'] += float(erp.get('revenue') or 0)
+        acc_data[aid]['volume']  += float(erp.get('volume')  or 0)
+        acc_data[aid]['orders']  += int(erp.get('orders')    or 0)
+
+    result = []
+    for aid, d in acc_data.items():
+        rev  = d['revenue']
+        ords = d['orders']
+        result.append({
+            'account_id': aid, 'account_name': d['account_name'],
+            'outlet_count': d['outlet_count'],
+            'revenue':  round(rev, 2),
+            'volume':   round(d['volume'], 2),
+            'orders':   ords,
+            'avg_order': round(rev / ords, 2) if ords > 0 else 0,
+        })
+    result.sort(key=lambda x: -x['revenue'])
+    return jsonify(result)
 
 @app.route('/api/sales-dashboard/reps', methods=['GET'])
 @require_auth
