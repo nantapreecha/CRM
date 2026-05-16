@@ -2551,10 +2551,8 @@ def revenue_debug():
     """)
     erp_sample = []
     try:
-        cols = erp_query("SELECT column_name FROM information_schema.columns WHERE table_name='sourcing_erp_order_items' ORDER BY ordinal_position")
-        erp_sample = [{'columns': [c['column_name'] for c in cols]}]
-        erp_sample += erp_query("SELECT * FROM sourcing_erp_order_items LIMIT 3")
-        erp_sample = [{k: str(v) for k,v in dict(r).items()} for r in erp_sample if isinstance(r, dict)]
+        erp_sample = erp_query("SELECT outlet_id, doc_date, delivery_started_at::date AS del_date, total_sales FROM sourcing_erp_order_items ORDER BY delivery_started_at DESC LIMIT 5")
+        erp_sample = [{k: str(v) for k,v in dict(r).items()} for r in erp_sample]
     except Exception as ex:
         erp_sample = [{'error': str(ex)}]
     return jsonify({
@@ -2596,7 +2594,7 @@ def revenue_owners():
                    COALESCE(SUM(qty), 0)          AS volume,
                    COUNT(DISTINCT invoice_number) AS orders
             FROM sourcing_erp_order_items
-            WHERE delivery_date >= %s AND delivery_date <= %s
+            WHERE delivery_started_at::date >= %s AND delivery_started_at::date <= %s
               AND outlet_id::text = ANY(%s)
             GROUP BY outlet_id
         """, (start, end, [str(x) for x in all_outlet_ids]))
@@ -2663,7 +2661,7 @@ def revenue_owner_accounts():
                COALESCE(SUM(qty), 0)          AS volume,
                COUNT(DISTINCT invoice_number) AS orders
         FROM sourcing_erp_order_items
-        WHERE delivery_date >= %s AND delivery_date <= %s
+        WHERE delivery_started_at::date >= %s AND delivery_started_at::date <= %s
           AND outlet_id::text = ANY(%s)
         GROUP BY outlet_id
     """, (start, end, outlet_ids))
