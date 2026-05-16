@@ -2594,7 +2594,7 @@ def revenue_owners():
                    COALESCE(SUM(qty), 0)          AS volume,
                    COUNT(DISTINCT invoice_number) AS orders
             FROM sourcing_erp_order_items
-            WHERE delivery_started_at::date >= %s AND delivery_started_at::date <= %s
+            WHERE doc_date >= %s AND doc_date <= %s
               AND outlet_id::text = ANY(%s)
             GROUP BY outlet_id
         """, (start, end, [str(x) for x in all_outlet_ids]))
