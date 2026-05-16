@@ -2538,29 +2538,6 @@ def sales_dashboard():
         'period': period, 'since': since, 'until': until,
     })
 
-@app.route('/api/revenue/debug', methods=['GET'])
-def revenue_debug():
-    accounts_with_owner = query("SELECT COUNT(*) AS cnt FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
-    outlets_with_erp    = query("SELECT COUNT(*) AS cnt FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
-    joined = query("""
-        SELECT a.owner, a.name, o.erp_outlet_id
-        FROM accounts a JOIN outlets o ON o.account_id=a.id
-        WHERE a.owner IS NOT NULL AND trim(a.owner)!=''
-          AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id)!=''
-        LIMIT 10
-    """)
-    erp_sample = []
-    try:
-        date_range = erp_query("SELECT MIN(doc_date) AS min_date, MAX(doc_date) AS max_date, COUNT(*) AS total_rows FROM sourcing_erp_order_items", one=True)
-        erp_sample = [{'min_date': str(date_range['min_date']), 'max_date': str(date_range['max_date']), 'total_rows': date_range['total_rows']}]
-    except Exception as ex:
-        erp_sample = [{'error': str(ex)}]
-    return jsonify({
-        'accounts_with_owner': accounts_with_owner['cnt'] if accounts_with_owner else 0,
-        'outlets_with_erp_id': outlets_with_erp['cnt'] if outlets_with_erp else 0,
-        'joined_sample': joined,
-        'erp_sample': erp_sample,
-    })
 
 @app.route('/api/revenue/owners', methods=['GET'])
 @require_auth
@@ -2580,9 +2557,7 @@ def revenue_owners():
     if not crm_rows:
         acct_cnt  = query("SELECT COUNT(*) AS c FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
         outl_cnt  = query("SELECT COUNT(*) AS c FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
-        return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end,
-                        '_debug': {'msg':'no crm rows', 'accounts_with_owner': acct_cnt['c'] if acct_cnt else 0,
-                                   'outlets_with_erp_id': outl_cnt['c'] if outl_cnt else 0}})
+        return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end})
 
     all_outlet_ids = list({r['erp_outlet_id'] for r in crm_rows})
     erp_rows = []
@@ -2628,11 +2603,9 @@ def revenue_owners():
             'share':     round(rev / total_revenue * 100, 1) if total_revenue > 0 else 0,
         })
     result.sort(key=lambda x: -x['revenue'])
-    return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end,
-                    '_debug': {'crm_rows': len(crm_rows), 'outlet_ids': all_outlet_ids[:5],
-                               'erp_rows': len(erp_rows), 'erp_error': erp_error}})
+    return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end})
   except Exception as e:
-    return jsonify({'rows': [], 'total_revenue': 0, 'error': str(e), '_debug': {'fatal': str(e)}}), 200
+    return jsonify({'rows': [], 'total_revenue': 0}), 200
 
 @app.route('/api/revenue/owner-accounts', methods=['GET'])
 @require_auth
