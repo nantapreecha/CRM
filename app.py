@@ -2565,8 +2565,9 @@ def revenue_debug():
 @app.route('/api/revenue/owners', methods=['GET'])
 @require_auth
 def revenue_owners():
+  try:
     now   = datetime.now()
-    start = request.args.get('start') or (now - timedelta(days=30)).strftime('%Y-%m-%d')
+    start = request.args.get('start') or now.replace(day=1).strftime('%Y-%m-%d')
     end   = request.args.get('end')   or now.strftime('%Y-%m-%d')
 
     crm_rows = query("""
@@ -2577,11 +2578,10 @@ def revenue_owners():
           AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id) != ''
     """)
     if not crm_rows:
-        # Debug: count totals to help diagnose
         acct_cnt  = query("SELECT COUNT(*) AS c FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
         outl_cnt  = query("SELECT COUNT(*) AS c FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
         return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end,
-                        '_debug': {'accounts_with_owner': acct_cnt['c'] if acct_cnt else 0,
+                        '_debug': {'msg':'no crm rows', 'accounts_with_owner': acct_cnt['c'] if acct_cnt else 0,
                                    'outlets_with_erp_id': outl_cnt['c'] if outl_cnt else 0}})
 
     all_outlet_ids = list({r['erp_outlet_id'] for r in crm_rows})
@@ -2631,6 +2631,8 @@ def revenue_owners():
     return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end,
                     '_debug': {'crm_rows': len(crm_rows), 'outlet_ids': all_outlet_ids[:5],
                                'erp_rows': len(erp_rows), 'erp_error': erp_error}})
+  except Exception as e:
+    return jsonify({'rows': [], 'total_revenue': 0, 'error': str(e), '_debug': {'fatal': str(e)}}), 200
 
 @app.route('/api/revenue/owner-accounts', methods=['GET'])
 @require_auth

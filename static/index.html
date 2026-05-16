@@ -967,14 +967,19 @@ function ImageUploader({ urls = [], onAdd, onRemove, onUploaded }) {
   );
 }
 
+// ── localISO: date → 'YYYY-MM-DD' in local timezone (avoids UTC offset bug) ──
+function localISO(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
 // ── DateRangeFilter ───────────────────────────────────────────────────────────
 function DateRangeFilter({ value, onChange }) {
   const now = new Date();
-  const today     = now.toISOString().slice(0,10);
-  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().slice(0,10);
-  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0,10);
+  const today     = localISO(now);
+  const yesterday = localISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()-1));
+  const thisMonthStart = localISO(new Date(now.getFullYear(), now.getMonth(), 1));
+  const lastMonthStart = localISO(new Date(now.getFullYear(), now.getMonth()-1, 1));
+  const lastMonthEnd   = localISO(new Date(now.getFullYear(), now.getMonth(), 0));
   return (
     <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:20}}>
       <span style={{fontSize:12,color:'var(--text-muted)',flexShrink:0}}>Date range:</span>
@@ -1876,11 +1881,11 @@ function TicketList({ user, onSelect, onUnreadCount }) {
         <div className="flex items-center gap-1">
           {(()=>{
             const _now = new Date();
-            const _today = _now.toISOString().slice(0,10);
-            const _yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
-            const _thisMonthStart = new Date(_now.getFullYear(),_now.getMonth(),1).toISOString().slice(0,10);
-            const _lastMonthStart = new Date(_now.getFullYear(),_now.getMonth()-1,1).toISOString().slice(0,10);
-            const _lastMonthEnd   = new Date(_now.getFullYear(),_now.getMonth(),0).toISOString().slice(0,10);
+            const _today = localISO(_now);
+            const _yesterday = localISO(new Date(_now.getFullYear(),_now.getMonth(),_now.getDate()-1));
+            const _thisMonthStart = localISO(new Date(_now.getFullYear(),_now.getMonth(),1));
+            const _lastMonthStart = localISO(new Date(_now.getFullYear(),_now.getMonth()-1,1));
+            const _lastMonthEnd   = localISO(new Date(_now.getFullYear(),_now.getMonth(),0));
             return [['Today',_today,_today],['Yesterday',_yesterday,_yesterday],['This Month',_thisMonthStart,_today],['Last Month',_lastMonthStart,_lastMonthEnd]].map(([l,f,t])=>(
               <button key={l} type="button" onClick={()=>{setDateFrom(f);setDateTo(t);}}
                 style={{fontSize:11,padding:'3px 8px',border:'1px solid #e5e7eb',borderRadius:4,
@@ -4259,8 +4264,8 @@ const REP_COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899',
 
 function RevenueBoard({ user }) {
   const now0 = new Date();
-  const today     = now0.toISOString().slice(0,10);
-  const thisMonthStart = new Date(now0.getFullYear(), now0.getMonth(), 1).toISOString().slice(0,10);
+  const today     = localISO(now0);
+  const thisMonthStart = localISO(new Date(now0.getFullYear(), now0.getMonth(), 1));
   const [start, setStart]   = useState(thisMonthStart);
   const [end,   setEnd]     = useState(today);
   const [data,  setData]    = useState(null);
@@ -4312,11 +4317,11 @@ function RevenueBoard({ user }) {
         <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
           {(()=>{
             const _now = new Date();
-            const _today     = _now.toISOString().slice(0,10);
-            const _yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
-            const _thisStart = new Date(_now.getFullYear(),_now.getMonth(),1).toISOString().slice(0,10);
-            const _lastStart = new Date(_now.getFullYear(),_now.getMonth()-1,1).toISOString().slice(0,10);
-            const _lastEnd   = new Date(_now.getFullYear(),_now.getMonth(),0).toISOString().slice(0,10);
+            const _today     = localISO(_now);
+            const _yesterday = localISO(new Date(_now.getFullYear(),_now.getMonth(),_now.getDate()-1));
+            const _thisStart = localISO(new Date(_now.getFullYear(),_now.getMonth(),1));
+            const _lastStart = localISO(new Date(_now.getFullYear(),_now.getMonth()-1,1));
+            const _lastEnd   = localISO(new Date(_now.getFullYear(),_now.getMonth(),0));
             return [
               ['Today',      _today,     _today],
               ['Yesterday',  _yesterday, _yesterday],
