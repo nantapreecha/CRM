@@ -2551,8 +2551,8 @@ def revenue_debug():
     """)
     erp_sample = []
     try:
-        erp_sample = erp_query("SELECT outlet_id, doc_date, delivery_started_at::date AS del_date, total_sales FROM sourcing_erp_order_items ORDER BY delivery_started_at DESC LIMIT 5")
-        erp_sample = [{k: str(v) for k,v in dict(r).items()} for r in erp_sample]
+        date_range = erp_query("SELECT MIN(doc_date) AS min_date, MAX(doc_date) AS max_date, COUNT(*) AS total_rows FROM sourcing_erp_order_items", one=True)
+        erp_sample = [{'min_date': str(date_range['min_date']), 'max_date': str(date_range['max_date']), 'total_rows': date_range['total_rows']}]
     except Exception as ex:
         erp_sample = [{'error': str(ex)}]
     return jsonify({
