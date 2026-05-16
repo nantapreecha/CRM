@@ -2577,19 +2577,29 @@ def revenue_owners():
           AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id) != ''
     """)
     if not crm_rows:
-        return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end})
+        # Debug: count totals to help diagnose
+        acct_cnt  = query("SELECT COUNT(*) AS c FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
+        outl_cnt  = query("SELECT COUNT(*) AS c FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
+        return jsonify({'rows': [], 'total_revenue': 0, 'start': start, 'end': end,
+                        '_debug': {'accounts_with_owner': acct_cnt['c'] if acct_cnt else 0,
+                                   'outlets_with_erp_id': outl_cnt['c'] if outl_cnt else 0}})
 
     all_outlet_ids = list({r['erp_outlet_id'] for r in crm_rows})
-    erp_rows = erp_query("""
-        SELECT outlet_id,
-               COALESCE(SUM(total_sales), 0) AS revenue,
-               COALESCE(SUM(qty), 0)          AS volume,
-               COUNT(DISTINCT invoice_number) AS orders
-        FROM sourcing_erp_order_items
-        WHERE delivery_date >= %s AND delivery_date <= %s
-          AND outlet_id = ANY(%s)
-        GROUP BY outlet_id
-    """, (start, end, all_outlet_ids))
+    erp_rows = []
+    erp_error = None
+    try:
+        erp_rows = erp_query("""
+            SELECT outlet_id,
+                   COALESCE(SUM(total_sales), 0) AS revenue,
+                   COALESCE(SUM(qty), 0)          AS volume,
+                   COUNT(DISTINCT invoice_number) AS orders
+            FROM sourcing_erp_order_items
+            WHERE delivery_date >= %s AND delivery_date <= %s
+              AND outlet_id = ANY(%s)
+            GROUP BY outlet_id
+        """, (start, end, all_outlet_ids))
+    except Exception as ex:
+        erp_error = str(ex)
     erp_map = {r['outlet_id']: r for r in (erp_rows or [])}
 
     owner_data = {}
@@ -2618,7 +2628,9 @@ def revenue_owners():
             'share':     round(rev / total_revenue * 100, 1) if total_revenue > 0 else 0,
         })
     result.sort(key=lambda x: -x['revenue'])
-    return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end})
+    return jsonify({'rows': result, 'total_revenue': round(total_revenue, 2), 'start': start, 'end': end,
+                    '_debug': {'crm_rows': len(crm_rows), 'outlet_ids': all_outlet_ids[:5],
+                               'erp_rows': len(erp_rows), 'erp_error': erp_error}})
 
 @app.route('/api/revenue/owner-accounts', methods=['GET'])
 @require_auth
