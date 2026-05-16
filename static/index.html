@@ -4178,8 +4178,8 @@ function SalesDashboard({ user }) {
                     {sortedReps.map(rep => {
                       const la  = lastActiveLabel(rep.last_active);
                       const isOpen = expandedRep === rep.user_id;
-                      return (<>
-                        <tr key={rep.user_id} onClick={() => toggleRep(rep.user_id)}
+                      return (<React.Fragment key={rep.user_id}>
+                        <tr onClick={() => toggleRep(rep.user_id)}
                           style={{borderBottom: isOpen ? 'none' : '1px solid #f3f4f6', cursor:'pointer',
                             background: isOpen ? '#f0f9ff' : 'transparent'}}
                           onMouseEnter={e => { if(!isOpen) e.currentTarget.style.background='#f9fafb'; }}
@@ -4197,7 +4197,7 @@ function SalesDashboard({ user }) {
                           <td style={{padding:'11px 12px',fontSize:12,color: la.warn?'#dc2626':'#6b7280'}}>{la.text}</td>
                         </tr>
                         {isOpen && (
-                          <tr key={rep.user_id+'-expand'}>
+                          <tr>
                             <td colSpan={9} style={{padding:0, background:'#f0f9ff', borderBottom:'1px solid #e5e7eb'}}>
                               {repLeadsLoading
                                 ? <div style={{display:'flex',justifyContent:'center',padding:20}}><Spinner/></div>
@@ -4234,7 +4234,7 @@ function SalesDashboard({ user }) {
                             </td>
                           </tr>
                         )}
-                      </>);
+                      </React.Fragment>);
                     })}
                   </tbody>
                 </table>
@@ -4277,9 +4277,9 @@ function RevenueBoard({ user }) {
       .then(d => { setOwnerAccounts(Array.isArray(d)?d:[]); setAcctLoading(false); });
   };
 
-  const fmt฿  = n => '฿' + Math.round(n||0).toLocaleString('th-TH');
-  const fmtKg = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:1,maximumFractionDigits:1});
-  const fmtN  = n => (n||0).toLocaleString();
+  const fmtTHB = n => '฿' + Math.round(n||0).toLocaleString('th-TH');
+  const fmtKg  = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const fmtN   = n => (n||0).toLocaleString();
 
   const rows = data?.rows || [];
   const maxRev = rows.length > 0 ? rows[0].revenue : 1;
@@ -4319,7 +4319,7 @@ function RevenueBoard({ user }) {
                 <div style={{flex:1, height:26, background:'#f3f4f6', borderRadius:4, overflow:'hidden'}}>
                   <div style={{width:pct+'%', height:'100%', background:color, borderRadius:4, transition:'width .5s'}}/>
                 </div>
-                <div style={{width:100, fontSize:12, fontWeight:600, color:'#111827', flexShrink:0}}>{fmt฿(row.revenue)}</div>
+                <div style={{width:100, fontSize:12, fontWeight:600, color:'#111827', flexShrink:0}}>{fmtTHB(row.revenue)}</div>
               </div>
             );
           })}
@@ -4370,14 +4370,14 @@ function RevenueBoard({ user }) {
                         <div style={{width:70, height:5, background:'#f3f4f6', borderRadius:3, flexShrink:0}}>
                           <div style={{width:barPct+'%', height:'100%', background:color, borderRadius:3}}/>
                         </div>
-                        <span style={{fontSize:13, fontWeight:700, color:'#111827'}}>{fmt฿(row.revenue)}</span>
+                        <span style={{fontSize:13, fontWeight:700, color:'#111827'}}>{fmtTHB(row.revenue)}</span>
                       </div>
                     </td>
                     <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{row.share}%</td>
                     <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtKg(row.volume)}</td>
                     <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtN(row.orders)}</td>
                     <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151'}}>{row.accounts}</td>
-                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151', fontWeight:500}}>{fmt฿(row.avg_order)}</td>
+                    <td style={{padding:'12px 14px', fontSize:13, textAlign:'right', color:'#374151', fontWeight:500}}>{fmtTHB(row.avg_order)}</td>
                   </tr>
                   {isOpen && (
                     <tr>
@@ -4400,10 +4400,10 @@ function RevenueBoard({ user }) {
                                     <tr key={a.account_id} style={{borderBottom:'1px solid #e0f2fe'}}>
                                       <td style={{padding:'8px 16px', fontSize:13, fontWeight:500, color:'#111827'}}>{a.account_name}</td>
                                       <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{a.outlet_count}</td>
-                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', fontWeight:600, color:'#111827'}}>{fmt฿(a.revenue)}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', fontWeight:600, color:'#111827'}}>{fmtTHB(a.revenue)}</td>
                                       <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtKg(a.volume)}</td>
                                       <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtN(a.orders)}</td>
-                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmt฿(a.avg_order)}</td>
+                                      <td style={{padding:'8px 16px', fontSize:13, textAlign:'right', color:'#374151'}}>{fmtTHB(a.avg_order)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -4420,7 +4420,7 @@ function RevenueBoard({ user }) {
           <div style={{padding:'12px 14px', background:'#f9fafb', borderTop:'2px solid #e5e7eb',
             display:'flex', justifyContent:'flex-end', gap:8, fontSize:13, fontWeight:700, color:'#111827'}}>
             <span>Total:</span>
-            <span>{fmt฿(data?.total_revenue||0)}</span>
+            <span>{fmtTHB(data?.total_revenue||0)}</span>
           </div>
         </div>
       </>)}
