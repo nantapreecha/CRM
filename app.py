@@ -2538,6 +2538,31 @@ def sales_dashboard():
         'period': period, 'since': since, 'until': until,
     })
 
+@app.route('/api/revenue/debug', methods=['GET'])
+@require_auth
+def revenue_debug():
+    accounts_with_owner = query("SELECT COUNT(*) AS cnt FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
+    outlets_with_erp    = query("SELECT COUNT(*) AS cnt FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
+    joined = query("""
+        SELECT a.owner, a.name, o.erp_outlet_id
+        FROM accounts a JOIN outlets o ON o.account_id=a.id
+        WHERE a.owner IS NOT NULL AND trim(a.owner)!=''
+          AND o.erp_outlet_id IS NOT NULL AND trim(o.erp_outlet_id)!=''
+        LIMIT 10
+    """)
+    erp_sample = []
+    try:
+        erp_sample = erp_query("SELECT outlet_id, delivery_date, total_sales FROM sourcing_erp_order_items ORDER BY delivery_date DESC LIMIT 5")
+        erp_sample = [dict(r, delivery_date=str(r.get('delivery_date',''))) for r in erp_sample]
+    except Exception as ex:
+        erp_sample = [{'error': str(ex)}]
+    return jsonify({
+        'accounts_with_owner': accounts_with_owner['cnt'] if accounts_with_owner else 0,
+        'outlets_with_erp_id': outlets_with_erp['cnt'] if outlets_with_erp else 0,
+        'joined_sample': joined,
+        'erp_sample': erp_sample,
+    })
+
 @app.route('/api/revenue/owners', methods=['GET'])
 @require_auth
 def revenue_owners():

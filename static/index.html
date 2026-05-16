@@ -4258,9 +4258,10 @@ function SalesDashboard({ user }) {
 const REP_COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#6366f1'];
 
 function RevenueBoard({ user }) {
-  const today = new Date().toISOString().slice(0,10);
-  const d30   = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
-  const [start, setStart]   = useState(d30);
+  const now0 = new Date();
+  const today     = now0.toISOString().slice(0,10);
+  const thisMonthStart = new Date(now0.getFullYear(), now0.getMonth(), 1).toISOString().slice(0,10);
+  const [start, setStart]   = useState(thisMonthStart);
   const [end,   setEnd]     = useState(today);
   const [data,  setData]    = useState(null);
   const [loading, setLoading] = useState(false);
@@ -4268,15 +4269,19 @@ function RevenueBoard({ user }) {
   const [ownerAccounts, setOwnerAccounts] = useState([]);
   const [acctLoading, setAcctLoading]     = useState(false);
 
-  const load = () => {
-    if (!start || !end) return;
+  const load = (s, e) => {
+    const s0 = (s !== undefined ? s : start);
+    const e0 = (e !== undefined ? e : end);
+    if (!s0 || !e0) return;
     setLoading(true);
-    api(`/api/revenue/owners?start=${start}&end=${end}`)
+    api(`/api/revenue/owners?start=${s0}&end=${e0}`)
       .then(d => { setData(d); setLoading(false); })
-      .catch(() => { setData({rows:[], total_revenue:0}); setLoading(false); });
+      .catch(err => { console.error('Revenue API error:', err); setData({rows:[], total_revenue:0}); setLoading(false); });
   };
 
-  useEffect(() => { load(); }, []);
+  const setRange = (s, e) => { setStart(s); setEnd(e); load(s, e); };
+
+  useEffect(() => { load(start, end); }, []);
 
   const toggleOwner = owner => {
     if (expandedOwner === owner) { setExpandedOwner(null); setOwnerAccounts([]); return; }
@@ -4296,18 +4301,44 @@ function RevenueBoard({ user }) {
   return (
     <div style={{padding:24, overflowY:'auto', height:'100%'}}>
       {/* Header */}
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20, flexWrap:'wrap', gap:12}}>
-        <div>
-          <h1 style={{fontSize:20, fontWeight:700, color:'#111827', margin:0}}>Revenue / ยอดขาย</h1>
-          <p style={{fontSize:13, color:'#6b7280', marginTop:3}}>ข้อมูลจาก ERP · คำนวณจาก delivery date</p>
+      <div style={{marginBottom:20}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12, marginBottom:12}}>
+          <div>
+            <h1 style={{fontSize:20, fontWeight:700, color:'#111827', margin:0}}>Revenue / ยอดขาย</h1>
+            <p style={{fontSize:13, color:'#6b7280', marginTop:3}}>ข้อมูลจาก ERP · คำนวณจาก delivery date</p>
+          </div>
         </div>
+        {/* Date filter row */}
         <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+          {(()=>{
+            const _now = new Date();
+            const _today     = _now.toISOString().slice(0,10);
+            const _yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10);
+            const _thisStart = new Date(_now.getFullYear(),_now.getMonth(),1).toISOString().slice(0,10);
+            const _lastStart = new Date(_now.getFullYear(),_now.getMonth()-1,1).toISOString().slice(0,10);
+            const _lastEnd   = new Date(_now.getFullYear(),_now.getMonth(),0).toISOString().slice(0,10);
+            return [
+              ['Today',      _today,     _today],
+              ['Yesterday',  _yesterday, _yesterday],
+              ['This Month', _thisStart, _today],
+              ['Last Month', _lastStart, _lastEnd],
+            ].map(([l,s,e]) => (
+              <button key={l} type="button" onClick={()=>setRange(s,e)}
+                style={{fontSize:12,padding:'5px 12px',border:'1px solid #e5e7eb',borderRadius:6,cursor:'pointer',
+                  background: start===s&&end===e ? '#111827' : '#fff',
+                  color:      start===s&&end===e ? '#fff'    : '#374151',
+                  fontWeight: start===s&&end===e ? 600 : 400}}>
+                {l}
+              </button>
+            ));
+          })()}
+          <span style={{color:'#d1d5db', fontSize:13, margin:'0 2px'}}>|</span>
           <input type="date" value={start} onChange={e=>setStart(e.target.value)}
             style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
           <span style={{color:'#9ca3af', fontSize:13}}>–</span>
           <input type="date" value={end} onChange={e=>setEnd(e.target.value)}
             style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
-          <button onClick={load} className="btn btn-primary" style={{fontSize:12}}>Apply</button>
+          <button onClick={()=>load()} className="btn btn-primary" style={{fontSize:12,padding:'5px 14px'}}>Apply</button>
         </div>
       </div>
 
