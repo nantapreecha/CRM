@@ -3987,12 +3987,30 @@ function StatCard({ label, value, sub, color }) {
 }
 
 function SalesDashboard({ user }) {
+  const isAdmin = user.role === 'admin';
+
+  // ── Period filter ────────────────────────────────────────────────────────────
   const [period, setPeriod]       = useState('30d');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate]     = useState('');
-  const [data, setData]           = useState(null);
-  const [loading, setLoading]     = useState(true);
 
+  // ── Summary data ─────────────────────────────────────────────────────────────
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // ── Rep table (admin only) ───────────────────────────────────────────────────
+  const [reps, setReps]           = useState([]);
+  const [repsLoading, setRepsLoading] = useState(false);
+  const [sortCol, setSortCol]     = useState('total');
+  const [sortDir, setSortDir]     = useState('desc');
+  const [expandedRep, setExpandedRep] = useState(null);   // user_id
+  const [repLeads, setRepLeads]   = useState([]);
+  const [repLeadsLoading, setRepLeadsLoading] = useState(false);
+
+  // ── Drill-down (Lead Detail) ─────────────────────────────────────────────────
+  const [drillLead, setDrillLead] = useState(null);
+
+  // ── Fetch summary ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (period === 'custom' && (!startDate || !endDate)) return;
     setLoading(true);
@@ -4003,29 +4021,85 @@ function SalesDashboard({ user }) {
       .catch(() => setLoading(false));
   }, [period, startDate, endDate]);
 
+  // ── Fetch reps (admin) ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAdmin) return;
+    setRepsLoading(true);
+    api('/api/sales-dashboard/reps')
+      .then(d => { setReps(d || []); setRepsLoading(false); });
+  }, [isAdmin]);
+
+  // ── Sort reps ────────────────────────────────────────────────────────────────
+  const doSort = col => {
+    if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortCol(col); setSortDir('desc'); }
+  };
+  const sortedReps = [...reps].sort((a,b) => {
+    const av = a[sortCol] ?? (typeof a[sortCol]==='string' ? '' : 0);
+    const bv = b[sortCol] ?? (typeof b[sortCol]==='string' ? '' : 0);
+    if (typeof av === 'string') return sortDir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortDir === 'desc' ? bv - av : av - bv;
+  });
+
+  // ── Toggle rep expand ────────────────────────────────────────────────────────
+  const toggleRep = uid => {
+    if (expandedRep === uid) { setExpandedRep(null); setRepLeads([]); return; }
+    setExpandedRep(uid);
+    setRepLeadsLoading(true);
+    api(`/api/leads?owner_user_id=${uid}`)
+      .then(d => { setRepLeads(Array.isArray(d) ? d : []); setRepLeadsLoading(false); });
+  };
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   const STAGE_ORDER = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost'];
   const byStage = (data?.by_stage || []).slice().sort((a,b) =>
     STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
-  const total   = data?.total_leads || 0;
-  const periodLabel = period === '1d' ? 'Today' : period === 'yesterday' ? 'Yesterday' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : `${startDate} – ${endDate}`;
+  const total = data?.total_leads || 0;
+  const periodLabel = period==='7d' ? 'Last 7 days' : period==='30d' ? 'Last 30 days' : period==='custom' ? `${startDate} – ${endDate}` : period;
+
+  const lastActiveLabel = ts => {
+    if (!ts) return { text: 'No activity', warn: true };
+    const days = Math.floor((Date.now() - new Date(ts)) / 86400000);
+    if (days === 0) return { text: 'Today',     warn: false };
+    if (days === 1) return { text: 'Yesterday', warn: false };
+    return { text: `${days}d ago`, warn: days >= 7 };
+  };
+
+  const Th = ({ col, label, right }) => {
+    const active = sortCol === col;
+    return (
+      <th onClick={() => doSort(col)}
+        style={{padding:'9px 12px', fontSize:11, fontWeight:600, color: active?'#111827':'#6b7280',
+          textAlign: right?'right':'left', cursor:'pointer', userSelect:'none',
+          whiteSpace:'nowrap', background:'#f9fafb', borderBottom:'1px solid #e5e7eb'}}>
+        {label} {active ? (sortDir==='desc'?'↓':'↑') : ''}
+      </th>
+    );
+  };
+
+  // ── Drill-down: show LeadDetail replacing dashboard ──────────────────────────
+  if (drillLead) {
+    return <LeadDetail lead={drillLead} user={user}
+      onBack={() => setDrillLead(null)}
+      onUpdated={() => setDrillLead(null)}/>;
+  }
 
   return (
-    <div style={{padding:24,overflowY:'auto',height:'100%'}}>
-      {/* Header */}
+    <div style={{padding:24, overflowY:'auto', height:'100%'}}>
+      {/* Header + Period filter */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:12}}>
         <div>
           <h1 style={{fontSize:20,fontWeight:700,color:'#111827',margin:0}}>Sales Dashboard</h1>
           <p style={{fontSize:13,color:'#6b7280',marginTop:3}}>
-            {user.role==='admin' ? 'All team data' : `Your data — ${user.display_name}`}
+            {isAdmin ? 'All team data' : `Your data — ${user.display_name}`}
           </p>
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-          {[['1d','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
+          {[['7d','7 days'],['30d','30 days'],['custom','Custom']].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               style={{padding:'5px 14px',fontSize:12,borderRadius:6,border:'1px solid',cursor:'pointer',
                 background:period===v?'#111827':'#fff', color:period===v?'#fff':'#6b7280',
-                borderColor:period===v?'#111827':'#e5e7eb'}}>
-              {l}
+                borderColor:period===v?'#111827':'#e5e7eb'}}>{l}
             </button>
           ))}
           {period==='custom' && (
@@ -4040,44 +4114,133 @@ function SalesDashboard({ user }) {
         </div>
       </div>
 
-      {loading ? <div style={{display:'flex',justifyContent:'center',padding:48}}><Spinner/></div> : (
-        <>
-          {/* Stat Cards */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
-            <StatCard label="Total Leads" value={total} sub="all" color="#3b82f6"/>
-            <StatCard label="Closed Win" value={data?.closed_wins||0} sub={periodLabel} color="#22c55e"/>
-            <StatCard label="Activities" value={data?.activities_week||0} sub="last 7 days" color="#f59e0b"/>
-            <StatCard label="Win Rate" value={total>0?Math.round((data?.closed_wins||0)/total*100)+'%':'—'} sub="Closed Win / Total" color="#8b5cf6"/>
-          </div>
+      {loading ? <div style={{display:'flex',justifyContent:'center',padding:48}}><Spinner/></div> : (<>
+        {/* Summary Cards */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
+          <StatCard label="Total Leads"  value={total}                     sub="all time"            color="#3b82f6"/>
+          <StatCard label="Closed Win"   value={data?.closed_wins||0}      sub={periodLabel}         color="#22c55e"/>
+          <StatCard label="Activities"   value={data?.activities_week||0}  sub="last 7 days"         color="#f59e0b"/>
+          <StatCard label="Win Rate"     value={total>0?Math.round((data?.closed_wins||0)/total*100)+'%':'—'} sub="Win / Total" color="#8b5cf6"/>
+        </div>
 
-          {/* Leads by Stage */}
-          <div className="card" style={{padding:20}}>
-            <div style={{fontWeight:600,fontSize:14,color:'#111827',marginBottom:16}}>Leads by Stage</div>
-            {byStage.length === 0
-              ? <p style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>No data yet</p>
-              : <div style={{display:'flex',flexDirection:'column',gap:12}}>
-                  {byStage.map(s => {
-                    const c   = STAGE_COLORS[s.stage] || {bg:'#f3f4f6',border:'#9ca3af',text:'#374151'};
-                    const pct = total > 0 ? Math.round(s.cnt/total*100) : 0;
-                    return (
-                      <div key={s.stage}>
-                        <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}>
-                          <span style={{color:c.text,fontWeight:500}}>{s.stage}</span>
-                          <span style={{color:'#374151',fontWeight:600}}>
-                            {s.cnt} <span style={{color:'#9ca3af',fontWeight:400}}>({pct}%)</span>
-                          </span>
-                        </div>
-                        <div style={{height:8,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
-                          <div style={{height:'100%',background:c.border,borderRadius:4,width:pct+'%',transition:'width .4s'}}/>
-                        </div>
+        {/* Leads by Stage */}
+        <div className="card" style={{padding:20, marginBottom:24}}>
+          <div style={{fontWeight:600,fontSize:14,color:'#111827',marginBottom:16}}>Leads by Stage</div>
+          {byStage.length === 0
+            ? <p style={{color:'#9ca3af',fontSize:13,textAlign:'center',padding:16}}>No data yet</p>
+            : <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {byStage.map(s => {
+                  const c   = STAGE_COLORS[s.stage] || {bg:'#f3f4f6',border:'#9ca3af',text:'#374151'};
+                  const pct = total > 0 ? Math.round(s.cnt/total*100) : 0;
+                  return (
+                    <div key={s.stage}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}>
+                        <span style={{color:c.text,fontWeight:500}}>{s.stage}</span>
+                        <span style={{color:'#374151',fontWeight:600}}>
+                          {s.cnt} <span style={{color:'#9ca3af',fontWeight:400}}>({pct}%)</span>
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div style={{height:8,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
+                        <div style={{height:'100%',background:c.border,borderRadius:4,width:pct+'%',transition:'width .4s'}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </div>
+
+        {/* ── Rep Performance Table (admin only) ─────────────────────────────── */}
+        {isAdmin && (
+          <div className="card" style={{padding:0, overflow:'hidden'}}>
+            <div style={{padding:'16px 20px', borderBottom:'1px solid #e5e7eb'}}>
+              <div style={{fontWeight:600,fontSize:14,color:'#111827'}}>Rep Performance</div>
+              <div style={{fontSize:12,color:'#9ca3af',marginTop:2}}>คลิกแถวเพื่อดู leads ของแต่ละคน · Activities = 7 วันล่าสุด</div>
+            </div>
+            {repsLoading
+              ? <div style={{display:'flex',justifyContent:'center',padding:32}}><Spinner/></div>
+              : <table style={{width:'100%',borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr>
+                      <Th col="display_name" label="Rep"/>
+                      <Th col="total"        label="Leads"    right/>
+                      <Th col="cold_call"    label="Cold Call" right/>
+                      <Th col="meeting"      label="Meeting"  right/>
+                      <Th col="follow_up"    label="Follow Up" right/>
+                      <Th col="won"          label="Won"      right/>
+                      <Th col="lost"         label="Lost"     right/>
+                      <Th col="activities_week" label="Act/wk" right/>
+                      <Th col="last_active"  label="Last Active"/>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedReps.map(rep => {
+                      const la  = lastActiveLabel(rep.last_active);
+                      const isOpen = expandedRep === rep.user_id;
+                      return (<>
+                        <tr key={rep.user_id} onClick={() => toggleRep(rep.user_id)}
+                          style={{borderBottom: isOpen ? 'none' : '1px solid #f3f4f6', cursor:'pointer',
+                            background: isOpen ? '#f0f9ff' : 'transparent'}}
+                          onMouseEnter={e => { if(!isOpen) e.currentTarget.style.background='#f9fafb'; }}
+                          onMouseLeave={e => { if(!isOpen) e.currentTarget.style.background='transparent'; }}>
+                          <td style={{padding:'11px 12px',fontSize:13,fontWeight:600,color:'#111827'}}>
+                            {isOpen ? '▾ ' : '▸ '}{rep.display_name}
+                          </td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#374151'}}>{rep.total}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.cold_call}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.meeting}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.follow_up}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',fontWeight:600,color:'#16a34a'}}>{rep.won}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',fontWeight:600,color:'#dc2626'}}>{rep.lost}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#374151'}}>{rep.activities_week}</td>
+                          <td style={{padding:'11px 12px',fontSize:12,color: la.warn?'#dc2626':'#6b7280'}}>{la.text}</td>
+                        </tr>
+                        {isOpen && (
+                          <tr key={rep.user_id+'-expand'}>
+                            <td colSpan={9} style={{padding:0, background:'#f0f9ff', borderBottom:'1px solid #e5e7eb'}}>
+                              {repLeadsLoading
+                                ? <div style={{display:'flex',justifyContent:'center',padding:20}}><Spinner/></div>
+                                : repLeads.length === 0
+                                  ? <div style={{padding:'16px 24px',fontSize:13,color:'#9ca3af'}}>ไม่มี lead</div>
+                                  : <table style={{width:'100%',borderCollapse:'collapse'}}>
+                                      <thead>
+                                        <tr style={{background:'#e0f2fe'}}>
+                                          {['Lead No','Company','Stage','Last Activity','Outlet(s)','Contact'].map(h=>(
+                                            <th key={h} style={{padding:'7px 16px',fontSize:11,fontWeight:600,color:'#0369a1',textAlign:'left'}}>{h}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {repLeads.map(l => {
+                                          const la2 = lastActiveLabel(l.last_activity_date || l.created_at);
+                                          return (
+                                            <tr key={l.id} onClick={e=>{e.stopPropagation();setDrillLead(l);}}
+                                              style={{borderBottom:'1px solid #e0f2fe',cursor:'pointer'}}
+                                              onMouseEnter={e=>e.currentTarget.style.background='#bae6fd'}
+                                              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                                              <td style={{padding:'8px 16px',fontSize:12,fontFamily:'monospace',color:'#0369a1'}}>{l.lead_no}</td>
+                                              <td style={{padding:'8px 16px',fontSize:13,fontWeight:500,color:'#111827'}}>{l.company_name}</td>
+                                              <td style={{padding:'8px 16px'}}><StageBadge stage={l.stage}/></td>
+                                              <td style={{padding:'8px 16px',fontSize:12,color:la2.warn?'#dc2626':'#6b7280'}}>{la2.text}</td>
+                                              <td style={{padding:'8px 16px',fontSize:13,color:'#374151'}}>{l.branch||'-'}</td>
+                                              <td style={{padding:'8px 16px',fontSize:12,color:'#6b7280'}}>{l.contact_name||'-'}</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                              }
+                            </td>
+                          </tr>
+                        )}
+                      </>);
+                    })}
+                  </tbody>
+                </table>
             }
           </div>
-        </>
-      )}
+        )}
+      </>)}
     </div>
   );
 }

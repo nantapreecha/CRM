@@ -2526,6 +2526,34 @@ def sales_dashboard():
         'period': period, 'since': since, 'until': until,
     })
 
+@app.route('/api/sales-dashboard/reps', methods=['GET'])
+@require_auth
+def sales_dashboard_reps():
+    if g.user['role'] not in ('admin',):
+        return jsonify({'error': 'Forbidden'}), 403
+    now      = datetime.now()
+    week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%dT00:00:00')
+    rows = query("""
+        SELECT
+            u.id   AS user_id,
+            u.display_name,
+            COUNT(DISTINCT l.id)                                           AS total,
+            COUNT(DISTINCT CASE WHEN l.stage='Cold Call/Email' THEN l.id END) AS cold_call,
+            COUNT(DISTINCT CASE WHEN l.stage='Meeting'         THEN l.id END) AS meeting,
+            COUNT(DISTINCT CASE WHEN l.stage='Follow Up'       THEN l.id END) AS follow_up,
+            COUNT(DISTINCT CASE WHEN l.stage='Closed Win'      THEN l.id END) AS won,
+            COUNT(DISTINCT CASE WHEN l.stage='Closed Lost'     THEN l.id END) AS lost,
+            COUNT(CASE WHEN la.created_at >= %s              THEN la.id END) AS activities_week,
+            MAX(la.created_at)                                             AS last_active
+        FROM users u
+        LEFT JOIN leads l  ON l.owner_user_id = u.id
+        LEFT JOIN lead_activities la ON la.lead_id = l.id
+        WHERE u.role IN ('sales','admin') AND u.status = 'active'
+        GROUP BY u.id, u.display_name
+        ORDER BY u.display_name
+    """, (week_ago,))
+    return jsonify(rows)
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
