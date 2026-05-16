@@ -2539,7 +2539,6 @@ def sales_dashboard():
     })
 
 @app.route('/api/revenue/debug', methods=['GET'])
-@require_auth
 def revenue_debug():
     accounts_with_owner = query("SELECT COUNT(*) AS cnt FROM accounts WHERE owner IS NOT NULL AND trim(owner)!=''", one=True)
     outlets_with_erp    = query("SELECT COUNT(*) AS cnt FROM outlets WHERE erp_outlet_id IS NOT NULL AND trim(erp_outlet_id)!=''", one=True)
