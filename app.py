@@ -2589,15 +2589,15 @@ def revenue_owners():
     erp_error = None
     try:
         erp_rows = erp_query("""
-            SELECT outlet_id,
+            SELECT outlet_id::text AS outlet_id,
                    COALESCE(SUM(total_sales), 0) AS revenue,
                    COALESCE(SUM(qty), 0)          AS volume,
                    COUNT(DISTINCT invoice_number) AS orders
             FROM sourcing_erp_order_items
             WHERE delivery_date >= %s AND delivery_date <= %s
-              AND outlet_id = ANY(%s)
+              AND outlet_id::text = ANY(%s)
             GROUP BY outlet_id
-        """, (start, end, all_outlet_ids))
+        """, (start, end, [str(x) for x in all_outlet_ids]))
     except Exception as ex:
         erp_error = str(ex)
     erp_map = {r['outlet_id']: r for r in (erp_rows or [])}
@@ -2654,15 +2654,15 @@ def revenue_owner_accounts():
     if not crm_rows:
         return jsonify([])
 
-    outlet_ids = [r['erp_outlet_id'] for r in crm_rows]
+    outlet_ids = [str(r['erp_outlet_id']) for r in crm_rows]
     erp_rows = erp_query("""
-        SELECT outlet_id,
+        SELECT outlet_id::text AS outlet_id,
                COALESCE(SUM(total_sales), 0) AS revenue,
                COALESCE(SUM(qty), 0)          AS volume,
                COUNT(DISTINCT invoice_number) AS orders
         FROM sourcing_erp_order_items
         WHERE delivery_date >= %s AND delivery_date <= %s
-          AND outlet_id = ANY(%s)
+          AND outlet_id::text = ANY(%s)
         GROUP BY outlet_id
     """, (start, end, outlet_ids))
     erp_map = {r['outlet_id']: r for r in (erp_rows or [])}
