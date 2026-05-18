@@ -606,7 +606,16 @@ def auth_me():
 @app.route('/api/users', methods=['GET'])
 @require_admin
 def get_users():
-    rows = query("SELECT id, username, display_name, team, role, status, created_at FROM users ORDER BY team, display_name")
+    has_leads = request.args.get('has_leads', '0') == '1'
+    if has_leads:
+        rows = query("""
+            SELECT DISTINCT u.id, u.username, u.display_name, u.team, u.role, u.status
+            FROM users u
+            INNER JOIN leads l ON l.owner_user_id = u.id
+            ORDER BY u.display_name
+        """)
+    else:
+        rows = query("SELECT id, username, display_name, team, role, status, created_at FROM users ORDER BY team, display_name")
     return jsonify(rows)
 
 @app.route('/api/users', methods=['POST'])

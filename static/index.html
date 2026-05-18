@@ -3716,7 +3716,7 @@ function Pipeline({ user }) {
     api('/api/leads?' + params).then(d=>{ setLeads(Array.isArray(d)?d:[]); setLoading(false); }).catch(()=>setLoading(false));
   };
 
-  useEffect(()=>{ if (isAdmin) api('/api/users').then(d=>setUsers(d||[])); },[]);
+  useEffect(()=>{ if (isAdmin) api('/api/users?has_leads=1').then(d=>setUsers(d||[])); },[]);
   useEffect(()=>{ reload(); }, [filterStage, filterOwner]);
 
   if (selectedLead) return <LeadDetail lead={selectedLead} user={user} onBack={()=>setSelectedLead(null)} onUpdated={reload}/>;
