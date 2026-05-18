@@ -1087,7 +1087,13 @@ def get_tickets():
                (SELECT image_url FROM ticket_workflow_log
                 WHERE ticket_id = t.id AND image_url IS NOT NULL AND image_url != ''
                 ORDER BY created_at DESC LIMIT 1) AS latest_image_url,
-               EXISTS(SELECT 1 FROM case_reads cr WHERE cr.user_id=%s AND cr.ticket_id=t.id) AS is_read
+               EXISTS(SELECT 1 FROM case_reads cr WHERE cr.user_id=%s AND cr.ticket_id=t.id) AS is_read,
+               COALESCE(
+                 (SELECT created_at FROM ticket_workflow_log
+                  WHERE ticket_id = t.id AND to_team = t.current_team
+                  ORDER BY created_at DESC LIMIT 1),
+                 t.created_at
+               ) AS team_since
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id

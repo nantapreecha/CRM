@@ -1990,17 +1990,24 @@ const STATUS_BOARD_SHORT = {
 };
 
 function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
-  const [expandedTeam, setExpandedTeam] = useState(null);
-
   if (loading) return <div className="py-16 text-center text-gray-400"><Spinner/></div>;
+
+  const daysSince = (dateStr) => {
+    if (!dateStr) return 0;
+    const diff = Date.now() - new Date(dateStr).getTime();
+    return Math.floor(diff / 86400000);
+  };
+
+  const daysBadgeStyle = (days) => {
+    if (days >= 7)  return {background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca'};
+    if (days >= 3)  return {background:'#fff7ed',color:'#ea580c',border:'1px solid #fed7aa'};
+    return              {background:'#f0fdf4',color:'#16a34a',border:'1px solid #bbf7d0'};
+  };
 
   // Build team stats from all tickets (not closed)
   const active = tickets.filter(t => t.status !== 'closed');
   const teamMap = {};
-
-  // Seed all known teams
   TEAMS.forEach(t => { teamMap[t] = { total:0, byStatus:{}, tickets:[] }; });
-
   active.forEach(t => {
     const team = t.current_team || 'ยังไม่ระบุ';
     if (!teamMap[team]) teamMap[team] = { total:0, byStatus:{}, tickets:[] };
@@ -2009,7 +2016,6 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
     teamMap[team].tickets.push(t);
   });
 
-  // Sort by total desc, then by TEAMS order for ties
   const teamEntries = Object.entries(teamMap).sort((a,b) => b[1].total - a[1].total || TEAMS.indexOf(a[0]) - TEAMS.indexOf(b[0]));
   const totalActive = active.length;
 
@@ -2034,27 +2040,27 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
       </div>
 
       {/* Team grid */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:14}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
         {teamEntries.map(([team, info]) => {
           const color = TEAM_COLORS[team] || '#9ca3af';
-          const isExpanded = expandedTeam === team;
-          const recentTickets = [...info.tickets].sort((a,b)=>b.id-a.id).slice(0,5);
+          // Sort by days in team (most days first)
+          const sortedTickets = [...info.tickets].sort((a,b) => {
+            const da = daysSince(a.team_since || a.created_at);
+            const db = daysSince(b.team_since || b.created_at);
+            return db - da;
+          });
           return (
             <div key={team} style={{background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',
               boxShadow:'0 1px 4px rgba(0,0,0,.06)',overflow:'hidden',
               borderLeft:`4px solid ${color}`}}>
               {/* Card header */}
-              <div style={{padding:'14px 16px',cursor:'pointer'}}
-                onClick={()=>setExpandedTeam(isExpanded ? null : team)}>
+              <div style={{padding:'14px 16px'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
                     <span style={{fontSize:18}}>{TEAM_ICONS[team]||'👥'}</span>
                     <span style={{fontWeight:700,fontSize:14,color:'#111827'}}>{team}</span>
                   </div>
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <span style={{fontSize:24,fontWeight:800,color: info.total>0 ? color : '#d1d5db'}}>{info.total}</span>
-                    <span style={{color:'#9ca3af',fontSize:12}}>{isExpanded?'▲':'▼'}</span>
-                  </div>
+                  <span style={{fontSize:24,fontWeight:800,color: info.total>0 ? color : '#d1d5db'}}>{info.total}</span>
                 </div>
                 {/* Status breakdown bar */}
                 {info.total > 0 && (
@@ -2083,38 +2089,33 @@ function ByTeamBoard({ tickets, loading, onSelectTeam, onSelectTicket }) {
                 {info.total === 0 && <div style={{fontSize:12,color:'#9ca3af'}}>No active cases</div>}
               </div>
 
-              {/* Expanded: recent tickets + action buttons */}
-              {isExpanded && info.total > 0 && (
-                <div style={{borderTop:'1px solid #f1f5f9',padding:'0 0 12px'}}>
-                  {recentTickets.map(t=>(
-                    <div key={t.id} style={{padding:'8px 16px',cursor:'pointer',borderBottom:'1px solid #f9fafb'}}
-                      onClick={()=>onSelectTicket(t.id)}
-                      className="hover:bg-gray-50">
-                      <div style={{display:'flex',alignItems:'center',gap:8}}>
-                        <span style={{fontSize:11,color:'#9ca3af',fontFamily:'monospace'}}>#{t.id}</span>
-                        <span style={{fontSize:11,background:'#f3f4f6',color:'#374151',padding:'1px 7px',borderRadius:10}}>{t.case_type}</span>
-                        <span style={{fontSize:11,padding:'1px 6px',borderRadius:8,
-                          background:STATUS_BOARD_COLORS[t.status]+'22',color:STATUS_BOARD_COLORS[t.status],fontWeight:600}}>
-                          {STATUS_BOARD_SHORT[t.status]}
-                        </span>
+              {/* All tickets — sorted by days in team desc */}
+              {info.total > 0 && (
+                <div style={{borderTop:'1px solid #f1f5f9'}}>
+                  {sortedTickets.map(t => {
+                    const days = daysSince(t.team_since || t.created_at);
+                    const bs = daysBadgeStyle(days);
+                    return (
+                      <div key={t.id} style={{padding:'8px 16px',cursor:'pointer',borderBottom:'1px solid #f9fafb'}}
+                        onClick={()=>onSelectTicket(t.id)}
+                        className="hover:bg-gray-50">
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                          <span style={{fontSize:11,color:'#9ca3af',fontFamily:'monospace',flexShrink:0}}>#{t.id}</span>
+                          <span style={{fontSize:11,background:'#f3f4f6',color:'#374151',padding:'1px 7px',borderRadius:10,flexShrink:0}}>{t.case_type}</span>
+                          <span style={{fontSize:11,padding:'1px 6px',borderRadius:8,flexShrink:0,
+                            background:STATUS_BOARD_COLORS[t.status]+'22',color:STATUS_BOARD_COLORS[t.status],fontWeight:600}}>
+                            {STATUS_BOARD_SHORT[t.status]}
+                          </span>
+                          <span style={{marginLeft:'auto',fontSize:10,fontWeight:700,padding:'1px 7px',borderRadius:8,flexShrink:0,...bs}}>
+                            {days}d
+                          </span>
+                        </div>
+                        <div style={{fontSize:12,color:'#374151',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {t.outlet_name || t.description || '—'}
+                        </div>
                       </div>
-                      <div style={{fontSize:12,color:'#374151',marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
-                        {t.outlet_name || t.description || '—'}
-                      </div>
-                    </div>
-                  ))}
-                  {info.tickets.length > 5 && (
-                    <div style={{padding:'4px 16px',fontSize:11,color:'#6b7280'}}>
-                      +{info.tickets.length - 5} more cases
-                    </div>
-                  )}
-                  <div style={{padding:'10px 16px 0',display:'flex',gap:8}}>
-                    <button onClick={()=>onSelectTeam(team)}
-                      style={{flex:1,padding:'6px 0',fontSize:12,fontWeight:600,borderRadius:8,
-                        border:`1px solid ${color}`,color:color,background:'#fff',cursor:'pointer'}}>
-                      See all ({info.total})
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
