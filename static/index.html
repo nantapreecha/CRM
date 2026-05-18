@@ -4306,15 +4306,14 @@ function RevenueBoard({ user }) {
   return (
     <div style={{padding:24, overflowY:'auto', height:'100%'}}>
       {/* Header */}
-      <div style={{marginBottom:20}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12, marginBottom:12}}>
-          <div>
-            <h1 style={{fontSize:20, fontWeight:700, color:'#111827', margin:0}}>Revenue / ยอดขาย</h1>
-            <p style={{fontSize:13, color:'#6b7280', marginTop:3}}>ข้อมูลจาก ERP · คำนวณจาก delivery date</p>
-          </div>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12, marginBottom:20}}>
+        <div>
+          <h1 style={{fontSize:20, fontWeight:700, color:'#111827', margin:0}}>Revenue / ยอดขาย</h1>
+          <p style={{fontSize:13, color:'#6b7280', marginTop:2}}>ข้อมูลจาก ERP · ตั้งแต่มีข้อมูล ERP</p>
         </div>
-        {/* Date filter row */}
-        <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+        {/* Date filter — inline compact */}
+        <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap',
+          background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:10, padding:'6px 10px'}}>
           {(()=>{
             const _now = new Date();
             const _today     = localISO(_now);
@@ -4329,21 +4328,23 @@ function RevenueBoard({ user }) {
               ['Last Month', _lastStart, _lastEnd],
             ].map(([l,s,e]) => (
               <button key={l} type="button" onClick={()=>setRange(s,e)}
-                style={{fontSize:12,padding:'5px 12px',border:'1px solid #e5e7eb',borderRadius:6,cursor:'pointer',
-                  background: start===s&&end===e ? '#111827' : '#fff',
-                  color:      start===s&&end===e ? '#fff'    : '#374151',
+                style={{fontSize:12,padding:'4px 10px',border:'none',borderRadius:6,cursor:'pointer',
+                  background: start===s&&end===e ? '#111827' : 'transparent',
+                  color:      start===s&&end===e ? '#fff'    : '#6b7280',
                   fontWeight: start===s&&end===e ? 600 : 400}}>
                 {l}
               </button>
             ));
           })()}
-          <span style={{color:'#d1d5db', fontSize:13, margin:'0 2px'}}>|</span>
+          <div style={{width:1, height:18, background:'#e5e7eb', margin:'0 2px'}}/>
           <input type="date" value={start} onChange={e=>setStart(e.target.value)}
-            style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
-          <span style={{color:'#9ca3af', fontSize:13}}>–</span>
+            style={{fontSize:12,padding:'3px 6px',border:'1px solid #e5e7eb',borderRadius:5,width:120,background:'#fff'}}/>
+          <span style={{color:'#9ca3af',fontSize:12}}>–</span>
           <input type="date" value={end} onChange={e=>setEnd(e.target.value)}
-            style={{fontSize:12,padding:'5px 10px',border:'1px solid #e5e7eb',borderRadius:6}}/>
-          <button onClick={()=>load()} className="btn btn-primary" style={{fontSize:12,padding:'5px 14px'}}>Apply</button>
+            style={{fontSize:12,padding:'3px 6px',border:'1px solid #e5e7eb',borderRadius:5,width:120,background:'#fff'}}/>
+          <button onClick={()=>load()}
+            style={{fontSize:12,padding:'4px 12px',borderRadius:6,border:'none',cursor:'pointer',
+              background:'#111827',color:'#fff',fontWeight:600}}>Apply</button>
         </div>
       </div>
 
