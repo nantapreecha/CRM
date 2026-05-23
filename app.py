@@ -1137,7 +1137,7 @@ def create_ticket():
         return jsonify({'error': 'กรุณาเลือกทีมที่จะส่งงานให้'}), 400
 
     if case_type == 'Complain':
-        current_team = 'pending_ack'
+        current_team = initial_teams[0]  # team ที่รับเคส (ต้อง acknowledge)
         status = 'pending_ack'
     else:
         current_team = initial_teams[0]
