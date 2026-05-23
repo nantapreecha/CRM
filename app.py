@@ -9,6 +9,7 @@ from functools import wraps
 import openpyxl
 import psycopg2
 import psycopg2.extras
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -2716,6 +2717,76 @@ def sales_dashboard_reps():
         ORDER BY u.display_name
     """, (week_ago,))
     return jsonify(rows)
+
+# ---------------------------------------------------------------------------
+# Auto-sync: ERP outlets → CRM (runs every hour)
+# ---------------------------------------------------------------------------
+
+def sync_outlets_from_erp():
+    """Sync new outlets from ERP sourcing_erp_order_items into CRM outlets table."""
+    if not ERP_DATABASE_URL:
+        return
+    try:
+        erp = psycopg2.connect(ERP_DATABASE_URL, options="-c timezone=Asia/Bangkok")
+        crm = get_db()
+        ec = erp.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cc = crm.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # ERP: distinct outlets
+        ec.execute("""
+            SELECT DISTINCT ON (customer_name)
+                outlet_id, customer_name, account_name, csc_code
+            FROM sourcing_erp_order_items
+            WHERE customer_name IS NOT NULL AND customer_name != ''
+            ORDER BY customer_name, outlet_id
+        """)
+        erp_outlets = ec.fetchall()
+
+        # CRM: existing names and accounts
+        cc.execute("SELECT name FROM outlets")
+        crm_names = {r['name'] for r in cc.fetchall()}
+        cc.execute("SELECT id, name FROM accounts")
+        crm_accounts = {r['name']: r['id'] for r in cc.fetchall()}
+
+        added = 0
+        for o in erp_outlets:
+            name = (o['customer_name'] or '').strip()
+            acc_name = (o['account_name'] or '').strip()
+            if not name or not acc_name or name in crm_names:
+                continue
+
+            # Find or create account
+            if acc_name not in crm_accounts:
+                cc.execute("INSERT INTO accounts (name, status) VALUES (%s, 'active') RETURNING id", (acc_name,))
+                aid = cc.fetchone()['id']
+                crm_accounts[acc_name] = aid
+            else:
+                aid = crm_accounts[acc_name]
+
+            # Create outlet
+            cc.execute("""
+                INSERT INTO outlets (account_id, name, erp_outlet_id, csc_code, status)
+                VALUES (%s, %s, %s, %s, 'active')
+                ON CONFLICT DO NOTHING
+                RETURNING id
+            """, (aid, name, o['outlet_id'], o['csc_code']))
+            if cc.fetchone():
+                crm_names.add(name)
+                added += 1
+
+        crm.commit()
+        if added:
+            print(f"[sync_outlets] {added} new outlets added from ERP", flush=True)
+        erp.close()
+        crm.close()
+    except Exception as e:
+        print(f"[sync_outlets] Error: {e}", flush=True)
+
+# Start scheduler
+_scheduler = BackgroundScheduler(daemon=True)
+_scheduler.add_job(sync_outlets_from_erp, 'interval', hours=1, id='sync_outlets')
+_scheduler.start()
+sync_outlets_from_erp()  # run once at startup
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
