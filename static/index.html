@@ -2863,22 +2863,30 @@ function TicketDetail({ ticketId, user, onBack }) {
               <div className="mb-3">
                 <label className="text-sm font-medium text-gray-700 block mb-2">Responsible team *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {FAULT_TEAMS.filter(t=>t!=='Customer').map(t => (
-                    <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`} onClick={()=>setFaultTeam(t)}>
-                      <div style={{width:28,height:28,borderRadius:'50%',background:TEAM_COLORS[t]||'#9ca3af',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 4px'}}>{t.substring(0,2).toUpperCase()}</div>
+                  {FAULT_TEAMS.map(t => (
+                    <div key={t} className={`fault-btn ${faultTeam===t?'selected':''}`}
+                      onClick={()=>{
+                        setFaultTeam(t);
+                        if(t==='Customer') act('close',{note,fault_team:'Customer'});
+                      }}>
+                      <div style={{width:28,height:28,borderRadius:'50%',background:TEAM_COLORS[t]||'#6b7280',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 4px'}}>
+                        {t==='Customer'?'👤':t.substring(0,2).toUpperCase()}
+                      </div>
                       <div className="text-xs mt-1">{t}</div>
                     </div>
                   ))}
                 </div>
               </div>
-              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
-                placeholder="Note for re-assignment..." className="mb-3"/>
-              <button className="btn btn-primary w-full" disabled={saving||!faultTeam}
-                onClick={()=>act('close',{note,fault_team:faultTeam})}>
-                {saving?<Spinner/>:'✅ Re-assign & Send'}
-              </button>
-              {faultTeam === ticket.fault_team && faultTeam &&
-                <p className="text-xs text-amber-600 mt-2">⚠️ Re-assigning back to <strong>{faultTeam}</strong> — make sure this is correct</p>}
+              {faultTeam !== 'Customer' && (<>
+                <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
+                  placeholder="Note for re-assignment..." className="mb-3"/>
+                <button className="btn btn-primary w-full" disabled={saving||!faultTeam}
+                  onClick={()=>act('close',{note,fault_team:faultTeam})}>
+                  {saving?<Spinner/>:'✅ Re-assign & Send'}
+                </button>
+                {faultTeam === ticket.fault_team && faultTeam &&
+                  <p className="text-xs text-amber-600 mt-2">⚠️ Re-assigning back to <strong>{faultTeam}</strong> — make sure this is correct</p>}
+              </>)}
             </div>
           )}
 
