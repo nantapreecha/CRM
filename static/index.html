@@ -1059,12 +1059,13 @@ function BarChart({ data, labelKey, valueKey, color='var(--primary)', onRowClick
 }
 
 // ── DrillModal ────────────────────────────────────────────────────────────────
-function DrillModal({ filters, title, dateRange, onClose }) {
+function DrillModal({ filters, title, dateRange, overrideDateRange, onClose }) {
   const [cases, setCases] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const params = new URLSearchParams({ start: dateRange.start || '', end: dateRange.end || '', ...filters });
+    const dr = overrideDateRange || dateRange;
+    const params = new URLSearchParams({ start: dr.start || '', end: dr.end || '', ...filters });
     api(`/api/dashboard/drill?${params}`).then(d => { setCases(d||[]); setLoading(false); });
   }, []);
 
@@ -1072,7 +1073,7 @@ function DrillModal({ filters, title, dateRange, onClose }) {
   const sc = s => STATUS_COLOR[s] || '#6b7280';
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
       onClick={onClose}>
       <div style={{background:'var(--card)',borderRadius:12,width:'100%',maxWidth:900,maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}
         onClick={e=>e.stopPropagation()}>
