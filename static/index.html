@@ -1113,7 +1113,7 @@ function DrillModal({ filters, title, dateRange, overrideDateRange, onClose }) {
               </thead>
               <tbody>
                 {cases.map((c,i) => (
-                  <tr key={c.id} style={{borderBottom:'1px solid var(--border)',background:i%2===1?'var(--bg)':'var(--card)'}}>
+                  <tr key={c.id} style={{borderBottom:'1px solid #f0f0f0',background:i%2===1?'#f8fafc':'#ffffff'}}>
                     <td style={{padding:'7px 8px',fontWeight:700,color:'var(--primary)',whiteSpace:'nowrap'}}>{c.ticket_no}</td>
                     <td style={{padding:'7px 8px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.outlet_name}>{c.outlet_name||'—'}</td>
                     <td style={{padding:'7px 8px',whiteSpace:'nowrap'}}>{c.case_type}</td>
