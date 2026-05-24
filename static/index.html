@@ -1006,7 +1006,7 @@ function DateRangeFilter({ value, onChange }) {
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-function BarChart({ data, labelKey, valueKey, color='var(--primary)' }) {
+function BarChart({ data, labelKey, valueKey, color='var(--primary)', onRowClick }) {
   if (!data || data.length === 0) return <p className="text-gray-400 text-sm">No data yet</p>;
   const max = Math.max(...data.map(d => d[valueKey] || 0)) || 1;
   return (
@@ -1014,7 +1014,11 @@ function BarChart({ data, labelKey, valueKey, color='var(--primary)' }) {
       {data.map((d, i) => {
         const pct = Math.round((d[valueKey]||0) / max * 100);
         return (
-          <div key={i} className="flex items-center gap-3">
+          <div key={i} className="flex items-center gap-3"
+            onClick={onRowClick ? ()=>onRowClick(d) : undefined}
+            style={onRowClick ? {cursor:'pointer',borderRadius:6,margin:'0 -4px',padding:'0 4px',transition:'background .15s'} : {}}
+            onMouseEnter={onRowClick ? e=>e.currentTarget.style.background='var(--primary-bg)' : undefined}
+            onMouseLeave={onRowClick ? e=>e.currentTarget.style.background='transparent' : undefined}>
             <div className="w-32 text-sm text-gray-600 truncate shrink-0">{d[labelKey] || '—'}</div>
             <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full" style={{width:pct+'%', background:color}}/>
@@ -1023,6 +1027,70 @@ function BarChart({ data, labelKey, valueKey, color='var(--primary)' }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── DrillModal ────────────────────────────────────────────────────────────────
+function DrillModal({ filters, title, dateRange, onClose }) {
+  const [cases, setCases] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ start: dateRange.start || '', end: dateRange.end || '', ...filters });
+    api(`/api/dashboard/drill?${params}`).then(d => { setCases(d||[]); setLoading(false); });
+  }, []);
+
+  const STATUS_COLOR = { open:'#2563eb', in_progress:'#d97706', closed:'#16a34a', pending_ack:'#7c3aed', pending_fault:'#9f1239' };
+  const sc = s => STATUS_COLOR[s] || '#6b7280';
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+      onClick={onClose}>
+      <div style={{background:'var(--card)',borderRadius:12,width:'100%',maxWidth:900,maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}
+        onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+          <h3 style={{fontWeight:700,fontSize:16,color:'var(--text)',margin:0}}>🔍 {title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--text-muted)',lineHeight:1}}>✕</button>
+        </div>
+        {/* Body */}
+        <div style={{overflowY:'auto',flex:1,padding:'10px 20px 20px'}}>
+          {loading ? (
+            <div style={{textAlign:'center',padding:48,color:'var(--text-muted)'}}><Spinner/> Loading...</div>
+          ) : !cases || cases.length === 0 ? (
+            <p style={{color:'var(--text-muted)',textAlign:'center',padding:40}}>No cases found</p>
+          ) : (<>
+            <p style={{fontSize:12,color:'var(--text-muted)',margin:'6px 0 10px'}}>
+              {cases.length} case{cases.length!==1?'s':''}{cases.length===200?' (showing first 200)':''}
+            </p>
+            <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
+              <thead>
+                <tr style={{color:'var(--text-muted)',textAlign:'left',position:'sticky',top:0,background:'var(--card)'}}>
+                  {['Ticket No','Outlet','Type','Status','Current Team','Fault Team','Created'].map(h=>(
+                    <th key={h} style={{padding:'6px 8px',fontWeight:600,borderBottom:'2px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c,i) => (
+                  <tr key={c.id} style={{borderBottom:'1px solid var(--border)',background:i%2===1?'var(--bg)':'var(--card)'}}>
+                    <td style={{padding:'7px 8px',fontWeight:700,color:'var(--primary)',whiteSpace:'nowrap'}}>{c.ticket_no}</td>
+                    <td style={{padding:'7px 8px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.outlet_name}>{c.outlet_name||'—'}</td>
+                    <td style={{padding:'7px 8px',whiteSpace:'nowrap'}}>{c.case_type}</td>
+                    <td style={{padding:'7px 8px'}}>
+                      <span style={{background:sc(c.status)+'22',color:sc(c.status),padding:'2px 8px',borderRadius:10,fontSize:11,fontWeight:700,whiteSpace:'nowrap'}}>{c.status}</span>
+                    </td>
+                    <td style={{padding:'7px 8px'}}>{c.current_team||'—'}</td>
+                    <td style={{padding:'7px 8px'}}>{c.fault_team||'—'}</td>
+                    <td style={{padding:'7px 8px',color:'var(--text-muted)',whiteSpace:'nowrap'}}>{c.created_at?c.created_at.slice(0,10):'—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1045,7 +1113,14 @@ function Dashboard() {
   const [faultTrend, setFaultTrend] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [drill, setDrill] = useState(null); // {filters, title}
   const hasData = useRef(false);
+
+  const openDrill = (filters, title) => setDrill({ filters, title });
+  const exportExcel = () => {
+    const url = `/api/dashboard/export?start=${dateRange.start||''}&end=${dateRange.end||''}`;
+    const a = document.createElement('a'); a.href = url; a.click();
+  };
 
   const qs = dateRange.start ? `?start=${dateRange.start}&end=${dateRange.end}` : '';
 
@@ -1091,6 +1166,11 @@ function Dashboard() {
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
         <h2 className="text-xl font-bold" style={{color:'var(--text)'}}>Dashboard</h2>
         {refreshing && <span style={{fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><Spinner size={12}/> updating...</span>}
+        <div style={{marginLeft:'auto'}}>
+          <button onClick={exportExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#16a34a',color:'#fff',border:'none',borderRadius:7,cursor:'pointer',fontSize:13,fontWeight:600}}>
+            📥 Export Excel
+          </button>
+        </div>
       </div>
 
       <DateRangeFilter value={dateRange} onChange={setDateRange}/>
@@ -1107,13 +1187,17 @@ function Dashboard() {
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            {label:'Total', val:overview.total, color:'#374151'},
-            {label:'Open', val:overview.open, color:'#2563eb'},
-            {label:'In Progress', val:overview.in_progress, color:'#d97706'},
-            {label:'Pending', val:(overview.pending_ack||0)+(overview.pending_fault||0), color:'#7c3aed'},
-            {label:'Closed', val:overview.closed, color:'#16a34a'},
+            {label:'Total', val:overview.total, color:'#374151', filters:{}},
+            {label:'Open', val:overview.open, color:'#2563eb', filters:{status:'open'}},
+            {label:'In Progress', val:overview.in_progress, color:'#d97706', filters:{status:'in_progress'}},
+            {label:'Pending', val:(overview.pending_ack||0)+(overview.pending_fault||0), color:'#7c3aed', filters:{status:'pending_ack'}},
+            {label:'Closed', val:overview.closed, color:'#16a34a', filters:{status:'closed'}},
           ].map(c => (
-            <div key={c.label} className="card p-4 text-center">
+            <div key={c.label} className="card p-4 text-center"
+              style={{cursor:'pointer',transition:'transform .15s,box-shadow .15s'}}
+              onClick={()=>openDrill(c.filters, c.label+' Cases')}
+              onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)';}}
+              onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
               <div className="text-3xl font-bold" style={{color:c.color}}>{c.val ?? 0}</div>
               <div className="text-sm text-gray-500 mt-1">{c.label}</div>
             </div>
@@ -1133,7 +1217,10 @@ function Dashboard() {
                 const pct = maxCnt ? (r.cnt / maxCnt * 100) : 0;
                 const color = TEAM_COLORS[r.team] || '#6b7280';
                 return (
-                  <div key={r.team} style={{display:'flex',alignItems:'center',gap:10}}>
+                  <div key={r.team} style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',borderRadius:6,padding:'2px 4px',margin:'0 -4px',transition:'background .15s'}}
+                    onClick={()=>openDrill({current_team:r.team},'Backlog: '+r.team)}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--primary-bg)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                     <div style={{width:20,fontSize:11,color:'#9ca3af',textAlign:'right',flexShrink:0}}>#{i+1}</div>
                     <div style={{width:110,fontSize:13,fontWeight:500,color:'var(--text)',flexShrink:0}}>
                       {TEAM_ICONS[r.team]||''} {r.team}
@@ -1162,7 +1249,10 @@ function Dashboard() {
               const serviceTotal = service.reduce((s,d)=>s+d.cnt,0);
               const max = Math.max(...all.map(d=>d.cnt), 1);
               const Bar = ({d, color}) => (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" style={{cursor:'pointer',borderRadius:6,padding:'0 4px',margin:'0 -4px',transition:'background .15s'}}
+                  onClick={()=>openDrill({case_type:d.case_type},'Case Type: '+d.case_type)}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--primary-bg)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <div className="w-32 text-sm text-gray-600 truncate shrink-0">{d.case_type}</div>
                   <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{width:Math.round(d.cnt/max*100)+'%',background:color}}/>
@@ -1198,11 +1288,13 @@ function Dashboard() {
           </div>
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Responsible Team</h3>
-            <BarChart data={faultTeam} labelKey="fault_team" valueKey="cnt" color="#ef4444"/>
+            <BarChart data={faultTeam} labelKey="fault_team" valueKey="cnt" color="#ef4444"
+              onRowClick={d=>openDrill({fault_team:d.fault_team||'ยังไม่ระบุ'},'Fault Team: '+(d.fault_team||'ยังไม่ระบุ'))}/>
           </div>
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Priority</h3>
-            <BarChart data={overview.by_priority} labelKey="priority" valueKey="cnt" color="#f59e0b"/>
+            <BarChart data={overview.by_priority} labelKey="priority" valueKey="cnt" color="#f59e0b"
+              onRowClick={d=>openDrill({priority:d.priority},'Priority: '+d.priority)}/>
           </div>
         </div>
 
@@ -1214,7 +1306,11 @@ function Dashboard() {
               {overview.by_opener_team.map(r => {
                 const pct = overview.total ? Math.round(r.count/overview.total*100) : 0;
                 return (
-                  <div key={r.opener_team} className="flex items-center gap-3">
+                  <div key={r.opener_team} className="flex items-center gap-3"
+                    style={{cursor:'pointer',borderRadius:6,padding:'2px 4px',margin:'0 -4px',transition:'background .15s'}}
+                    onClick={()=>openDrill({opener_team:r.opener_team},'Opener: '+r.opener_team)}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--primary-bg)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                     <div className="w-32 text-sm text-gray-600 shrink-0">{TEAM_ICONS[r.opener_team]||''} {r.opener_team}</div>
                     <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{width:pct+'%', background:'var(--primary)'}}/>
@@ -1231,7 +1327,8 @@ function Dashboard() {
         {overview.by_root_cause && overview.by_root_cause.length > 0 && (
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Root Cause</h3>
-            <BarChart data={overview.by_root_cause} labelKey="root_cause" valueKey="cnt" color="#8b5cf6"/>
+            <BarChart data={overview.by_root_cause} labelKey="root_cause" valueKey="cnt" color="#8b5cf6"
+              onRowClick={d=>openDrill({root_cause:d.root_cause},'Root Cause: '+d.root_cause)}/>
           </div>
         )}
       </div>)}
@@ -1378,6 +1475,9 @@ function Dashboard() {
           <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend} start={dateRange.start} end={dateRange.end}/>
         </div>
       )}
+
+      {/* Drill-down modal */}
+      {drill && <DrillModal filters={drill.filters} title={drill.title} dateRange={dateRange} onClose={()=>setDrill(null)}/>}
     </div>
   );
 }

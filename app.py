@@ -1943,6 +1943,113 @@ def dashboard_fault_rate_trend():
         result.append(row)
     return jsonify(result)
 
+@app.route('/api/dashboard/drill', methods=['GET'])
+@require_auth
+def dashboard_drill():
+    """Return ticket list for dashboard drill-down by any filter combination."""
+    extra, params = date_filter_sql()
+    wheres = [f"1=1{extra}"]
+
+    for col in ('status', 'current_team', 'case_type', 'priority', 'opener_team'):
+        val = request.args.get(col)
+        if val:
+            wheres.append(f"t.{col} = %s")
+            params.append(val)
+
+    fault_team = request.args.get('fault_team')
+    if fault_team == 'ยังไม่ระบุ':
+        wheres.append("(tfa.fault_team IS NULL OR tfa.fault_team = '')")
+    elif fault_team:
+        wheres.append("tfa.fault_team = %s")
+        params.append(fault_team)
+
+    root_cause = request.args.get('root_cause')
+    if root_cause:
+        wheres.append("t.root_cause = %s")
+        params.append(root_cause)
+
+    where_sql = ' AND '.join(wheres)
+    rows = query(f"""
+        SELECT t.id, t.ticket_no, t.case_type, t.status, t.priority,
+               t.current_team, t.opener_team, t.root_cause, t.created_at,
+               o.name AS outlet_name, a.name AS account_name,
+               COALESCE(tfa.fault_team, t.fault_team) AS fault_team
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
+        WHERE {where_sql}
+        ORDER BY t.created_at DESC
+        LIMIT 200
+    """, params)
+    return jsonify(rows)
+
+@app.route('/api/dashboard/export', methods=['GET'])
+@require_auth
+def dashboard_export():
+    """Export all tickets in date range as Excel."""
+    import io
+    extra, params = date_filter_sql()
+    rows = query(f"""
+        SELECT t.ticket_no, t.case_type, t.case_subtype, t.status, t.priority,
+               t.root_cause, t.opener_team, t.current_team, t.fault_team,
+               t.invoice_number, t.description, t.created_by, t.created_at,
+               t.closed_at, o.name AS outlet_name, a.name AS account_name,
+               tfa.fault_team AS attributed_team, tfa.note AS attributed_note,
+               u.display_name AS attributed_employee
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
+        LEFT JOIN users u ON u.id = tfa.employee_id
+        WHERE 1=1 {extra}
+        ORDER BY t.created_at DESC
+    """, params)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Cases'
+
+    headers = [
+        'Ticket No', 'Case Type', 'Sub Type', 'Status', 'Priority',
+        'Root Cause', 'Opener Team', 'Current Team', 'Responsible Team',
+        'Invoice No', 'Description', 'Created By', 'Created At', 'Closed At',
+        'Outlet', 'Account', 'Attributed Team', 'Attributed Note', 'Employee'
+    ]
+    ws.append(headers)
+
+    # Style header
+    from openpyxl.styles import Font, PatternFill
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='1D4ED8')
+
+    keys = [
+        'ticket_no','case_type','case_subtype','status','priority',
+        'root_cause','opener_team','current_team','fault_team',
+        'invoice_number','description','created_by','created_at','closed_at',
+        'outlet_name','account_name','attributed_team','attributed_note','attributed_employee'
+    ]
+    for r in (rows or []):
+        ws.append([str(r.get(k) or '') for k in keys])
+
+    # Auto column width
+    for col in ws.columns:
+        max_len = max((len(str(cell.value or '')) for cell in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    start = request.args.get('start', '')
+    end = request.args.get('end', '')
+    filename = f"cases_{start}_{end}.xlsx" if start else "cases_all.xlsx"
+
+    from flask import send_file
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=filename)
+
 @app.route('/api/my-team/active', methods=['GET'])
 @require_auth
 def my_team_active():
