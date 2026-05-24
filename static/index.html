@@ -320,7 +320,10 @@ function LandingPage({ user, onChoose, onLogout }) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const isPdf = url => url && (url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('/pdf'));
+const isPdf = url => url && (
+  url.toLowerCase().includes('.pdf') ||
+  /\/raw\/upload\//i.test(url)   // Cloudinary raw upload = PDF in this app
+);
 const isImage = url => url && (
   /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url) ||
   /res\.cloudinary\.com\/.+\/image\/upload\//i.test(url)
