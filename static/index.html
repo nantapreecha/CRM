@@ -408,7 +408,9 @@ function StackedBar({ teams, totalInvoices }) {
   );
 }
 
-function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
+function CaseInvoicePanel({ ratio, faultTrend, start, end, onDrill }) {
+  const CASE_TYPES = 'Claim,Complain,Update Invoice';
+  const drill = onDrill || (() => {});
   const [debug, setDebug] = useState(null);
   const [loadingDebug, setLoadingDebug] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -478,11 +480,14 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
       {/* KPI row */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
         {[
-          {label:'Invoices Delivered', value: total_invoices.toLocaleString(), color:'#111827'},
-          {label:'Cases (Claim+Complain+Update Invoice)', value: totalFaults, color:'#dc2626'},
-          {label:'Overall Error Rate', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981'},
-        ].map(({label,value,color})=>(
-          <div key={label} className="card" style={{padding:'14px 16px'}}>
+          {label:'Invoices Delivered', value: total_invoices.toLocaleString(), color:'#111827', clickable: false},
+          {label:'Cases (Claim+Complain+Update Invoice)', value: totalFaults, color:'#dc2626', clickable: true},
+          {label:'Overall Error Rate', value: overallRate+'%', color: overallRate>5?'#dc2626':overallRate>2?'#f59e0b':'#10b981', clickable: true},
+        ].map(({label,value,color,clickable})=>(
+          <div key={label} className="card" style={{padding:'14px 16px', cursor: clickable?'pointer':'default', transition: clickable?'transform .15s,box-shadow .15s':''}}
+            onClick={clickable ? ()=>drill({case_types:CASE_TYPES}, 'Cases (Claim+Complain+Update Invoice)') : undefined}
+            onMouseEnter={clickable ? e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)';} : undefined}
+            onMouseLeave={clickable ? e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';} : undefined}>
             <div style={{fontSize:22,fontWeight:700,color}}>{value}</div>
             <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>{label}</div>
           </div>
@@ -679,8 +684,11 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
                 });
                 const isHovered = hoveredBar === i;
 
+                const weekEnd = new Date(new Date(w.date+'T00:00:00').getTime()+6*86400000).toISOString().slice(0,10);
                 return (
-                  <g key={i} onMouseEnter={()=>setHoveredBar(i)} style={{cursor:'pointer'}}>
+                  <g key={i} onMouseEnter={()=>setHoveredBar(i)}
+                    onClick={()=>drill({case_types:CASE_TYPES}, weekLabel(w.date)+' — '+w.faults+' cases / '+w.invoices+' invoices ('+w.rate.toFixed(1)+'%)', {start:w.date,end:weekEnd})}
+                    style={{cursor:'pointer'}}>
                     {/* background track */}
                     <rect x={x-barW/2} y={pad.t} width={barW} height={ch} fill="#f9fafb" rx="3"/>
                     {/* stacked team segments */}
@@ -774,7 +782,10 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end }) {
               const barColor = isPending ? '#9ca3af' : (TEAM_COLORS[t.team]||'#6b7280');
               const labelColor = isPending ? '#9ca3af' : 'var(--text)';
               return (
-                <div key={t.team} style={{display:'flex',alignItems:'center',gap:10}}>
+                <div key={t.team} style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',borderRadius:6,padding:'3px 6px',margin:'0 -6px',transition:'background .15s'}}
+                  onClick={()=>drill({case_types:CASE_TYPES, fault_team: isPending?'ยังไม่ระบุ':t.team}, 'Error Rate — '+(isPending?'(Unassigned)':t.team))}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--primary-bg)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <div style={{width:100,fontSize:12,color:labelColor,flexShrink:0,fontWeight:500,fontStyle:isPending?'italic':'normal'}}>
                     {isPending ? '(Unassigned)' : t.team}
                   </div>
@@ -1144,7 +1155,7 @@ function Dashboard() {
   const [drill, setDrill] = useState(null); // {filters, title}
   const hasData = useRef(false);
 
-  const openDrill = (filters, title) => setDrill({ filters, title });
+  const openDrill = (filters, title, overrideDateRange = null) => setDrill({ filters, title, overrideDateRange });
   const exportExcel = () => {
     const url = `/api/dashboard/export?start=${dateRange.start||''}&end=${dateRange.end||''}`;
     const a = document.createElement('a'); a.href = url; a.click();
@@ -1500,12 +1511,12 @@ function Dashboard() {
 
       {tab === 'ratio' && (
         <div>
-          <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend} start={dateRange.start} end={dateRange.end}/>
+          <CaseInvoicePanel ratio={ratio} faultTrend={faultTrend} start={dateRange.start} end={dateRange.end} onDrill={openDrill}/>
         </div>
       )}
 
       {/* Drill-down modal */}
-      {drill && <DrillModal filters={drill.filters} title={drill.title} dateRange={dateRange} onClose={()=>setDrill(null)}/>}
+      {drill && <DrillModal filters={drill.filters} title={drill.title} dateRange={dateRange} overrideDateRange={drill.overrideDateRange} onClose={()=>setDrill(null)}/>}
     </div>
   );
 }

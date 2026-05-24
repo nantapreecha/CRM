@@ -1959,6 +1959,14 @@ def dashboard_drill():
             wheres.append(f"t.{col} = %s")
             params.append(val)
 
+    # case_types = comma-separated list, e.g. "Claim,Complain,Update Invoice"
+    case_types_raw = request.args.get('case_types')
+    if case_types_raw:
+        ct_list = [c.strip() for c in case_types_raw.split(',') if c.strip()]
+        if ct_list:
+            wheres.append(f"t.case_type = ANY(%s)")
+            params.append(ct_list)
+
     fault_team = request.args.get('fault_team')
     if fault_team == 'ยังไม่ระบุ':
         wheres.append("(tfa.fault_team IS NULL OR tfa.fault_team = '')")
