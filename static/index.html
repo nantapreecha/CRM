@@ -1175,9 +1175,25 @@ function Dashboard() {
   const hasData = useRef(false);
 
   const openDrill = (filters, title, overrideDateRange = null) => setDrill({ filters, title, overrideDateRange });
-  const exportExcel = () => {
-    const url = `/api/dashboard/export?start=${dateRange.start||''}&end=${dateRange.end||''}`;
-    const a = document.createElement('a'); a.href = url; a.click();
+  const [exporting, setExporting] = useState(false);
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const url = `/api/dashboard/export?start=${dateRange.start||''}&end=${dateRange.end||''}`;
+      const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+      if (!resp.ok) { alert('Export failed: ' + resp.statusText); return; }
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `cases_${dateRange.start||'all'}_${dateRange.end||''}.xlsx`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } catch(e) {
+      alert('Export error: ' + e.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const qs = dateRange.start ? `?start=${dateRange.start}&end=${dateRange.end}` : '';
@@ -1225,8 +1241,8 @@ function Dashboard() {
         <h2 className="text-xl font-bold" style={{color:'var(--text)'}}>Dashboard</h2>
         {refreshing && <span style={{fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><Spinner size={12}/> updating...</span>}
         <div style={{marginLeft:'auto'}}>
-          <button onClick={exportExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#16a34a',color:'#fff',border:'none',borderRadius:7,cursor:'pointer',fontSize:13,fontWeight:600}}>
-            📥 Export Excel
+          <button onClick={exportExcel} disabled={exporting} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#16a34a',color:'#fff',border:'none',borderRadius:7,cursor:exporting?'not-allowed':'pointer',fontSize:13,fontWeight:600,opacity:exporting?0.7:1}}>
+            {exporting ? <><Spinner size={13}/> Exporting...</> : '📥 Export Excel'}
           </button>
         </div>
       </div>

@@ -1998,23 +1998,22 @@ def dashboard_drill():
 @app.route('/api/dashboard/export', methods=['GET'])
 @require_auth
 def dashboard_export():
-    """Export all tickets in date range as Excel."""
-    import io
+    """Export tickets in date range as Excel — one row per claim item (or per ticket if no items)."""
+    import io, json as _json
+    from datetime import datetime, date as _date
     extra, params = date_filter_sql()
     rows = query(f"""
-        SELECT t.ticket_no, t.case_type, t.case_subtype, t.status, t.priority,
-               t.root_cause, t.opener_team, t.current_team, t.fault_team,
-               t.invoice_number, t.description, t.created_by, t.created_at,
-               t.closed_at, o.name AS outlet_name, a.name AS account_name,
-               tfa.fault_team AS attributed_team, tfa.note AS attributed_note,
-               u.display_name AS attributed_employee
+        SELECT t.ticket_no, t.case_type, t.case_subtype, t.description,
+               t.invoice_number, t.resolution_type, t.claim_items,
+               t.created_at, t.root_cause,
+               o.name AS outlet_name, a.name AS account_name,
+               COALESCE(tfa.fault_team, t.fault_team) AS resp_team
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
-        LEFT JOIN users u ON u.id = tfa.employee_id
         WHERE 1=1 {extra}
-        ORDER BY t.created_at DESC
+        ORDER BY t.created_at ASC
     """, params)
 
     wb = openpyxl.Workbook()
@@ -2022,32 +2021,97 @@ def dashboard_export():
     ws.title = 'Cases'
 
     headers = [
-        'Ticket No', 'Case Type', 'Sub Type', 'Status', 'Priority',
-        'Root Cause', 'Opener Team', 'Current Team', 'Responsible Team',
-        'Invoice No', 'Description', 'Created By', 'Created At', 'Closed At',
-        'Outlet', 'Account', 'Attributed Team', 'Attributed Note', 'Employee'
+        'วันที่รับเรื่อง',   # 1.1
+        'สัปดาห์',           # 1.2
+        'เลขเอกสาร (IVSC)', # 1.3
+        'หมวดหมู่',          # 1.4
+        'ประเภทงาน',         # 1.5
+        'ผู้รับผิดชอบ (ทีม)', # 1.6
+        'ชื่อลูกค้า',        # 1.7
+        'สาขา / รายละเอียด', # 1.8
+        'ประเภทสินค้า',      # 1.9
+        'ชื่อสินค้า',        # 1.10
+        'รายละเอียดปัญหา',   # 1.11
+        'จำนวนสินค้าที่สั่ง', # 1.12
+        'จำนวนสินค้าที่พบปัญหา', # 1.13
+        'การดำเนินการ',      # 1.14
     ]
     ws.append(headers)
 
-    # Style header
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Font, PatternFill, Alignment
     for cell in ws[1]:
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', fgColor='1D4ED8')
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
 
-    keys = [
-        'ticket_no','case_type','case_subtype','status','priority',
-        'root_cause','opener_team','current_team','fault_team',
-        'invoice_number','description','created_by','created_at','closed_at',
-        'outlet_name','account_name','attributed_team','attributed_note','attributed_employee'
-    ]
+    def week_label(dt):
+        if not dt:
+            return ''
+        if isinstance(dt, str):
+            try: dt = datetime.fromisoformat(dt.replace('Z',''))
+            except: return ''
+        iso = dt.isocalendar()
+        return f"W{iso[1]:02d}/{iso[0]}"
+
+    def fmt_date(dt):
+        if not dt: return ''
+        if isinstance(dt, str):
+            try: dt = datetime.fromisoformat(dt.replace('Z',''))
+            except: return str(dt)[:10]
+        if isinstance(dt, (_date, datetime)):
+            return dt.strftime('%d/%m/%Y')
+        return str(dt)[:10]
+
     for r in (rows or []):
-        ws.append([str(r.get(k) or '') for k in keys])
+        # Parse claim_items JSON
+        items = []
+        raw_ci = r.get('claim_items')
+        if raw_ci:
+            try:
+                parsed = _json.loads(raw_ci) if isinstance(raw_ci, str) else raw_ci
+                if isinstance(parsed, list):
+                    items = parsed
+            except: pass
+
+        base = [
+            fmt_date(r.get('created_at')),      # 1.1
+            week_label(r.get('created_at')),     # 1.2
+            r.get('invoice_number') or '',       # 1.3
+            r.get('case_type') or '',            # 1.4
+            r.get('case_subtype') or '',         # 1.5
+            r.get('resp_team') or '',            # 1.6
+            r.get('account_name') or '',         # 1.7
+            r.get('outlet_name') or '',          # 1.8
+        ]
+
+        if items:
+            for item in items:
+                ws.append(base + [
+                    '',                                         # 1.9 ประเภทสินค้า (manual)
+                    item.get('product_name') or item.get('sku_code') or '',  # 1.10
+                    r.get('description') or r.get('root_cause') or '',       # 1.11
+                    str(item.get('qty') or ''),                              # 1.12
+                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 1.13
+                    r.get('resolution_type') or '',                          # 1.14
+                ])
+        else:
+            ws.append(base + [
+                '',  # 1.9
+                '',  # 1.10
+                r.get('description') or r.get('root_cause') or '',  # 1.11
+                '',  # 1.12
+                '',  # 1.13
+                r.get('resolution_type') or '',  # 1.14
+            ])
 
     # Auto column width
-    for col in ws.columns:
-        max_len = max((len(str(cell.value or '')) for cell in col), default=10)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+    col_widths = [14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 12, 12, 24]
+    for i, col in enumerate(ws.columns):
+        letter = col[0].column_letter
+        ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
+
+    # Freeze header row
+    ws.freeze_panes = 'A2'
 
     buf = io.BytesIO()
     wb.save(buf)
