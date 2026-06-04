@@ -2022,20 +2022,21 @@ def dashboard_export():
     ws.title = 'Cases'
 
     headers = [
-        'วันที่รับเรื่อง',   # 1.1
-        'สัปดาห์',           # 1.2
-        'เลขเอกสาร (IVSC)', # 1.3
-        'หมวดหมู่',          # 1.4
-        'ประเภทงาน',         # 1.5
-        'ผู้รับผิดชอบ (ทีม)', # 1.6
-        'ชื่อลูกค้า',        # 1.7
-        'สาขา / รายละเอียด', # 1.8
-        'ประเภทสินค้า',      # 1.9
-        'ชื่อสินค้า',        # 1.10
-        'รายละเอียดปัญหา',   # 1.11
-        'จำนวนสินค้าที่สั่ง', # 1.12
-        'จำนวนสินค้าที่พบปัญหา', # 1.13
-        'การดำเนินการ',      # 1.14
+        'Ticket No',         # 0
+        'วันที่รับเรื่อง',   # 1
+        'สัปดาห์',           # 2
+        'เลขเอกสาร (IVSC)', # 3
+        'หมวดหมู่',          # 4
+        'ประเภทงาน',         # 5
+        'ผู้รับผิดชอบ (ทีม)', # 6
+        'ชื่อลูกค้า',        # 7
+        'สาขา / รายละเอียด', # 8
+        'ประเภทสินค้า',      # 9
+        'ชื่อสินค้า',        # 10
+        'รายละเอียดปัญหา',   # 11
+        'จำนวนสินค้าที่สั่ง', # 12
+        'จำนวนสินค้าที่พบปัญหา', # 13
+        'การดำเนินการ',      # 14
     ]
     ws.append(headers)
 
@@ -2051,6 +2052,49 @@ def dashboard_export():
         if isinstance(dt, str):
             try: dt = datetime.fromisoformat(dt.replace('Z',''))
             except: return ''
+        from datetime import date as _d2
+        d = dt.date() if isinstance(dt, datetime) else dt
+        # Hardcoded 2026 custom week table (Sun–Sat, labeled by majority month)
+        _W2026 = [
+            (_d2(2026,  1,  4), 'Jan W1/2026'), (_d2(2026,  1, 11), 'Jan W2/2026'),
+            (_d2(2026,  1, 18), 'Jan W3/2026'), (_d2(2026,  1, 25), 'Jan W4/2026'),
+            (_d2(2026,  2,  1), 'Feb W1/2026'), (_d2(2026,  2,  8), 'Feb W2/2026'),
+            (_d2(2026,  2, 15), 'Feb W3/2026'), (_d2(2026,  2, 22), 'Feb W4/2026'),
+            (_d2(2026,  3,  1), 'Mar W1/2026'), (_d2(2026,  3,  8), 'Mar W2/2026'),
+            (_d2(2026,  3, 15), 'Mar W3/2026'), (_d2(2026,  3, 22), 'Mar W4/2026'),
+            (_d2(2026,  3, 29), 'Apr W1/2026'), (_d2(2026,  4,  5), 'Apr W2/2026'),
+            (_d2(2026,  4, 12), 'Apr W3/2026'), (_d2(2026,  4, 19), 'Apr W4/2026'),
+            (_d2(2026,  4, 26), 'Apr W5/2026'),
+            (_d2(2026,  5,  3), 'May W1/2026'), (_d2(2026,  5, 10), 'May W2/2026'),
+            (_d2(2026,  5, 17), 'May W3/2026'), (_d2(2026,  5, 24), 'May W4/2026'),
+            (_d2(2026,  5, 31), 'May W5/2026'),
+            (_d2(2026,  6,  7), 'Jun W1/2026'), (_d2(2026,  6, 14), 'Jun W2/2026'),
+            (_d2(2026,  6, 21), 'Jun W3/2026'), (_d2(2026,  6, 28), 'Jun W4/2026'),
+            (_d2(2026,  7,  5), 'Jul W1/2026'), (_d2(2026,  7, 12), 'Jul W2/2026'),
+            (_d2(2026,  7, 19), 'Jul W3/2026'), (_d2(2026,  7, 26), 'Jul W4/2026'),
+            (_d2(2026,  8,  2), 'Aug W1/2026'), (_d2(2026,  8,  9), 'Aug W2/2026'),
+            (_d2(2026,  8, 16), 'Aug W3/2026'), (_d2(2026,  8, 23), 'Aug W4/2026'),
+            (_d2(2026,  8, 30), 'Aug W5/2026'),
+            (_d2(2026,  9,  6), 'Sep W1/2026'), (_d2(2026,  9, 13), 'Sep W2/2026'),
+            (_d2(2026,  9, 20), 'Sep W3/2026'), (_d2(2026,  9, 27), 'Sep W4/2026'),
+            (_d2(2026, 10,  4), 'Oct W1/2026'), (_d2(2026, 10, 11), 'Oct W2/2026'),
+            (_d2(2026, 10, 18), 'Oct W3/2026'), (_d2(2026, 10, 25), 'Oct W4/2026'),
+            (_d2(2026, 11,  1), 'Nov W1/2026'), (_d2(2026, 11,  8), 'Nov W2/2026'),
+            (_d2(2026, 11, 15), 'Nov W3/2026'), (_d2(2026, 11, 22), 'Nov W4/2026'),
+            (_d2(2026, 11, 29), 'Nov W5/2026'),
+            (_d2(2026, 12,  6), 'Dec W1/2026'), (_d2(2026, 12, 13), 'Dec W2/2026'),
+            (_d2(2026, 12, 20), 'Dec W3/2026'), (_d2(2026, 12, 27), 'Dec W4/2026'),
+        ]
+        if d.year == 2026:
+            label = None
+            for start, lbl in _W2026:
+                if d >= start:
+                    label = lbl
+                else:
+                    break
+            if label:
+                return label
+        # Fallback: ISO week
         iso = dt.isocalendar()
         return f"W{iso[1]:02d}/{iso[0]}"
 
@@ -2075,14 +2119,15 @@ def dashboard_export():
             except: pass
 
         base = [
-            fmt_date(r.get('created_at')),      # 1.1
-            week_label(r.get('created_at')),     # 1.2
-            r.get('invoice_number') or '',       # 1.3
-            r.get('case_type') or '',            # 1.4
-            r.get('case_subtype') or '',         # 1.5
-            r.get('resp_team') or '',            # 1.6
-            r.get('account_name') or '',         # 1.7
-            r.get('outlet_name') or '',          # 1.8
+            r.get('ticket_no') or '',            # 0  Ticket No
+            fmt_date(r.get('created_at')),       # 1  วันที่รับเรื่อง
+            week_label(r.get('created_at')),     # 2  สัปดาห์
+            r.get('invoice_number') or '',       # 3  เลขเอกสาร (IVSC)
+            r.get('case_type') or '',            # 4  หมวดหมู่
+            r.get('case_subtype') or '',         # 5  ประเภทงาน
+            r.get('resp_team') or '',            # 6  ผู้รับผิดชอบ (ทีม)
+            r.get('account_name') or '',         # 7  ชื่อลูกค้า
+            r.get('outlet_name') or '',          # 8  สาขา / รายละเอียด
         ]
 
         if items:
@@ -2106,7 +2151,7 @@ def dashboard_export():
             ])
 
     # Auto column width
-    col_widths = [14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 12, 12, 24]
+    col_widths = [16, 14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 12, 12, 24]
     for i, col in enumerate(ws.columns):
         letter = col[0].column_letter
         ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
