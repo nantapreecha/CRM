@@ -140,7 +140,7 @@ const TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outboun
 const FAULT_TEAMS = [...TEAMS, 'Customer'];
 const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล'];
 const CLAIM_SUBTYPES = ['Express (same day)', 'Next delivery (date TBD)', 'Next delivery (date confirmed)'];
-const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'อื่นๆ'];
+const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'สินค้าขาดตลาด', 'อื่นๆ'];
 const PRIORITIES = ['High', 'Medium'];
 
 const TEAM_ICONS = {
@@ -320,16 +320,24 @@ function LandingPage({ user, onChoose, onLogout }) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const isPdf = url => url && (
-  url.toLowerCase().includes('.pdf') ||
-  /\/raw\/upload\//i.test(url)   // Cloudinary raw upload = PDF in this app
-);
-// Build Cloudinary fl_attachment download URL — forces browser to download as .pdf with proper name
-const pdfDownloadUrl = url => {
+// Attachment storage format: "original_filename.pdf@@@https://cloudinary.com/..."
+// Old (backward compat) format: plain URL string
+const splitAttachment = raw => {
+  if (!raw) return { url: '', name: '' };
+  const idx = raw.indexOf('@@@');
+  return idx > 0 ? { url: raw.slice(idx + 3), name: raw.slice(0, idx) } : { url: raw, name: '' };
+};
+const isPdf = raw => {
+  const url = (raw && raw.includes('@@@')) ? raw.split('@@@')[1] : raw;
+  return url && (url.toLowerCase().includes('.pdf') || /\/raw\/upload\//i.test(url));
+};
+// Build Cloudinary fl_attachment URL — uses original filename if provided
+const pdfDownloadUrl = (url, originalName) => {
   if (!url || !url.includes('cloudinary.com')) return url;
-  const rawName = decodeURIComponent(url.split('?')[0].split('/').pop());
-  const dlName = rawName.toLowerCase().endsWith('.pdf') ? rawName : rawName + '.pdf';
-  return url.replace('/upload/', '/upload/fl_attachment:' + dlName + '/');
+  const fallback = decodeURIComponent(url.split('?')[0].split('/').pop());
+  const base = originalName || fallback;
+  const dlName = base.toLowerCase().endsWith('.pdf') ? base : base + '.pdf';
+  return url.replace('/upload/', '/upload/fl_attachment:' + encodeURIComponent(dlName) + '/');
 };
 const isImage = url => url && (
   /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url) ||
@@ -890,37 +898,47 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end, onDrill }) {
   );
 }
 
-function FilePreview({ url, className = '', embed = false }) {
+function FilePreview({ url: rawProp, className = '', embed = false }) {
+  if (!rawProp) return null;
+  const { url, name } = splitAttachment(rawProp);
   if (!url) return null;
-  if (isPdf(url)) {
-    const dlUrl = pdfDownloadUrl(url);
+
+  if (isPdf(rawProp)) {
+    const dlUrl = pdfDownloadUrl(url, name || null);
+    const displayName = name || 'PDF';
+    const shortName = displayName.length > 40 ? displayName.slice(0, 37) + '…' : displayName;
     if (embed) {
       return (
         <div className={className} style={{border:'1px solid #fecaca',borderRadius:8,overflow:'hidden',marginTop:4}}>
-          <div style={{background:'#fef2f2',padding:'5px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid #fecaca'}}>
-            <span style={{fontSize:12,fontWeight:600,color:'#dc2626'}}>📄 PDF</span>
-            <div style={{display:'flex',gap:10,alignItems:'center'}}>
+          <div style={{background:'#fef2f2',padding:'5px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid #fecaca',gap:8}}>
+            <span style={{fontSize:12,fontWeight:600,color:'#dc2626',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}} title={displayName}>
+              📄 {shortName}
+            </span>
+            <div style={{display:'flex',gap:10,alignItems:'center',flexShrink:0}}>
               <a href={url} target="_blank" rel="noopener noreferrer"
                 style={{fontSize:11,color:'#6b7280',textDecoration:'none'}}>👁 View</a>
               <a href={dlUrl} rel="noopener noreferrer"
                 style={{fontSize:11,color:'#2563eb',textDecoration:'none',fontWeight:600}}>📥 Download PDF</a>
             </div>
           </div>
-          <iframe src={url} title="PDF Preview"
+          <iframe src={url} title={displayName}
             style={{width:'100%',height:500,border:'none',display:'block',background:'#fff'}}/>
         </div>
       );
     }
     return (
-      <div style={{display:'inline-flex',gap:6}} className={className}>
-        <a href={url} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm hover:bg-red-100">
-          <Icon name="file-text" size={14}/> View PDF
-        </a>
-        <a href={dlUrl} rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm hover:bg-blue-100">
-          📥 Download
-        </a>
+      <div style={{display:'inline-flex',flexDirection:'column',gap:4,maxWidth:220}} className={className}>
+        {name && <span style={{fontSize:11,color:'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={name}>{name}</span>}
+        <div style={{display:'inline-flex',gap:6}}>
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm hover:bg-red-100">
+            <Icon name="file-text" size={14}/> View PDF
+          </a>
+          <a href={dlUrl} rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm hover:bg-blue-100">
+            📥 Download
+          </a>
+        </div>
       </div>
     );
   }
@@ -928,8 +946,8 @@ function FilePreview({ url, className = '', embed = false }) {
     return <img src={url} alt="attachment" className={`rounded-lg border border-gray-200 cursor-pointer ${className}`}
       onClick={()=>window.open(url,'_blank')}/>;
   }
-  // Other file types (Word, Excel, etc.) — show as a download link
-  const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]) || 'attachment';
+  // Other file types — show as a download link with original name if available
+  const fileName = name || decodeURIComponent(url.split('/').pop().split('?')[0]) || 'attachment';
   const ext = fileName.split('.').pop().toUpperCase();
   const extColors = { DOC:'#2b579a', DOCX:'#2b579a', XLS:'#217346', XLSX:'#217346', PPT:'#d04423', PPTX:'#d04423' };
   const bgColor = extColors[ext] || '#6b7280';
@@ -940,7 +958,7 @@ function FilePreview({ url, className = '', embed = false }) {
         textDecoration:'none',color:'#374151',fontSize:12}}
       className={className}>
       <span style={{background:bgColor,color:'#fff',borderRadius:4,padding:'1px 5px',fontSize:10,fontWeight:700,flexShrink:0}}>{ext||'FILE'}</span>
-      <span style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{fileName}</span>
+      <span style={{maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{fileName}</span>
     </a>
   );
 }
@@ -975,8 +993,11 @@ function ImageUploader({ urls = [], onAdd, onRemove, onUploaded }) {
         const fd = new FormData();
         fd.append('file', file);
         const res = await apiUpload('/api/upload/image', fd);
-        if (res && res.url) { isSingle ? onUploaded(res.url) : onAdd(res.url); }
-        else setErr(res?.error || 'Upload failed');
+        if (res && res.url) {
+          // Store as "originalName@@@cloudinaryUrl" to preserve original filename
+          const stored = res.name ? `${res.name}@@@${res.url}` : res.url;
+          isSingle ? onUploaded(stored) : onAdd(stored);
+        } else setErr(res?.error || 'Upload failed');
       }
     } catch(ex) {
       setErr('Network error: ' + ex.message);
@@ -990,17 +1011,20 @@ function ImageUploader({ urls = [], onAdd, onRemove, onUploaded }) {
     <div className="flex flex-col gap-2">
       {!isSingle && urls.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {urls.map((url, i) => (
+          {urls.map((rawUrl, i) => {
+            const {url: itemUrl, name: itemName} = splitAttachment(rawUrl);
+            return (
             <div key={i} style={{position:'relative',display:'inline-block'}}>
-              {isPdf(url) ? (
+              {isPdf(rawUrl) ? (
                 <div style={{width:64,height:64,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                   background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,cursor:'pointer'}}
-                  onClick={()=>window.open(url,'_blank')}>
-                  <Icon name="file-text" size={22} style={{color:'#dc2626'}}/>
-                  <span style={{fontSize:9,color:'#dc2626',marginTop:2,fontWeight:700}}>PDF</span>
+                  onClick={()=>window.open(itemUrl,'_blank')}>
+                  <Icon name="file-text" size={20} style={{color:'#dc2626'}}/>
+                  <span style={{fontSize:7,color:'#dc2626',marginTop:2,fontWeight:700,textAlign:'center',padding:'0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:60}}
+                    title={itemName}>{itemName||'PDF'}</span>
                 </div>
               ) : (
-                <FilePreview url={url} className="w-16 h-16 object-cover"/>
+                <FilePreview url={rawUrl} className="w-16 h-16 object-cover"/>
               )}
               <button type="button" onClick={()=>onRemove(i)}
                 style={{position:'absolute',top:-6,right:-6,width:18,height:18,
@@ -1010,7 +1034,8 @@ function ImageUploader({ urls = [], onAdd, onRemove, onUploaded }) {
                 ×
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-500 hover:text-gray-700">
@@ -2815,18 +2840,26 @@ function TicketDetail({ ticketId, user, onBack }) {
                         <div className="text-xs mt-1">{t}</div>
                       </div>
                     ))}
+                    {ticket.root_cause === 'สินค้าขาดตลาด' && (
+                      <div className={`fault-btn ${faultTeam==='N/A (Out of Stock)'?'selected':''}`}
+                        onClick={()=>{ setFaultTeam('N/A (Out of Stock)'); act('close',{note,image_url:serializeImages(imageUrls),fault_team:'N/A (Out of Stock)'}); }}>
+                        <div style={{width:28,height:28,borderRadius:'50%',background:'#64748b',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 4px'}}>N/A</div>
+                        <div className="text-xs mt-1" style={{color:'#64748b'}}>N/A (Out of Stock)</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
               <ImageUploader urls={imageUrls} onAdd={addImage} onRemove={removeImage}/>
               <div className="flex items-center gap-2 mt-2">
                 <button className="btn btn-danger ml-auto"
-                  disabled={saving||(faultTeam!=='Customer'&&!note)||(ticket.case_type!=='วางบิล'&&!faultTeam)}
+                  disabled={saving||(faultTeam!=='Customer'&&faultTeam!=='N/A (Out of Stock)'&&!note)||(ticket.case_type!=='วางบิล'&&!faultTeam)}
                   onClick={()=>act('close',{note,image_url:serializeImages(imageUrls),fault_team:faultTeam})}>
-                  {saving?<Spinner/>:faultTeam==='Customer'?'🔒 Close Case (Customer)':'🔒 Close Case'}
+                  {saving?<Spinner/>:faultTeam==='Customer'?'🔒 Close Case (Customer)':faultTeam==='N/A (Out of Stock)'?'🔒 Close (Out of Stock)':'🔒 Close Case'}
                 </button>
               </div>
               {faultTeam==='Customer'&&<p className="text-xs text-gray-400 mt-1 text-right">Customer fault — case will close immediately, no employee assignment needed</p>}
+              {faultTeam==='N/A (Out of Stock)'&&<p className="text-xs text-gray-400 mt-1 text-right">Out of Stock — no responsible team, case will close immediately</p>}
             </div>
           )}
 

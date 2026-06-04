@@ -1519,13 +1519,14 @@ def upload_image():
             api_secret=CLOUDINARY_API_SECRET
         )
         f = request.files['file']
-        fname = (f.filename or '').lower()
+        orig_name = f.filename or ''
+        fname = orig_name.lower()
         resource_type = 'raw' if fname.endswith('.pdf') else 'image'
         result = cloudinary.uploader.upload(
             f, folder='smm-crm', resource_type=resource_type,
             use_filename=True, unique_filename=True
         )
-        return jsonify({'url': result['secure_url']})
+        return jsonify({'url': result['secure_url'], 'name': orig_name})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
