@@ -3971,6 +3971,7 @@ function Pipeline({ user }) {
   const [view, setView] = useState('kanban');
   const [filterStage, setFilterStage] = useState('');
   const [filterOwner, setFilterOwner] = useState('');
+  const [search, setSearch] = useState('');
   const [users, setUsers] = useState([]);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -4006,7 +4007,14 @@ function Pipeline({ user }) {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-5">
+      <div className="flex gap-3 mb-5" style={{flexWrap:'wrap'}}>
+        {/* Search */}
+        <div style={{position:'relative', flex:'1 1 200px', minWidth:180}}>
+          <svg style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',width:14,height:14,stroke:'#9ca3af',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search lead name..."
+            style={{width:'100%',paddingLeft:30,fontSize:13,padding:'5px 10px 5px 30px',border:'1px solid #e5e7eb',borderRadius:7}}/>
+        </div>
         <select value={filterStage} onChange={e=>setFilterStage(e.target.value)} style={{ fontSize:13, padding:'5px 10px', border:'1px solid #e5e7eb', borderRadius:7 }}>
           <option value="">All Stages</option>
           {LEAD_STAGES.map(s=><option key={s} value={s}>{s}</option>)}
@@ -4019,10 +4027,19 @@ function Pipeline({ user }) {
         )}
       </div>
 
-      {loading ? <div className="flex justify-center py-12"><Spinner/></div> : view === 'kanban'
-        ? <KanbanView leads={leads} user={user} onSelect={setSelectedLead} onStageChange={reload} users={users}/>
-        : <ListView leads={leads} user={user} onSelect={setSelectedLead} onReassigned={reload} users={users}/>
-      }
+      {(()=>{
+        const q = search.trim().toLowerCase();
+        const filtered = q ? leads.filter(l =>
+          (l.company_name||'').toLowerCase().includes(q) ||
+          (l.contact_name||'').toLowerCase().includes(q) ||
+          (l.lead_no||'').toLowerCase().includes(q)
+        ) : leads;
+        return loading
+          ? <div className="flex justify-center py-12"><Spinner/></div>
+          : view === 'kanban'
+            ? <KanbanView leads={filtered} user={user} onSelect={setSelectedLead} onStageChange={reload} users={users}/>
+            : <ListView leads={filtered} user={user} onSelect={setSelectedLead} onReassigned={reload} users={users}/>;
+      })()}
     </div>
   );
 }
