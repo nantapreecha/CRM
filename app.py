@@ -1531,6 +1531,47 @@ def upload_image():
         return jsonify({'error': str(e)}), 500
 
 # ---------------------------------------------------------------------------
+# File download proxy — fetches Cloudinary file server-side to bypass CORS,
+# then streams it back with a correct Content-Disposition filename header.
+# ---------------------------------------------------------------------------
+
+@app.route('/api/download-file', methods=['GET'])
+@require_auth
+def download_file_proxy():
+    import io, urllib.request
+    from urllib.parse import quote
+    from flask import make_response
+
+    url  = request.args.get('url', '').strip()
+    name = request.args.get('name', 'file').strip()
+
+    if not url or 'cloudinary.com' not in url:
+        return jsonify({'error': 'Invalid URL'}), 400
+
+    # Ensure .pdf extension
+    if not name.lower().endswith('.pdf'):
+        name = name + '.pdf'
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+            ctype = r.headers.get('Content-Type', 'application/pdf')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+    encoded = quote(name, safe='')
+    resp = make_response(data)
+    resp.headers['Content-Type'] = 'application/pdf'
+    # RFC 5987 — supports any Unicode filename
+    resp.headers['Content-Disposition'] = (
+        f"attachment; filename=\"{name.encode('ascii', 'replace').decode()}\"; "
+        f"filename*=UTF-8''{encoded}"
+    )
+    resp.headers['Content-Length'] = str(len(data))
+    return resp
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 
