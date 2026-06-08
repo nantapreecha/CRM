@@ -1538,17 +1538,20 @@ def upload_image():
 @app.route('/api/download-file', methods=['GET'])
 @require_auth
 def download_file_proxy():
-    import io, urllib.request
+    """Proxy Cloudinary file to bypass CORS and set correct filename/content-type.
+    ?url=<cloudinary_url>&name=<filename.pdf>&inline=1 (for iframe view)
+    """
+    import urllib.request
     from urllib.parse import quote
     from flask import make_response
 
-    url  = request.args.get('url', '').strip()
-    name = request.args.get('name', 'file').strip()
+    url    = request.args.get('url', '').strip()
+    name   = request.args.get('name', 'file').strip()
+    inline = request.args.get('inline', '0') == '1'
 
     if not url or 'cloudinary.com' not in url:
         return jsonify({'error': 'Invalid URL'}), 400
 
-    # Ensure .pdf extension
     if not name.lower().endswith('.pdf'):
         name = name + '.pdf'
 
@@ -1556,19 +1559,23 @@ def download_file_proxy():
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=30) as r:
             data = r.read()
-            ctype = r.headers.get('Content-Type', 'application/pdf')
     except Exception as e:
         return jsonify({'error': str(e)}), 502
 
     encoded = quote(name, safe='')
+    ascii_name = name.encode('ascii', 'replace').decode()
+    disposition = (
+        f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+        if inline else
+        f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+    )
+
     resp = make_response(data)
     resp.headers['Content-Type'] = 'application/pdf'
-    # RFC 5987 — supports any Unicode filename
-    resp.headers['Content-Disposition'] = (
-        f"attachment; filename=\"{name.encode('ascii', 'replace').decode()}\"; "
-        f"filename*=UTF-8''{encoded}"
-    )
+    resp.headers['Content-Disposition'] = disposition
     resp.headers['Content-Length'] = str(len(data))
+    # Allow iframe embedding from same origin
+    resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
 # ---------------------------------------------------------------------------

@@ -898,14 +898,42 @@ function CaseInvoicePanel({ ratio, faultTrend, start, end, onDrill }) {
   );
 }
 
+// Loads a PDF via the backend proxy into an iframe (avoids CORS + content-type issues).
+function PdfViewer({ rawUrl, displayName, className }) {
+  const { url, name } = splitAttachment(rawUrl);
+  const dlName = (() => {
+    const base = name || decodeURIComponent(url.split('?')[0].split('/').pop()) || 'file';
+    return base.toLowerCase().endsWith('.pdf') ? base : base + '.pdf';
+  })();
+  const [src, setSrc] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    if (!url) return;
+    let blobUrl = null;
+    setLoading(true);
+    const proxyUrl = `/api/download-file?url=${encodeURIComponent(url)}&name=${encodeURIComponent(dlName)}&inline=1`;
+    fetch(proxyUrl, { headers: { 'Authorization': 'Bearer ' + getToken() } })
+      .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+      .then(blob => { blobUrl = URL.createObjectURL(blob); setSrc(blobUrl); setLoading(false); })
+      .catch(() => { setSrc(url); setLoading(false); }); // fallback: direct URL
+    return () => { if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 5000); };
+  }, [url]);
+  return (
+    <div style={{position:'relative',width:'100%',height:500,background:'#f8fafc'}}>
+      {loading && <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#9ca3af'}}>⏳ กำลังโหลด PDF...</div>}
+      {src && <iframe src={src} title={displayName}
+        style={{width:'100%',height:'100%',border:'none',display:'block',background:'#fff'}}/>}
+    </div>
+  );
+}
+
 function FilePreview({ url: rawProp, className = '', embed = false }) {
   if (!rawProp) return null;
   const { url, name } = splitAttachment(rawProp);
   if (!url) return null;
 
   // Proxy through backend → blob → a.download
-  // Direct fetch from Cloudinary fails with CORS on raw files, and fl_attachment
-  // with Thai chars in the URL causes HTTP 400. Backend proxy solves both.
+  // Direct Cloudinary raw URLs fail with CORS; fl_attachment with Thai chars → HTTP 400.
   const triggerDownload = async () => {
     const base = name || decodeURIComponent(url.split('?')[0].split('/').pop()) || 'file';
     const dlName = base.toLowerCase().endsWith('.pdf') ? base : base + '.pdf';
@@ -924,7 +952,7 @@ function FilePreview({ url: rawProp, className = '', embed = false }) {
       setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
     } catch(e) {
       console.error('download failed', e);
-      window.open(url, '_blank');  // last resort: open raw URL
+      window.open(url, '_blank');
     }
   };
 
@@ -945,8 +973,7 @@ function FilePreview({ url: rawProp, className = '', embed = false }) {
                 style={{fontSize:11,color:'#2563eb',background:'none',border:'none',cursor:'pointer',fontWeight:600,padding:0}}>📥 Download PDF</button>
             </div>
           </div>
-          <iframe src={url} title={displayName}
-            style={{width:'100%',height:500,border:'none',display:'block',background:'#fff'}}/>
+          <PdfViewer rawUrl={rawProp} displayName={displayName}/>
         </div>
       );
     }
