@@ -903,8 +903,32 @@ function FilePreview({ url: rawProp, className = '', embed = false }) {
   const { url, name } = splitAttachment(rawProp);
   if (!url) return null;
 
+  // Fetch → blob → a.download  guarantees the filename is used exactly as-is,
+  // regardless of Content-Disposition headers or cross-origin restrictions.
+  const triggerDownload = async () => {
+    const dlName = (() => {
+      const base = name || decodeURIComponent(url.split('?')[0].split('/').pop()) || 'file';
+      return base.toLowerCase().endsWith('.pdf') ? base : base + '.pdf';
+    })();
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('fetch failed');
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = dlName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    } catch {
+      // CORS fallback: open fl_attachment URL in new tab
+      window.open(pdfDownloadUrl(url, name || null), '_blank');
+    }
+  };
+
   if (isPdf(rawProp)) {
-    const dlUrl = pdfDownloadUrl(url, name || null);
     const displayName = name || 'PDF';
     const shortName = displayName.length > 40 ? displayName.slice(0, 37) + '…' : displayName;
     if (embed) {
@@ -917,8 +941,8 @@ function FilePreview({ url: rawProp, className = '', embed = false }) {
             <div style={{display:'flex',gap:10,alignItems:'center',flexShrink:0}}>
               <a href={url} target="_blank" rel="noopener noreferrer"
                 style={{fontSize:11,color:'#6b7280',textDecoration:'none'}}>👁 View</a>
-              <a href={dlUrl} rel="noopener noreferrer"
-                style={{fontSize:11,color:'#2563eb',textDecoration:'none',fontWeight:600}}>📥 Download PDF</a>
+              <button onClick={triggerDownload}
+                style={{fontSize:11,color:'#2563eb',background:'none',border:'none',cursor:'pointer',fontWeight:600,padding:0}}>📥 Download PDF</button>
             </div>
           </div>
           <iframe src={url} title={displayName}
@@ -934,10 +958,11 @@ function FilePreview({ url: rawProp, className = '', embed = false }) {
             className="inline-flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm hover:bg-red-100">
             <Icon name="file-text" size={14}/> View PDF
           </a>
-          <a href={dlUrl} rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm hover:bg-blue-100">
+          <button onClick={triggerDownload}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm hover:bg-blue-100"
+            style={{cursor:'pointer',fontFamily:'inherit'}}>
             📥 Download
-          </a>
+          </button>
         </div>
       </div>
     );
