@@ -2075,17 +2075,16 @@ def dashboard_export():
         'สัปดาห์',                # 2
         'เลขเอกสาร (IVSC)',      # 3
         'หมวดหมู่',               # 4
-        'ประเภทงาน',              # 5
-        'ผู้รับผิดชอบ (ทีม)',     # 6
-        'ชื่อลูกค้า',             # 7
-        'สาขา / รายละเอียด',     # 8
-        'ประเภทสินค้า',           # 9
-        'ชื่อสินค้า',             # 10
-        'รายละเอียดปัญหา',        # 11
-        'สาเหตุ (Root Cause)',    # 12
-        'จำนวนสินค้าที่สั่ง',     # 13
-        'จำนวนสินค้าที่พบปัญหา',  # 14
-        'การดำเนินการ',           # 15
+        'ผู้รับผิดชอบ (ทีม)',     # 5
+        'ชื่อลูกค้า',             # 6
+        'สาขา / รายละเอียด',     # 7
+        'ประเภทสินค้า',           # 8
+        'ชื่อสินค้า',             # 9
+        'รายละเอียดปัญหา',        # 10
+        'สาเหตุ (Root Cause)',    # 11
+        'จำนวนสินค้าที่สั่ง',     # 12
+        'จำนวนสินค้าที่พบปัญหา',  # 13
+        'การดำเนินการ',           # 14
     ]
     ws.append(headers)
 
@@ -2173,10 +2172,9 @@ def dashboard_export():
             week_label(r.get('created_at')),     # 2  สัปดาห์
             r.get('invoice_number') or '',       # 3  เลขเอกสาร (IVSC)
             r.get('case_type') or '',            # 4  หมวดหมู่
-            r.get('case_subtype') or '',         # 5  ประเภทงาน
-            r.get('resp_team') or '',            # 6  ผู้รับผิดชอบ (ทีม)
-            r.get('account_name') or '',         # 7  ชื่อลูกค้า
-            r.get('outlet_name') or '',          # 8  สาขา / รายละเอียด
+            r.get('resp_team') or '',            # 5  ผู้รับผิดชอบ (ทีม)
+            r.get('account_name') or '',         # 6  ชื่อลูกค้า
+            r.get('outlet_name') or '',          # 7  สาขา / รายละเอียด
         ]
 
         if items:
@@ -2202,7 +2200,7 @@ def dashboard_export():
             ])
 
     # Auto column width
-    col_widths = [16, 14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 20, 12, 12, 24]
+    col_widths = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 32, 20, 12, 12, 24]
     for i, col in enumerate(ws.columns):
         letter = col[0].column_letter
         ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
