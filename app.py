@@ -2070,21 +2070,22 @@ def dashboard_export():
     ws.title = 'Cases'
 
     headers = [
-        'Ticket No',         # 0
-        'วันที่รับเรื่อง',   # 1
-        'สัปดาห์',           # 2
-        'เลขเอกสาร (IVSC)', # 3
-        'หมวดหมู่',          # 4
-        'ประเภทงาน',         # 5
-        'ผู้รับผิดชอบ (ทีม)', # 6
-        'ชื่อลูกค้า',        # 7
-        'สาขา / รายละเอียด', # 8
-        'ประเภทสินค้า',      # 9
-        'ชื่อสินค้า',        # 10
-        'รายละเอียดปัญหา',   # 11
-        'จำนวนสินค้าที่สั่ง', # 12
-        'จำนวนสินค้าที่พบปัญหา', # 13
-        'การดำเนินการ',      # 14
+        'Ticket No',              # 0
+        'วันที่รับเรื่อง',        # 1
+        'สัปดาห์',                # 2
+        'เลขเอกสาร (IVSC)',      # 3
+        'หมวดหมู่',               # 4
+        'ประเภทงาน',              # 5
+        'ผู้รับผิดชอบ (ทีม)',     # 6
+        'ชื่อลูกค้า',             # 7
+        'สาขา / รายละเอียด',     # 8
+        'ประเภทสินค้า',           # 9
+        'ชื่อสินค้า',             # 10
+        'รายละเอียดปัญหา',        # 11
+        'สาเหตุ (Root Cause)',    # 12
+        'จำนวนสินค้าที่สั่ง',     # 13
+        'จำนวนสินค้าที่พบปัญหา',  # 14
+        'การดำเนินการ',           # 15
     ]
     ws.append(headers)
 
@@ -2181,25 +2182,27 @@ def dashboard_export():
         if items:
             for item in items:
                 ws.append(base + [
-                    '',                                         # 1.9 ประเภทสินค้า (manual)
-                    item.get('product_name') or item.get('sku_code') or '',  # 1.10
-                    r.get('description') or r.get('root_cause') or '',       # 1.11
-                    str(item.get('qty') or ''),                              # 1.12
-                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 1.13
-                    r.get('resolution_type') or '',                          # 1.14
+                    '',                                                          # 9  ประเภทสินค้า (manual)
+                    item.get('product_name') or item.get('sku_code') or '',     # 10 ชื่อสินค้า
+                    r.get('description') or '',                                  # 11 รายละเอียดปัญหา
+                    r.get('root_cause') or '',                                   # 12 สาเหตุ
+                    str(item.get('qty') or ''),                                  # 13 จำนวนสั่ง
+                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 14 จำนวนพบปัญหา
+                    r.get('resolution_type') or '',                              # 15 การดำเนินการ
                 ])
         else:
             ws.append(base + [
-                '',  # 1.9
-                '',  # 1.10
-                r.get('description') or r.get('root_cause') or '',  # 1.11
-                '',  # 1.12
-                '',  # 1.13
-                r.get('resolution_type') or '',  # 1.14
+                '',                         # 9
+                '',                         # 10
+                r.get('description') or '', # 11 รายละเอียดปัญหา
+                r.get('root_cause') or '',  # 12 สาเหตุ
+                '',                         # 13
+                '',                         # 14
+                r.get('resolution_type') or '',  # 15
             ])
 
     # Auto column width
-    col_widths = [16, 14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 12, 12, 24]
+    col_widths = [16, 14, 10, 20, 14, 24, 18, 24, 24, 16, 28, 32, 20, 12, 12, 24]
     for i, col in enumerate(ws.columns):
         letter = col[0].column_letter
         ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
