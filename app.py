@@ -2805,15 +2805,23 @@ def sales_dashboard():
 
     own = " AND owner_user_id=%s"
 
-    total = query(
-        "SELECT COUNT(*) AS cnt FROM leads" + (" WHERE owner_user_id=%s" if is_sales else ""),
-        ([uid] if is_sales else []), one=True)
+    period_filter = " AND created_at >= %s AND created_at <= %s"
+    period_params = [since, until]
 
-    by_stage = query(
-        "SELECT stage, COUNT(*) AS cnt FROM leads" +
-        (" WHERE owner_user_id=%s" if is_sales else "") +
-        " GROUP BY stage",
-        ([uid] if is_sales else []))
+    if is_sales:
+        total = query(
+            "SELECT COUNT(*) AS cnt FROM leads WHERE owner_user_id=%s" + period_filter,
+            [uid] + period_params, one=True)
+        by_stage = query(
+            "SELECT stage, COUNT(*) AS cnt FROM leads WHERE owner_user_id=%s" + period_filter +
+            " GROUP BY stage", [uid] + period_params)
+    else:
+        total = query(
+            "SELECT COUNT(*) AS cnt FROM leads WHERE created_at >= %s AND created_at <= %s",
+            period_params, one=True)
+        by_stage = query(
+            "SELECT stage, COUNT(*) AS cnt FROM leads WHERE created_at >= %s AND created_at <= %s"
+            " GROUP BY stage", period_params)
 
     wins = query(
         "SELECT COUNT(*) AS cnt FROM leads WHERE stage='Closed Win' AND updated_at>=%s AND updated_at<=%s" +

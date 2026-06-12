@@ -4416,7 +4416,7 @@ function SalesDashboard({ user }) {
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:48}}><Spinner/></div> : (<>
         {/* Summary Cards */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,marginBottom:24}}>
-          <StatCard label="Total Leads"  value={total}                     sub="all time"            color="#3b82f6"/>
+          <StatCard label="Total Leads"  value={total}                     sub={periodLabel}         color="#3b82f6"/>
           <StatCard label="Closed Win"   value={data?.closed_wins||0}      sub={periodLabel}         color="#22c55e"/>
           <StatCard label="Activities"   value={data?.activities_week||0}  sub="last 7 days"         color="#f59e0b"/>
           <StatCard label="Win Rate"     value={total>0?Math.round((data?.closed_wins||0)/total*100)+'%':'—'} sub="Win / Total" color="#8b5cf6"/>
