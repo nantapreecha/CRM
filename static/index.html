@@ -3660,11 +3660,12 @@ function ReassignModal({ lead, users, onClose, onReassigned }) {
 }
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
-const LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost'];
+const LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Ready to Close', 'Closed Win', 'Closed Lost'];
 const STAGE_COLORS = {
   'Cold Call/Email': { bg:'#eff6ff', border:'#3b82f6', text:'#1d4ed8', dot:'#3b82f6' },
   'Meeting':         { bg:'#fefce8', border:'#eab308', text:'#854d0e', dot:'#eab308' },
   'Follow Up':       { bg:'#fff7ed', border:'#f97316', text:'#9a3412', dot:'#f97316' },
+  'Ready to Close':  { bg:'#f0f9ff', border:'#0ea5e9', text:'#0369a1', dot:'#0ea5e9' },
   'Closed Win':      { bg:'#f0fdf4', border:'#22c55e', text:'#15803d', dot:'#22c55e' },
   'Closed Lost':     { bg:'#fef2f2', border:'#ef4444', text:'#991b1b', dot:'#ef4444' },
 };
@@ -4350,7 +4351,7 @@ function SalesDashboard({ user }) {
   };
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
-  const STAGE_ORDER = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost'];
+  const STAGE_ORDER = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Ready to Close', 'Closed Win', 'Closed Lost'];
   const byStage = (data?.by_stage || []).slice().sort((a,b) =>
     STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage));
   const total = data?.total_leads || 0;
@@ -4466,6 +4467,7 @@ function SalesDashboard({ user }) {
                       <Th col="cold_call"    label="Cold Call" right/>
                       <Th col="meeting"      label="Meeting"  right/>
                       <Th col="follow_up"    label="Follow Up" right/>
+                      <Th col="ready_to_close" label="Ready" right/>
                       <Th col="won"          label="Won"      right/>
                       <Th col="lost"         label="Lost"     right/>
                       <Th col="activities_week" label="Act/wk" right/>
@@ -4489,6 +4491,7 @@ function SalesDashboard({ user }) {
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.cold_call}</td>
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.meeting}</td>
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#6b7280'}}>{rep.follow_up}</td>
+                          <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#0369a1'}}>{rep.ready_to_close}</td>
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',fontWeight:600,color:'#16a34a'}}>{rep.won}</td>
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',fontWeight:600,color:'#dc2626'}}>{rep.lost}</td>
                           <td style={{padding:'11px 12px',fontSize:13,textAlign:'right',color:'#374151'}}>{rep.activities_week}</td>
@@ -4496,7 +4499,7 @@ function SalesDashboard({ user }) {
                         </tr>
                         {isOpen && (
                           <tr>
-                            <td colSpan={9} style={{padding:0, background:'#f0f9ff', borderBottom:'1px solid #e5e7eb'}}>
+                            <td colSpan={10} style={{padding:0, background:'#f0f9ff', borderBottom:'1px solid #e5e7eb'}}>
                               {repLeadsLoading
                                 ? <div style={{display:'flex',justifyContent:'center',padding:20}}><Spinner/></div>
                                 : repLeads.length === 0

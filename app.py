@@ -2599,7 +2599,7 @@ def debug_complain_no_invoice():
 # Pipeline / Leads
 # ---------------------------------------------------------------------------
 
-LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Closed Win', 'Closed Lost']
+LEAD_STAGES = ['Cold Call/Email', 'Meeting', 'Follow Up', 'Ready to Close', 'Closed Win', 'Closed Lost']
 
 def next_lead_no(cur):
     cur.execute("SELECT lead_no FROM leads ORDER BY id DESC LIMIT 1")
@@ -2990,6 +2990,7 @@ def sales_dashboard_reps():
             COUNT(DISTINCT CASE WHEN l.stage='Cold Call/Email' THEN l.id END) AS cold_call,
             COUNT(DISTINCT CASE WHEN l.stage='Meeting'         THEN l.id END) AS meeting,
             COUNT(DISTINCT CASE WHEN l.stage='Follow Up'       THEN l.id END) AS follow_up,
+            COUNT(DISTINCT CASE WHEN l.stage='Ready to Close'  THEN l.id END) AS ready_to_close,
             COUNT(DISTINCT CASE WHEN l.stage='Closed Win'      THEN l.id END) AS won,
             COUNT(DISTINCT CASE WHEN l.stage='Closed Lost'     THEN l.id END) AS lost,
             COUNT(CASE WHEN la.created_at >= %s              THEN la.id END) AS activities_week,
