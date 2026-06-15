@@ -2080,11 +2080,14 @@ def dashboard_export():
         'สาขา / รายละเอียด',     # 7
         'ประเภทสินค้า',           # 8
         'ชื่อสินค้า',             # 9
-        'รายละเอียดปัญหา',        # 10
-        'สาเหตุ (Root Cause)',    # 11
-        'จำนวนสินค้าที่สั่ง',     # 12
-        'จำนวนสินค้าที่พบปัญหา',  # 13
-        'การดำเนินการ',           # 14
+        'SKU Group',              # 10
+        'SKU Category',           # 11
+        'SKU Type',               # 12
+        'รายละเอียดปัญหา',        # 13
+        'สาเหตุ (Root Cause)',    # 14
+        'จำนวนสินค้าที่สั่ง',     # 15
+        'จำนวนสินค้าที่พบปัญหา',  # 16
+        'การดำเนินการ',           # 17
     ]
     ws.append(headers)
 
@@ -2155,16 +2158,54 @@ def dashboard_export():
             return dt.strftime('%d/%m/%Y')
         return str(dt)[:10]
 
+    # --- Build SKU metadata lookup (sku_group / sku_category / sku_type) from ERP ---
+    def parse_items(raw_ci):
+        if not raw_ci:
+            return []
+        try:
+            parsed = _json.loads(raw_ci) if isinstance(raw_ci, str) else raw_ci
+            return parsed if isinstance(parsed, list) else []
+        except:
+            return []
+
+    all_skus = set()
+    for r in (rows or []):
+        for it in parse_items(r.get('claim_items')):
+            sc = it.get('sku_code') or it.get('sku')
+            if sc:
+                all_skus.add(sc)
+
+    sku_meta = {}  # sku_code -> {'sku_group','sku_category','sku_type'}
+    if all_skus:
+        try:
+            cols = erp_query("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'sourcing_erp_order_items'
+                  AND column_name IN ('sku_group','sku_category','sku_categ','sku_type')
+            """)
+            avail = {c['column_name'] for c in (cols or [])}
+        except Exception:
+            avail = set()
+        grp = 'sku_group'    if 'sku_group'    in avail else None
+        cat = 'sku_category' if 'sku_category' in avail else ('sku_categ' if 'sku_categ' in avail else None)
+        typ = 'sku_type'     if 'sku_type'     in avail else None
+        if grp or cat or typ:
+            sel = ['sku',
+                   (grp or "''") + ' AS sku_group',
+                   (cat or "''") + ' AS sku_category',
+                   (typ or "''") + ' AS sku_type']
+            try:
+                meta_rows = erp_query(
+                    f"SELECT DISTINCT {', '.join(sel)} FROM sourcing_erp_order_items WHERE sku = ANY(%s)",
+                    (list(all_skus),))
+                for mr in (meta_rows or []):
+                    sku_meta[mr['sku']] = mr
+            except Exception:
+                pass
+
     for r in (rows or []):
         # Parse claim_items JSON
-        items = []
-        raw_ci = r.get('claim_items')
-        if raw_ci:
-            try:
-                parsed = _json.loads(raw_ci) if isinstance(raw_ci, str) else raw_ci
-                if isinstance(parsed, list):
-                    items = parsed
-            except: pass
+        items = parse_items(r.get('claim_items'))
 
         base = [
             r.get('ticket_no') or '',            # 0  Ticket No
@@ -2179,28 +2220,35 @@ def dashboard_export():
 
         if items:
             for item in items:
+                meta = sku_meta.get(item.get('sku_code') or item.get('sku') or '', {})
                 ws.append(base + [
-                    '',                                                          # 9  ประเภทสินค้า (manual)
-                    item.get('product_name') or item.get('sku_code') or '',     # 10 ชื่อสินค้า
-                    r.get('description') or '',                                  # 11 รายละเอียดปัญหา
-                    r.get('root_cause') or '',                                   # 12 สาเหตุ
-                    str(item.get('qty') or ''),                                  # 13 จำนวนสั่ง
-                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 14 จำนวนพบปัญหา
-                    r.get('resolution_type') or '',                              # 15 การดำเนินการ
+                    '',                                                          # 8  ประเภทสินค้า (manual)
+                    item.get('product_name') or item.get('sku_code') or '',     # 9  ชื่อสินค้า
+                    meta.get('sku_group') or '',                                 # 10 SKU Group
+                    meta.get('sku_category') or '',                             # 11 SKU Category
+                    meta.get('sku_type') or '',                                 # 12 SKU Type
+                    r.get('description') or '',                                  # 13 รายละเอียดปัญหา
+                    r.get('root_cause') or '',                                   # 14 สาเหตุ
+                    str(item.get('qty') or ''),                                  # 15 จำนวนสั่ง
+                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 16 จำนวนพบปัญหา
+                    r.get('resolution_type') or '',                              # 17 การดำเนินการ
                 ])
         else:
             ws.append(base + [
-                '',                         # 9
-                '',                         # 10
-                r.get('description') or '', # 11 รายละเอียดปัญหา
-                r.get('root_cause') or '',  # 12 สาเหตุ
-                '',                         # 13
-                '',                         # 14
-                r.get('resolution_type') or '',  # 15
+                '',                         # 8  ประเภทสินค้า
+                '',                         # 9  ชื่อสินค้า
+                '',                         # 10 SKU Group
+                '',                         # 11 SKU Category
+                '',                         # 12 SKU Type
+                r.get('description') or '', # 13 รายละเอียดปัญหา
+                r.get('root_cause') or '',  # 14 สาเหตุ
+                '',                         # 15
+                '',                         # 16
+                r.get('resolution_type') or '',  # 17
             ])
 
     # Auto column width
-    col_widths = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 32, 20, 12, 12, 24]
+    col_widths = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 18, 18, 16, 32, 20, 12, 12, 24]
     for i, col in enumerate(ws.columns):
         letter = col[0].column_letter
         ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
