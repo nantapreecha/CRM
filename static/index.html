@@ -3992,7 +3992,7 @@ function Pipeline({ user }) {
   if (selectedLead) return <LeadDetail lead={selectedLead} user={user} onBack={()=>setSelectedLead(null)} onUpdated={reload}/>;
 
   return (
-    <div style={{ padding:24, height:'100%', overflowY:'auto' }}>
+    <div style={{ padding:24, height:'100%', boxSizing:'border-box', display:'flex', flexDirection:'column', overflow:'hidden' }}>
       {showCreate && <CreateLeadModal users={users} currentUser={user} onClose={()=>setShowCreate(false)} onCreated={()=>{ setShowCreate(false); reload(); }}/>}
 
       {/* Header */}
@@ -4028,19 +4028,21 @@ function Pipeline({ user }) {
         )}
       </div>
 
-      {(()=>{
-        const q = search.trim().toLowerCase();
-        const filtered = q ? leads.filter(l =>
-          (l.company_name||'').toLowerCase().includes(q) ||
-          (l.contact_name||'').toLowerCase().includes(q) ||
-          (l.lead_no||'').toLowerCase().includes(q)
-        ) : leads;
-        return loading
-          ? <div className="flex justify-center py-12"><Spinner/></div>
-          : view === 'kanban'
-            ? <KanbanView leads={filtered} user={user} onSelect={setSelectedLead} onStageChange={reload} users={users}/>
-            : <ListView leads={filtered} user={user} onSelect={setSelectedLead} onReassigned={reload} users={users}/>;
-      })()}
+      <div style={{ flex:1, minHeight:0, overflow: view==='kanban' ? 'hidden' : 'auto' }}>
+        {(()=>{
+          const q = search.trim().toLowerCase();
+          const filtered = q ? leads.filter(l =>
+            (l.company_name||'').toLowerCase().includes(q) ||
+            (l.contact_name||'').toLowerCase().includes(q) ||
+            (l.lead_no||'').toLowerCase().includes(q)
+          ) : leads;
+          return loading
+            ? <div className="flex justify-center py-12"><Spinner/></div>
+            : view === 'kanban'
+              ? <KanbanView leads={filtered} user={user} onSelect={setSelectedLead} onStageChange={reload} users={users}/>
+              : <ListView leads={filtered} user={user} onSelect={setSelectedLead} onReassigned={reload} users={users}/>;
+        })()}
+      </div>
     </div>
   );
 }
@@ -4061,7 +4063,7 @@ function KanbanView({ leads, user, onSelect, onStageChange, users }) {
   return (
     <>
       {reassignLead && <ReassignModal lead={reassignLead} users={users} onClose={()=>setReassignLead(null)} onReassigned={()=>{ setReassignLead(null); onStageChange(); }}/>}
-      <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:16, alignItems:'flex-start' }}>
+      <div style={{ display:'flex', gap:12, overflowX:'auto', overflowY:'auto', height:'100%', boxSizing:'border-box', paddingBottom:8, alignItems:'flex-start' }}>
         {LEAD_STAGES.map(stage => {
           const c = STAGE_COLORS[stage];
           const stageLeads = leads.filter(l=>l.stage===stage);
@@ -4993,7 +4995,7 @@ function App() {
       </div>
 
       {/* Main */}
-      <div style={{flex:1,overflow:'auto',background:'#f9fafb'}}>
+      <div style={{flex:1,minWidth:0,overflow:'auto',background:'#f9fafb'}}>
         {renderPage()}
       </div>
 
