@@ -1276,24 +1276,26 @@ function Dashboard() {
   const hasData = useRef(false);
 
   const openDrill = (filters, title, overrideDateRange = null) => setDrill({ filters, title, overrideDateRange });
-  const [exporting, setExporting] = useState(false);
-  const exportExcel = async () => {
-    setExporting(true);
+  const [exporting, setExporting] = useState('');  // '' | 'cases' | 'orders'
+  const runExport = async (kind) => {
+    setExporting(kind);
     try {
-      const url = `/api/dashboard/export?start=${dateRange.start||''}&end=${dateRange.end||''}`;
+      const path = kind === 'orders' ? 'export-orders' : 'export';
+      const prefix = kind === 'orders' ? 'orders' : 'cases';
+      const url = `/api/dashboard/${path}?start=${dateRange.start||''}&end=${dateRange.end||''}`;
       const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
       if (!resp.ok) { alert('Export failed: ' + resp.statusText); return; }
       const blob = await resp.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `cases_${dateRange.start||'all'}_${dateRange.end||''}.xlsx`;
+      a.download = `${prefix}_${dateRange.start||'all'}_${dateRange.end||''}.xlsx`;
       document.body.appendChild(a); a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
     } catch(e) {
       alert('Export error: ' + e.message);
     } finally {
-      setExporting(false);
+      setExporting('');
     }
   };
 
@@ -1341,9 +1343,12 @@ function Dashboard() {
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
         <h2 className="text-xl font-bold" style={{color:'var(--text)'}}>Dashboard</h2>
         {refreshing && <span style={{fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><Spinner size={12}/> updating...</span>}
-        <div style={{marginLeft:'auto'}}>
-          <button onClick={exportExcel} disabled={exporting} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#16a34a',color:'#fff',border:'none',borderRadius:7,cursor:exporting?'not-allowed':'pointer',fontSize:13,fontWeight:600,opacity:exporting?0.7:1}}>
-            {exporting ? <><Spinner size={13}/> Exporting...</> : '📥 Export Excel'}
+        <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+          <button onClick={()=>runExport('cases')} disabled={!!exporting} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#16a34a',color:'#fff',border:'none',borderRadius:7,cursor:exporting?'not-allowed':'pointer',fontSize:13,fontWeight:600,opacity:exporting?0.7:1}}>
+            {exporting==='cases' ? <><Spinner size={13}/> Exporting...</> : '📥 Export Cases'}
+          </button>
+          <button onClick={()=>runExport('orders')} disabled={!!exporting} title="ดึงออเดอร์ทั้งหมดจาก ERP (schema เดียวกับ Cases) เพื่อ cross-check ว่ามีออเดอร์ตกหล่นไม่ได้เปิดเคสหรือไม่" style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',background:'#0d9488',color:'#fff',border:'none',borderRadius:7,cursor:exporting?'not-allowed':'pointer',fontSize:13,fontWeight:600,opacity:exporting?0.7:1}}>
+            {exporting==='orders' ? <><Spinner size={13}/> Exporting...</> : '📦 Export All Orders'}
           </button>
         </div>
       </div>

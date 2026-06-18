@@ -2044,69 +2044,40 @@ def dashboard_drill():
     """, params)
     return jsonify(rows)
 
-@app.route('/api/dashboard/export', methods=['GET'])
-@require_auth
-def dashboard_export():
-    """Export tickets in date range as Excel — one row per claim item (or per ticket if no items)."""
-    import io, json as _json
-    from datetime import datetime, date as _date
-    extra, params = date_filter_sql()
-    rows = query(f"""
-        SELECT t.ticket_no, t.case_type, t.case_subtype, t.description,
-               t.invoice_number, t.resolution_type, t.claim_items,
-               t.created_at, t.root_cause,
-               o.name AS outlet_name, a.name AS account_name,
-               COALESCE(tfa.fault_team, t.fault_team) AS resp_team
-        FROM tickets t
-        LEFT JOIN outlets o ON o.id = t.outlet_id
-        LEFT JOIN accounts a ON a.id = o.account_id
-        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
-        WHERE 1=1 {extra}
-        ORDER BY t.created_at ASC
-    """, params)
+# ---------------------------------------------------------------------------
+# Shared Excel export schema (used by both /export and /export-orders so the
+# two files line up column-for-column for cross-checking).
+# ---------------------------------------------------------------------------
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Cases'
+EXPORT_HEADERS = [
+    'Ticket No',              # 0
+    'วันที่รับเรื่อง',        # 1
+    'สัปดาห์',                # 2
+    'เลขเอกสาร (IVSC)',      # 3
+    'หมวดหมู่',               # 4
+    'ผู้รับผิดชอบ (ทีม)',     # 5
+    'ชื่อลูกค้า',             # 6
+    'สาขา / รายละเอียด',     # 7
+    'ประเภทสินค้า',           # 8
+    'ชื่อสินค้า',             # 9
+    'SKU Group',              # 10
+    'SKU Category',           # 11
+    'SKU Type',               # 12
+    'รายละเอียดปัญหา',        # 13
+    'สาเหตุ (Root Cause)',    # 14
+    'จำนวนสินค้าที่สั่ง',     # 15
+    'จำนวนสินค้าที่พบปัญหา',  # 16
+    'การดำเนินการ',           # 17
+]
+EXPORT_COL_WIDTHS = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 18, 18, 16, 32, 20, 12, 12, 24]
 
-    headers = [
-        'Ticket No',              # 0
-        'วันที่รับเรื่อง',        # 1
-        'สัปดาห์',                # 2
-        'เลขเอกสาร (IVSC)',      # 3
-        'หมวดหมู่',               # 4
-        'ผู้รับผิดชอบ (ทีม)',     # 5
-        'ชื่อลูกค้า',             # 6
-        'สาขา / รายละเอียด',     # 7
-        'ประเภทสินค้า',           # 8
-        'ชื่อสินค้า',             # 9
-        'SKU Group',              # 10
-        'SKU Category',           # 11
-        'SKU Type',               # 12
-        'รายละเอียดปัญหา',        # 13
-        'สาเหตุ (Root Cause)',    # 14
-        'จำนวนสินค้าที่สั่ง',     # 15
-        'จำนวนสินค้าที่พบปัญหา',  # 16
-        'การดำเนินการ',           # 17
-    ]
-    ws.append(headers)
+_EXPORT_W2026 = None  # cached week table
 
-    from openpyxl.styles import Font, PatternFill, Alignment
-    for cell in ws[1]:
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = PatternFill('solid', fgColor='1D4ED8')
-        cell.alignment = Alignment(horizontal='center', wrap_text=True)
-
-    def week_label(dt):
-        if not dt:
-            return ''
-        if isinstance(dt, str):
-            try: dt = datetime.fromisoformat(dt.replace('Z',''))
-            except: return ''
+def _w2026_table():
+    global _EXPORT_W2026
+    if _EXPORT_W2026 is None:
         from datetime import date as _d2
-        d = dt.date() if isinstance(dt, datetime) else dt
-        # Hardcoded 2026 custom week table (Sun–Sat, labeled by majority month)
-        _W2026 = [
+        _EXPORT_W2026 = [
             (_d2(2026,  1,  4), 'Jan W1/2026'), (_d2(2026,  1, 11), 'Jan W2/2026'),
             (_d2(2026,  1, 18), 'Jan W3/2026'), (_d2(2026,  1, 25), 'Jan W4/2026'),
             (_d2(2026,  2,  1), 'Feb W1/2026'), (_d2(2026,  2,  8), 'Feb W2/2026'),
@@ -2136,27 +2107,97 @@ def dashboard_export():
             (_d2(2026, 12,  6), 'Dec W1/2026'), (_d2(2026, 12, 13), 'Dec W2/2026'),
             (_d2(2026, 12, 20), 'Dec W3/2026'), (_d2(2026, 12, 27), 'Dec W4/2026'),
         ]
-        if d.year == 2026:
-            label = None
-            for start, lbl in _W2026:
-                if d >= start:
-                    label = lbl
-                else:
-                    break
-            if label:
-                return label
-        # Fallback: ISO week
+    return _EXPORT_W2026
+
+def export_week_label(dt):
+    if not dt:
+        return ''
+    if isinstance(dt, str):
+        try: dt = datetime.fromisoformat(dt.replace('Z', ''))
+        except: return ''
+    d = dt.date() if isinstance(dt, datetime) else dt
+    if getattr(d, 'year', None) == 2026:
+        label = None
+        for start, lbl in _w2026_table():
+            if d >= start:
+                label = lbl
+            else:
+                break
+        if label:
+            return label
+    try:
         iso = dt.isocalendar()
         return f"W{iso[1]:02d}/{iso[0]}"
+    except Exception:
+        return ''
 
-    def fmt_date(dt):
-        if not dt: return ''
-        if isinstance(dt, str):
-            try: dt = datetime.fromisoformat(dt.replace('Z',''))
-            except: return str(dt)[:10]
-        if isinstance(dt, (_date, datetime)):
-            return dt.strftime('%d/%m/%Y')
-        return str(dt)[:10]
+def export_fmt_date(dt):
+    from datetime import date as _date
+    if not dt: return ''
+    if isinstance(dt, str):
+        try: dt = datetime.fromisoformat(dt.replace('Z', ''))
+        except: return str(dt)[:10]
+    if isinstance(dt, (_date, datetime)):
+        return dt.strftime('%d/%m/%Y')
+    return str(dt)[:10]
+
+def write_export_header(ws):
+    from openpyxl.styles import Font, PatternFill, Alignment
+    ws.append(EXPORT_HEADERS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='1D4ED8')
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+
+def apply_export_widths(ws):
+    for i, col in enumerate(ws.columns):
+        letter = col[0].column_letter
+        ws.column_dimensions[letter].width = EXPORT_COL_WIDTHS[i] if i < len(EXPORT_COL_WIDTHS) else 16
+    ws.freeze_panes = 'A2'
+
+def detect_erp_sku_cols():
+    """Return (group_col, category_col, type_col) — actual ERP column names or None."""
+    try:
+        cols = erp_query("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'sourcing_erp_order_items'
+              AND column_name IN ('sku_group','sku_category','sku_categ','sku_type')
+        """)
+        avail = {c['column_name'] for c in (cols or [])}
+    except Exception:
+        avail = set()
+    grp = 'sku_group'    if 'sku_group'    in avail else None
+    cat = 'sku_category' if 'sku_category' in avail else ('sku_categ' if 'sku_categ' in avail else None)
+    typ = 'sku_type'     if 'sku_type'     in avail else None
+    return grp, cat, typ
+
+@app.route('/api/dashboard/export', methods=['GET'])
+@require_auth
+def dashboard_export():
+    """Export tickets in date range as Excel — one row per claim item (or per ticket if no items)."""
+    import io, json as _json
+    from datetime import datetime, date as _date
+    extra, params = date_filter_sql()
+    rows = query(f"""
+        SELECT t.ticket_no, t.case_type, t.case_subtype, t.description,
+               t.invoice_number, t.resolution_type, t.claim_items,
+               t.created_at, t.root_cause,
+               o.name AS outlet_name, a.name AS account_name,
+               COALESCE(tfa.fault_team, t.fault_team) AS resp_team
+        FROM tickets t
+        LEFT JOIN outlets o ON o.id = t.outlet_id
+        LEFT JOIN accounts a ON a.id = o.account_id
+        LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
+        WHERE 1=1 {extra}
+        ORDER BY t.created_at ASC
+    """, params)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Cases'
+    write_export_header(ws)
+    week_label = export_week_label
+    fmt_date = export_fmt_date
 
     # --- Build SKU metadata lookup (sku_group / sku_category / sku_type) from ERP ---
     def parse_items(raw_ci):
@@ -2177,18 +2218,7 @@ def dashboard_export():
 
     sku_meta = {}  # sku_code -> {'sku_group','sku_category','sku_type'}
     if all_skus:
-        try:
-            cols = erp_query("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'sourcing_erp_order_items'
-                  AND column_name IN ('sku_group','sku_category','sku_categ','sku_type')
-            """)
-            avail = {c['column_name'] for c in (cols or [])}
-        except Exception:
-            avail = set()
-        grp = 'sku_group'    if 'sku_group'    in avail else None
-        cat = 'sku_category' if 'sku_category' in avail else ('sku_categ' if 'sku_categ' in avail else None)
-        typ = 'sku_type'     if 'sku_type'     in avail else None
+        grp, cat, typ = detect_erp_sku_cols()
         if grp or cat or typ:
             sel = ['sku',
                    (grp or "''") + ' AS sku_group',
@@ -2247,14 +2277,7 @@ def dashboard_export():
                 r.get('resolution_type') or '',  # 17
             ])
 
-    # Auto column width
-    col_widths = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 18, 18, 16, 32, 20, 12, 12, 24]
-    for i, col in enumerate(ws.columns):
-        letter = col[0].column_letter
-        ws.column_dimensions[letter].width = col_widths[i] if i < len(col_widths) else 16
-
-    # Freeze header row
-    ws.freeze_panes = 'A2'
+    apply_export_widths(ws)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -2264,6 +2287,104 @@ def dashboard_export():
     end = request.args.get('end', '')
     filename = f"cases_{start}_{end}.xlsx" if start else "cases_all.xlsx"
 
+    from flask import send_file
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=filename)
+
+@app.route('/api/dashboard/export-orders', methods=['GET'])
+@require_auth
+def dashboard_export_orders():
+    """Export ALL ERP order items (one row per SKU per invoice) using the same
+    column schema as /export, so the two files can be compared side by side to
+    spot orders that were never logged as a case. Filtered by the same date
+    range; the 'Ticket No' / 'หมวดหมู่' columns are filled in when a CRM case
+    references that invoice (blank = no case logged for that order)."""
+    import io
+    from datetime import datetime, date as _date
+
+    start = request.args.get('start', '')
+    end   = request.args.get('end', '')
+
+    # Filter on delivery date (falls back to doc_date) to match the dashboard's
+    # order-counting logic, so totals line up for cross-checking.
+    date_expr = "COALESCE(o.delivery_started_at::date, o.doc_date)"
+    date_extra, date_params = '', []
+    if start:
+        date_extra += f" AND {date_expr} >= %s"; date_params.append(start)
+    if end:
+        date_extra += f" AND {date_expr} <= %s"; date_params.append(end)
+
+    grp, cat, typ = detect_erp_sku_cols()
+    sku_sel = (
+        ", " + (grp or "''") + " AS sku_group"
+        + ", " + (cat or "''") + " AS sku_category"
+        + ", " + (typ or "''") + " AS sku_type"
+    )
+    erp_rows = erp_query(f"""
+        SELECT o.invoice_number,
+               {date_expr}        AS ref_date,
+               o.customer_name,
+               o.account_name,
+               o.sku              AS sku_code,
+               o.product_name,
+               o.qty
+               {sku_sel}
+        FROM sourcing_erp_order_items o
+        WHERE 1=1 {date_extra}
+        ORDER BY o.invoice_number, o.product_name
+    """, date_params)
+
+    # Map invoice_number -> matching CRM case info (ticket_no / case_type)
+    inv_list = list({r['invoice_number'] for r in (erp_rows or []) if r.get('invoice_number')})
+    inv_to_case = {}
+    if inv_list:
+        case_rows = query("""
+            SELECT invoice_number, ticket_no, case_type
+            FROM tickets WHERE invoice_number = ANY(%s)
+        """, (inv_list,))
+        for cr in (case_rows or []):
+            inv = cr['invoice_number']
+            entry = inv_to_case.setdefault(inv, {'ticket_no': [], 'case_type': set()})
+            if cr.get('ticket_no'):  entry['ticket_no'].append(cr['ticket_no'])
+            if cr.get('case_type'):  entry['case_type'].add(cr['case_type'])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Orders'
+    write_export_header(ws)
+
+    for r in (erp_rows or []):
+        inv = r.get('invoice_number') or ''
+        case = inv_to_case.get(inv, {})
+        ticket_no = ', '.join(case.get('ticket_no', [])) if case else ''
+        case_type = ', '.join(sorted(case.get('case_type', []))) if case else ''
+        ws.append([
+            ticket_no,                          # 0  Ticket No (blank = no case)
+            export_fmt_date(r.get('ref_date')), # 1  วันที่
+            export_week_label(r.get('ref_date')),# 2  สัปดาห์
+            inv,                                # 3  เลขเอกสาร (IVSC)
+            case_type,                          # 4  หมวดหมู่
+            '',                                 # 5  ผู้รับผิดชอบ
+            r.get('account_name') or '',        # 6  ชื่อลูกค้า
+            r.get('customer_name') or '',       # 7  สาขา / รายละเอียด
+            '',                                 # 8  ประเภทสินค้า
+            r.get('product_name') or '',        # 9  ชื่อสินค้า
+            r.get('sku_group') or '',           # 10 SKU Group
+            r.get('sku_category') or '',        # 11 SKU Category
+            r.get('sku_type') or '',            # 12 SKU Type
+            '',                                 # 13 รายละเอียดปัญหา
+            '',                                 # 14 สาเหตุ
+            str(r.get('qty') or ''),            # 15 จำนวนสินค้าที่สั่ง
+            '',                                 # 16 จำนวนสินค้าที่พบปัญหา
+            '',                                 # 17 การดำเนินการ
+        ])
+
+    apply_export_widths(ws)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"orders_{start}_{end}.xlsx" if start else "orders_all.xlsx"
     from flask import send_file
     return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True, download_name=filename)
