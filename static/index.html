@@ -6,10 +6,11 @@
 <title>SMM Sourcing CRM</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- Pinned, production builds via jsDelivr (more reliable in Asia than unpkg) -->
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.9/babel.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <style>
   :root {
     --primary:#111827; --primary-light:#1f2937; --primary-bg:#f3f4f6;
@@ -109,6 +110,29 @@
 </head>
 <body>
 <div id="root"></div>
+<!-- Fallback: if React/ReactDOM/Babel failed to load (CDN/network issue), show a retry
+     screen instead of a blank white page. Runs after all head scripts attempted. -->
+<script>
+(function(){
+  function showError(msg){
+    var r=document.getElementById('root');
+    if(r && !r.hasChildNodes()){
+      r.innerHTML='<div style="max-width:420px;margin:18vh auto;text-align:center;font-family:sans-serif;color:#374151;padding:24px">'+
+        '<div style="font-size:40px">⚠️</div>'+
+        '<h2 style="font-size:18px;margin:12px 0 6px">โหลดหน้าไม่สำเร็จ</h2>'+
+        '<p style="font-size:14px;color:#6b7280;margin:0 0 16px">'+msg+'</p>'+
+        '<button onclick="location.reload(true)" style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer">ลองใหม่อีกครั้ง</button>'+
+        '</div>';
+    }
+  }
+  if(typeof React==='undefined'||typeof ReactDOM==='undefined'||typeof Babel==='undefined'){
+    showError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ส่วนแสดงผลได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
+    return;
+  }
+  // Safety net: if the app hasn't mounted after 12s, the JSX likely failed to compile.
+  setTimeout(function(){ showError('หน้าใช้เวลาโหลดนานผิดปกติ กรุณาลองใหม่'); }, 12000);
+})();
+</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useRef } = React;
 const API = '';
