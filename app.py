@@ -1778,10 +1778,10 @@ def dashboard_case_invoice_ratio():
     date_extra = ''
     date_params = []
     if start:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) >= %s"
         date_params.append(start)
     if end:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) <= %s"
         date_params.append(end)
 
     # ตัวหาร: invoice ที่ส่งในช่วง delivery_date (จาก ERP)
@@ -1895,17 +1895,17 @@ def dashboard_fault_rate_trend():
     date_extra = ''
     date_params = []
     if start:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) >= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) >= %s"
         date_params.append(start)
     if end:
-        date_extra += " AND COALESCE(o.delivery_date, o.doc_date) <= %s"
+        date_extra += " AND COALESCE(o.delivery_started_at::date, o.doc_date) <= %s"
         date_params.append(end)
 
     # For weekly: group by Sun-Sat week
     if group_by == 'week':
-        dt_expr = "(COALESCE(o.delivery_date, o.doc_date) - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_date, o.doc_date)) AS INT))"
+        dt_expr = "(COALESCE(o.delivery_started_at::date, o.doc_date) - CAST(EXTRACT(DOW FROM COALESCE(o.delivery_started_at::date, o.doc_date)) AS INT))"
     else:
-        dt_expr = "COALESCE(o.delivery_date, o.doc_date)"
+        dt_expr = "COALESCE(o.delivery_started_at::date, o.doc_date)"
 
     # Invoices per period — from ERP
     inv_rows = erp_query(f"""
@@ -2305,10 +2305,9 @@ def dashboard_export_orders():
     start = request.args.get('start', '')
     end   = request.args.get('end', '')
 
-    # Filter on the planned delivery_date column (matches the ERP report's
-    # "Delivery Date") so this export reconciles with what the ERP shows.
-    # Falls back to doc_date only when delivery_date is missing.
-    date_expr = "COALESCE(o.delivery_date, o.doc_date)"
+    # Filter on delivery date (falls back to doc_date) to match the dashboard's
+    # order-counting logic, so totals line up for cross-checking.
+    date_expr = "COALESCE(o.delivery_started_at::date, o.doc_date)"
     date_extra, date_params = '', []
     if start:
         date_extra += f" AND {date_expr} >= %s"; date_params.append(start)
@@ -3112,8 +3111,8 @@ def revenue_owner_accounts():
                COALESCE(SUM(total_sales), 0) AS revenue,
                COALESCE(SUM(qty), 0)          AS volume,
                COUNT(DISTINCT invoice_number) AS orders
-        FROM sourcing_erp_order_items o
-        WHERE COALESCE(o.delivery_date, o.doc_date) >= %s AND COALESCE(o.delivery_date, o.doc_date) <= %s
+        FROM sourcing_erp_order_items
+        WHERE delivery_started_at::date >= %s AND delivery_started_at::date <= %s
           AND outlet_id::text = ANY(%s)
         GROUP BY outlet_id
     """, (start, end, outlet_ids))
