@@ -1766,6 +1766,58 @@ def dashboard_aging():
     """)
     return jsonify(rows or [])
 
+@app.route('/api/debug/erp-date-schema', methods=['GET'])
+def debug_erp_date_schema():
+    """TEMPORARY diagnostic — inspect how ERP date columns are stored so we can
+    filter correctly. Returns column types, sample values, NULL counts, and the
+    distinct-invoice count for 2026-06-14..2026-06-20 under several date formulas.
+    Remove after use."""
+    out = {}
+    def safe(label, sql, params=()):
+        try:
+            out[label] = erp_query(sql, params)
+        except Exception as e:
+            out[label] = {'error': str(e)}
+
+    safe('column_types', """
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = 'sourcing_erp_order_items'
+          AND column_name IN ('delivery_date','delivery_started_at','doc_date')
+        ORDER BY column_name
+    """)
+    safe('sample_values', """
+        SELECT doc_date, delivery_date, delivery_started_at
+        FROM sourcing_erp_order_items
+        ORDER BY id DESC LIMIT 8
+    """)
+    safe('null_counts', """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(delivery_date) AS delivery_date_notnull,
+            COUNT(delivery_started_at) AS delivery_started_notnull,
+            COUNT(doc_date) AS doc_date_notnull
+        FROM sourcing_erp_order_items
+    """)
+    s, e = '2026-06-14', '2026-06-20'
+    safe('cnt_started_at', f"""
+        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
+        WHERE COALESCE(o.delivery_started_at::date, o.doc_date) BETWEEN %s AND %s
+    """, (s, e))
+    safe('cnt_delivery_date_raw', f"""
+        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
+        WHERE COALESCE(o.delivery_date, o.doc_date) BETWEEN %s AND %s
+    """, (s, e))
+    safe('cnt_delivery_date_cast', f"""
+        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
+        WHERE COALESCE(o.delivery_date::date, o.doc_date::date) BETWEEN %s::date AND %s::date
+    """, (s, e))
+    safe('cnt_delivery_date_ddmmyyyy', f"""
+        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
+        WHERE COALESCE(to_date(o.delivery_date,'DD/MM/YYYY'), o.doc_date::date) BETWEEN %s::date AND %s::date
+    """, (s, e))
+    return jsonify(out)
+
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
