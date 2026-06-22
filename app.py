@@ -1821,6 +1821,12 @@ def debug_erp_date_schema():
         WHERE invoice_number = ANY(%s)
         ORDER BY invoice_number
     """, (missing_sample,))
+    safe('missing_invoice_like', """
+        SELECT invoice_number FROM sourcing_erp_order_items
+        WHERE invoice_number LIKE '%001104%' OR invoice_number LIKE '%001105%'
+           OR invoice_number LIKE '%001115%' OR invoice_number LIKE '%001134%'
+        LIMIT 10
+    """)
     return jsonify(out)
 
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
