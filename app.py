@@ -1766,69 +1766,6 @@ def dashboard_aging():
     """)
     return jsonify(rows or [])
 
-@app.route('/api/debug/erp-date-schema', methods=['GET'])
-def debug_erp_date_schema():
-    """TEMPORARY diagnostic — inspect how ERP date columns are stored so we can
-    filter correctly. Returns column types, sample values, NULL counts, and the
-    distinct-invoice count for 2026-06-14..2026-06-20 under several date formulas.
-    Remove after use."""
-    out = {}
-    def safe(label, sql, params=()):
-        try:
-            out[label] = erp_query(sql, params)
-        except Exception as e:
-            out[label] = {'error': str(e)}
-
-    safe('all_columns', """
-        SELECT column_name, data_type
-        FROM information_schema.columns
-        WHERE table_name = 'sourcing_erp_order_items'
-        ORDER BY ordinal_position
-    """)
-    safe('freshness', """
-        SELECT MAX(etl_loaded_at) AS last_etl,
-               MAX(doc_date) AS max_doc_date,
-               MAX(delivery_started_at) AS max_delivery
-        FROM sourcing_erp_order_items
-    """)
-    safe('recent_doc_date_counts', """
-        SELECT doc_date, COUNT(DISTINCT invoice_number) AS invoices
-        FROM sourcing_erp_order_items
-        WHERE doc_date >= '2026-06-13'
-        GROUP BY doc_date ORDER BY doc_date
-    """)
-    s, e = '2026-06-14', '2026-06-20'
-    safe('cnt_started_at_coalesce', """
-        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
-        WHERE COALESCE(o.delivery_started_at::date, o.doc_date) BETWEEN %s AND %s
-    """, (s, e))
-    safe('cnt_started_at_only', """
-        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
-        WHERE o.delivery_started_at::date BETWEEN %s AND %s
-    """, (s, e))
-    safe('cnt_doc_date_only', """
-        SELECT COUNT(DISTINCT invoice_number) AS c FROM sourcing_erp_order_items o
-        WHERE o.doc_date BETWEEN %s AND %s
-    """, (s, e))
-    # Do the 46 'missing' invoices exist in the table AT ALL?
-    missing_sample = [
-        'IVSC2606-001104','IVSC2606-001105','IVSC2606-001115','IVSC2606-001116',
-        'IVSC2606-001119','IVSC2606-001134','IVSC2606-001136',
-    ]
-    safe('missing_invoice_lookup', """
-        SELECT invoice_number, doc_date, delivery_started_at
-        FROM sourcing_erp_order_items
-        WHERE invoice_number = ANY(%s)
-        ORDER BY invoice_number
-    """, (missing_sample,))
-    safe('missing_invoice_like', """
-        SELECT invoice_number FROM sourcing_erp_order_items
-        WHERE invoice_number LIKE %s OR invoice_number LIKE %s
-           OR invoice_number LIKE %s OR invoice_number LIKE %s
-        LIMIT 10
-    """, ('%001104%', '%001105%', '%001115%', '%001134%'))
-    return jsonify(out)
-
 @app.route('/api/dashboard/case-invoice-ratio', methods=['GET'])
 @require_auth
 def dashboard_case_invoice_ratio():
