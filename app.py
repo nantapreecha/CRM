@@ -1785,10 +1785,17 @@ def debug_erp_date_schema():
         WHERE table_name = 'sourcing_erp_order_items'
         ORDER BY ordinal_position
     """)
-    safe('sample_values', """
-        SELECT invoice_number, doc_date, delivery_started_at
+    safe('freshness', """
+        SELECT MAX(etl_loaded_at) AS last_etl,
+               MAX(doc_date) AS max_doc_date,
+               MAX(delivery_started_at) AS max_delivery
         FROM sourcing_erp_order_items
-        ORDER BY id DESC LIMIT 8
+    """)
+    safe('recent_doc_date_counts', """
+        SELECT doc_date, COUNT(DISTINCT invoice_number) AS invoices
+        FROM sourcing_erp_order_items
+        WHERE doc_date >= '2026-06-13'
+        GROUP BY doc_date ORDER BY doc_date
     """)
     s, e = '2026-06-14', '2026-06-20'
     safe('cnt_started_at_coalesce', """
