@@ -912,17 +912,25 @@ def get_outlet_invoices(oid):
     outlet = query("SELECT name, erp_outlet_id, csc_code FROM outlets WHERE id=%s", (oid,), one=True)
     if not outlet:
         return jsonify([])
+    # Only real invoices — exclude rows whose IVSC number is not yet assigned
+    # (NULL/blank), otherwise they show up as unselectable "date-only" options
+    # in the dropdown and block SKU lookup.
+    inv_filter = "invoice_number IS NOT NULL AND TRIM(invoice_number) != ''"
     # Primary: match by customer_name (most reliable — erp_outlet_id may be stale)
-    rows = erp_query("""
-        SELECT invoice_number, doc_date, COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
-        FROM sourcing_erp_order_items WHERE customer_name = %s
+    rows = erp_query(f"""
+        SELECT invoice_number, doc_date::text AS doc_date,
+               COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
+        FROM sourcing_erp_order_items
+        WHERE customer_name = %s AND {inv_filter}
         GROUP BY invoice_number, doc_date ORDER BY doc_date DESC
     """, (outlet['name'],))
     # Fallback: match by erp_outlet_id if name gives no results
     if not rows and outlet.get('erp_outlet_id'):
-        rows = erp_query("""
-            SELECT invoice_number, doc_date, COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
-            FROM sourcing_erp_order_items WHERE outlet_id = %s
+        rows = erp_query(f"""
+            SELECT invoice_number, doc_date::text AS doc_date,
+                   COUNT(*) AS sku_count, SUM(total_sales) AS total_sales
+            FROM sourcing_erp_order_items
+            WHERE outlet_id = %s AND {inv_filter}
             GROUP BY invoice_number, doc_date ORDER BY doc_date DESC
         """, (outlet['erp_outlet_id'],))
     return jsonify(rows)
