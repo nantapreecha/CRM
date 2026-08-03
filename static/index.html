@@ -2550,7 +2550,7 @@ function TicketDetail({ ticketId, user, onBack }) {
     setSaving(true); setMsg('');
     try {
       const res = await api(`/api/tickets/${ticketId}/${endpoint}`, { method:'POST', body: JSON.stringify(body) });
-      if (res && res.ok) { setNote(''); setImageUrls([]); setFaultTeam(''); setFaultEmployee(''); setAckEmployee(''); load(); }
+      if (res && res.ok) { setNote(''); setImageUrls([]); setFaultTeam(''); setFaultEmployee(''); setAckEmployee(''); setDisputeNote(''); load(); }
       else setMsg(res?.error || 'An error occurred');
     } catch(ex) {
       setMsg('Error: ' + ex.message);
@@ -2608,8 +2608,11 @@ function TicketDetail({ ticketId, user, onBack }) {
   const isPendingAck = ticket.status === 'pending_ack' || ticket.current_team === 'pending_ack';
   const isPendingFault = ticket.status === 'pending_fault';
   // For Complain: check if this user's team has an unacknowledged assignment
-  const myAssignment = assignments.find(a => a.team === user.team && !a.acknowledged_at);
+  // (a disputed one is parked with CX, so it no longer needs action from us)
+  const myAssignment = assignments.find(a => a.team === user.team && !a.acknowledged_at && !a.disputed_at);
   const hasMyAssignment = !!myAssignment;
+  const myDisputed = assignments.find(a => a.team === user.team && a.disputed_at);
+  const disputedAssignments = assignments.filter(a => a.disputed_at);
 
   const teamEmployees = employees.filter(e => e.team === user.team);
   const faultTeamEmployees = employees.filter(e => e.team === ticket.fault_team);
@@ -2825,6 +2828,47 @@ function TicketDetail({ ticketId, user, onBack }) {
                   {saving?<Spinner/>:'✅ Acknowledge'}
                 </button>
               </div>
+
+              {/* Divider */}
+              <div style={{display:'flex',alignItems:'center',gap:8,margin:'14px 0'}}>
+                <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
+                <span style={{fontSize:11,color:'#9ca3af',flexShrink:0}}>or if your team is not involved</span>
+                <div style={{flex:1,height:1,background:'#e5e7eb'}}/>
+              </div>
+
+              {/* Dispute section — mirrors the Claim flow */}
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:'#b91c1c',marginBottom:6}}>Dispute reason (required)</div>
+                <textarea rows={2} value={disputeNote} onChange={e=>setDisputeNote(e.target.value)}
+                  placeholder="เช่น เคสนี้ไม่เกี่ยวกับทีมของเรา เพราะ..."
+                  className="mb-2"/>
+                <button
+                  disabled={saving || !disputeNote.trim()}
+                  onClick={()=>act('dispute',{note:disputeNote})}
+                  style={{
+                    width:'100%', padding:'8px 0', borderRadius:8, fontSize:13, fontWeight:600,
+                    border:'1.5px solid #dc2626', cursor: disputeNote.trim() ? 'pointer' : 'not-allowed',
+                    background: disputeNote.trim() ? '#fef2f2' : '#f9fafb',
+                    color: disputeNote.trim() ? '#dc2626' : '#9ca3af',
+                    transition:'all .15s',
+                  }}>
+                  {saving ? <Spinner/> : '🔄 Dispute — Send back to CX'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 1b. Complain — this team already disputed, waiting on CX */}
+          {isPendingAck && myDisputed && (
+            <div className="card p-4 border-l-4 border-red-400">
+              <h4 className="font-semibold text-gray-700 mb-1">🔄 Dispute sent</h4>
+              <p className="text-sm text-gray-500">
+                ทีมของท่านได้โต้แย้งเคสนี้แล้ว — รอ CX พิจารณา
+              </p>
+              {myDisputed.dispute_note &&
+                <p className="text-xs text-gray-500 mt-2" style={{background:'#fef2f2',padding:'8px 10px',borderRadius:6}}>
+                  เหตุผล: {myDisputed.dispute_note}
+                </p>}
             </div>
           )}
 
@@ -3036,6 +3080,43 @@ function TicketDetail({ ticketId, user, onBack }) {
                 {faultTeam === ticket.fault_team && faultTeam &&
                   <p className="text-xs text-amber-600 mt-2">⚠️ Re-assigning back to <strong>{faultTeam}</strong> — make sure this is correct</p>}
               </>)}
+            </div>
+          )}
+
+          {/* 5b. CX resolves a disputed Complain assignment */}
+          {isPendingAck && isCX && disputedAssignments.length > 0 && (
+            <div className="card p-4 border-l-4 border-blue-500">
+              <h4 className="font-semibold text-gray-700 mb-1">🔄 Resolve Dispute</h4>
+              <p className="text-sm text-gray-500 mb-3">
+                มีทีมโต้แย้งว่าไม่เกี่ยวข้องกับเคสนี้ — โอนให้ทีมอื่น หรือถอดทีมออกจากเคส
+              </p>
+              {disputedAssignments.map(a => (
+                <div key={a.id} style={{border:'1px solid #e5e7eb',borderRadius:8,padding:12,marginBottom:10}}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <TeamBadge team={a.team}/>
+                    <span className="text-xs text-gray-400">โต้แย้งโดย {a.disputed_by||'-'}</span>
+                  </div>
+                  {a.dispute_note &&
+                    <p className="text-xs text-gray-600 mb-3" style={{background:'#fef2f2',padding:'8px 10px',borderRadius:6}}>
+                      เหตุผล: {a.dispute_note}
+                    </p>}
+                  <label className="text-xs font-medium text-gray-700 block mb-1">โอนให้ทีม</label>
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {TEAMS.filter(t => t !== a.team).map(t => (
+                      <button key={t} className="btn btn-secondary text-xs" disabled={saving}
+                        onClick={()=>act('resolve-assignment-dispute',{team:a.team,to_team:t,note})}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="btn btn-secondary w-full text-xs" disabled={saving}
+                    onClick={()=>act('resolve-assignment-dispute',{team:a.team,to_team:'',note})}>
+                    ✔️ ยอมรับข้อโต้แย้ง — ถอดทีม {a.team} ออกจากเคส
+                  </button>
+                </div>
+              ))}
+              <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
+                placeholder="หมายเหตุ (ถ้ามี)" className="mt-1"/>
             </div>
           )}
 

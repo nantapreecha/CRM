@@ -511,6 +511,10 @@ def init_db():
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_from_stage TEXT",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS contact_position TEXT",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS branch TEXT",
+        # Complain teams can dispute their assignment (mirrors Claim's dispute flow)
+        "ALTER TABLE ticket_assignments ADD COLUMN IF NOT EXISTS disputed_at TEXT",
+        "ALTER TABLE ticket_assignments ADD COLUMN IF NOT EXISTS dispute_note TEXT",
+        "ALTER TABLE ticket_assignments ADD COLUMN IF NOT EXISTS disputed_by TEXT",
     ]
     for m in migrations:
         try:
@@ -1419,14 +1423,32 @@ def dispute_fault(tid):
 
     my_team = g.user['team']
     is_admin = g.user['role'] == 'admin'
+    now = datetime.now().isoformat()
 
-    if ticket['status'] != 'pending_fault':
+    if ticket['status'] == 'pending_fault':
+        # Claim flow — the single fault team disputes being held responsible
+        if ticket['fault_team'] != my_team and not is_admin:
+            return jsonify({'error': 'เฉพาะทีมที่ถูกระบุเท่านั้นที่โต้แย้งได้'}), 403
+        mutate("UPDATE tickets SET current_team='CX' WHERE id=%s", (tid,))
+
+    elif ticket['status'] == 'pending_ack':
+        # Complain flow — one of the assigned teams disputes its assignment.
+        # The assignment stays on the ticket (marked disputed) so the audit trail
+        # is kept and the case cannot auto-close until CX resolves it.
+        assignment = query("""
+            SELECT * FROM ticket_assignments
+            WHERE ticket_id=%s AND team=%s AND acknowledged_at IS NULL AND disputed_at IS NULL
+        """, (tid, my_team), one=True)
+        if not assignment and not is_admin:
+            return jsonify({'error': 'ทีมของท่านไม่มี assignment ที่โต้แย้งได้'}), 403
+        if assignment:
+            mutate("""UPDATE ticket_assignments
+                SET disputed_at=%s, dispute_note=%s, disputed_by=%s WHERE id=%s""",
+                (now, note, g.user['display_name'], assignment['id']))
+        mutate("UPDATE tickets SET current_team='CX' WHERE id=%s", (tid,))
+
+    else:
         return jsonify({'error': 'ไม่สามารถโต้แย้งได้ในสถานะนี้'}), 400
-    if ticket['fault_team'] != my_team and not is_admin:
-        return jsonify({'error': 'เฉพาะทีมที่ถูกระบุเท่านั้นที่โต้แย้งได้'}), 403
-
-    # Send case back to CX, keep status = pending_fault
-    mutate("UPDATE tickets SET current_team='CX' WHERE id=%s", (tid,))
 
     # Mark as unread for all CX users so badge + dot light up
     mutate("""
@@ -1439,6 +1461,85 @@ def dispute_fault(tid):
         (ticket_id, from_team, to_team, action, note, user_id, created_by)
         VALUES (%s,%s,%s,%s,%s,%s,%s)""",
         (tid, my_team, 'CX', 'Dispute', note, g.user['user_id'], g.user['display_name']))
+
+    return jsonify({'ok': True})
+
+@app.route('/api/tickets/<int:tid>/resolve-assignment-dispute', methods=['POST'])
+@require_auth
+def resolve_assignment_dispute(tid):
+    """CX resolves a disputed Complain assignment: either hand it to another team
+    or drop it entirely (accepting that the team was not responsible)."""
+    d = request.json or {}
+    team    = (d.get('team') or '').strip()     # the team that disputed
+    to_team = (d.get('to_team') or '').strip()  # '' = remove the assignment
+    note    = (d.get('note') or '').strip()
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+    if g.user['team'] != 'CX' and g.user['role'] != 'admin':
+        return jsonify({'error': 'เฉพาะทีม CX เท่านั้นที่จัดการข้อโต้แย้งได้'}), 403
+
+    assignment = query("""
+        SELECT * FROM ticket_assignments
+        WHERE ticket_id=%s AND team=%s AND disputed_at IS NOT NULL
+    """, (tid, team), one=True)
+    if not assignment:
+        return jsonify({'error': 'ไม่พบ assignment ที่โต้แย้งของทีมนี้'}), 404
+
+    now = datetime.now().isoformat()
+    if to_team:
+        existing = query("""
+            SELECT id FROM ticket_assignments WHERE ticket_id=%s AND team=%s AND id != %s
+        """, (tid, to_team, assignment['id']), one=True)
+        if existing:
+            # Target team already on the case — just drop the disputed assignment
+            mutate("DELETE FROM ticket_assignments WHERE id=%s", (assignment['id'],))
+        else:
+            mutate("""UPDATE ticket_assignments
+                SET team=%s, disputed_at=NULL, dispute_note=NULL, disputed_by=NULL,
+                    note=NULL, employee_id=NULL,
+                    acknowledged_by=NULL, acknowledged_user_id=NULL, acknowledged_at=NULL
+                WHERE id=%s""", (to_team, assignment['id']))
+        action_note = f"โอนงานจากทีม {team} → {to_team}" + (f" — {note}" if note else '')
+    else:
+        mutate("DELETE FROM ticket_assignments WHERE id=%s", (assignment['id'],))
+        action_note = f"ยอมรับข้อโต้แย้ง — ถอดทีม {team} ออกจากเคส" + (f" — {note}" if note else '')
+
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, 'CX', to_team or '', 'Resolve dispute', action_note,
+         g.user['user_id'], g.user['display_name']))
+
+    # Route the case to whoever still owes an acknowledgement; auto-close if none left.
+    pending = query("""
+        SELECT team FROM ticket_assignments
+        WHERE ticket_id=%s AND acknowledged_at IS NULL ORDER BY id
+    """, (tid,))
+    remaining = query(
+        "SELECT COUNT(*) AS cnt FROM ticket_assignments WHERE ticket_id=%s", (tid,), one=True)
+
+    if pending:
+        mutate("UPDATE tickets SET current_team=%s WHERE id=%s", (pending[0]['team'], tid))
+    elif remaining and remaining['cnt'] > 0:
+        for ack in query(
+            "SELECT * FROM ticket_assignments WHERE ticket_id=%s AND acknowledged_at IS NOT NULL", (tid,)):
+            if ack['employee_id']:
+                mutate("""INSERT INTO ticket_fault_attribution
+                    (ticket_id, fault_team, employee_id, note, attributed_by, attributed_user_id)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                    (tid, ack['team'], ack['employee_id'], ack.get('note') or '',
+                     'system (dispute resolved)', g.user['user_id']))
+        mutate("UPDATE tickets SET status='closed', closed_at=%s, fault_attributed_at=%s WHERE id=%s",
+               (now, now, tid))
+        mutate("""INSERT INTO ticket_workflow_log
+            (ticket_id, from_team, to_team, action, note, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s)""",
+            (tid, 'system', '', 'ปิดเคสอัตโนมัติ — ทุกทีม Acknowledge ครบแล้ว', '', 'system'))
+    else:
+        # No assignments left at all — hand back to CX to decide
+        mutate("UPDATE tickets SET current_team='CX' WHERE id=%s", (tid,))
 
     return jsonify({'ok': True})
 
@@ -2064,20 +2165,21 @@ EXPORT_HEADERS = [
     'เลขเอกสาร (IVSC)',      # 3
     'หมวดหมู่',               # 4
     'ผู้รับผิดชอบ (ทีม)',     # 5
-    'ชื่อลูกค้า',             # 6
-    'สาขา / รายละเอียด',     # 7
-    'ประเภทสินค้า',           # 8
-    'ชื่อสินค้า',             # 9
-    'SKU Group',              # 10
-    'SKU Category',           # 11
-    'SKU Type',               # 12
-    'รายละเอียดปัญหา',        # 13
-    'สาเหตุ (Root Cause)',    # 14
-    'จำนวนสินค้าที่สั่ง',     # 15
-    'จำนวนสินค้าที่พบปัญหา',  # 16
-    'การดำเนินการ',           # 17
+    'ผู้รับผิดชอบ (พนักงาน)', # 6
+    'ชื่อลูกค้า',             # 7
+    'สาขา / รายละเอียด',     # 8
+    'ประเภทสินค้า',           # 9
+    'ชื่อสินค้า',             # 10
+    'SKU Group',              # 11
+    'SKU Category',           # 12
+    'SKU Type',               # 13
+    'รายละเอียดปัญหา',        # 14
+    'สาเหตุ (Root Cause)',    # 15
+    'จำนวนสินค้าที่สั่ง',     # 16
+    'จำนวนสินค้าที่พบปัญหา',  # 17
+    'การดำเนินการ',           # 18
 ]
-EXPORT_COL_WIDTHS = [16, 14, 10, 20, 14, 18, 24, 24, 16, 28, 18, 18, 16, 32, 20, 12, 12, 24]
+EXPORT_COL_WIDTHS = [16, 14, 10, 20, 14, 18, 20, 24, 24, 16, 28, 18, 18, 16, 32, 20, 12, 12, 24]
 
 _EXPORT_W2026 = None  # cached week table
 
@@ -2191,7 +2293,12 @@ def dashboard_export():
                t.invoice_number, t.resolution_type, t.claim_items,
                t.created_at, t.root_cause,
                o.name AS outlet_name, a.name AS account_name,
-               COALESCE(tfa.fault_team, t.fault_team) AS resp_team
+               COALESCE(tfa.fault_team, t.fault_team) AS resp_team,
+               -- Aggregated so a ticket with several attributions stays one row
+               (SELECT string_agg(DISTINCT e.name, ', ')
+                  FROM ticket_fault_attribution fa2
+                  JOIN employees e ON e.id = fa2.employee_id
+                 WHERE fa2.ticket_id = t.id) AS resp_employee
         FROM tickets t
         LEFT JOIN outlets o ON o.id = t.outlet_id
         LEFT JOIN accounts a ON a.id = o.account_id
@@ -2252,37 +2359,38 @@ def dashboard_export():
             r.get('invoice_number') or '',       # 3  เลขเอกสาร (IVSC)
             r.get('case_type') or '',            # 4  หมวดหมู่
             r.get('resp_team') or '',            # 5  ผู้รับผิดชอบ (ทีม)
-            r.get('account_name') or '',         # 6  ชื่อลูกค้า
-            r.get('outlet_name') or '',          # 7  สาขา / รายละเอียด
+            r.get('resp_employee') or '',        # 6  ผู้รับผิดชอบ (พนักงาน)
+            r.get('account_name') or '',         # 7  ชื่อลูกค้า
+            r.get('outlet_name') or '',          # 8  สาขา / รายละเอียด
         ]
 
         if items:
             for item in items:
                 meta = sku_meta.get(item.get('sku_code') or item.get('sku') or '', {})
                 ws.append(base + [
-                    '',                                                          # 8  ประเภทสินค้า (manual)
-                    item.get('product_name') or item.get('sku_code') or '',     # 9  ชื่อสินค้า
-                    meta.get('sku_group') or '',                                 # 10 SKU Group
-                    meta.get('sku_category') or '',                             # 11 SKU Category
-                    meta.get('sku_type') or '',                                 # 12 SKU Type
-                    r.get('description') or '',                                  # 13 รายละเอียดปัญหา
-                    r.get('root_cause') or '',                                   # 14 สาเหตุ
-                    str(item.get('qty') or ''),                                  # 15 จำนวนสั่ง
-                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 16 จำนวนพบปัญหา
-                    r.get('resolution_type') or '',                              # 17 การดำเนินการ
+                    '',                                                          # 9  ประเภทสินค้า (manual)
+                    item.get('product_name') or item.get('sku_code') or '',     # 10 ชื่อสินค้า
+                    meta.get('sku_group') or '',                                 # 11 SKU Group
+                    meta.get('sku_category') or '',                             # 12 SKU Category
+                    meta.get('sku_type') or '',                                 # 13 SKU Type
+                    r.get('description') or '',                                  # 14 รายละเอียดปัญหา
+                    r.get('root_cause') or '',                                   # 15 สาเหตุ
+                    str(item.get('qty') or ''),                                  # 16 จำนวนสั่ง
+                    str(item.get('claimed_qty') or item.get('claim_qty') or ''), # 17 จำนวนพบปัญหา
+                    r.get('resolution_type') or '',                              # 18 การดำเนินการ
                 ])
         else:
             ws.append(base + [
-                '',                         # 8  ประเภทสินค้า
-                '',                         # 9  ชื่อสินค้า
-                '',                         # 10 SKU Group
-                '',                         # 11 SKU Category
-                '',                         # 12 SKU Type
-                r.get('description') or '', # 13 รายละเอียดปัญหา
-                r.get('root_cause') or '',  # 14 สาเหตุ
-                '',                         # 15
+                '',                         # 9  ประเภทสินค้า
+                '',                         # 10 ชื่อสินค้า
+                '',                         # 11 SKU Group
+                '',                         # 12 SKU Category
+                '',                         # 13 SKU Type
+                r.get('description') or '', # 14 รายละเอียดปัญหา
+                r.get('root_cause') or '',  # 15 สาเหตุ
                 '',                         # 16
-                r.get('resolution_type') or '',  # 17
+                '',                         # 17
+                r.get('resolution_type') or '',  # 18
             ])
 
     apply_export_widths(ws)
@@ -2372,19 +2480,20 @@ def dashboard_export_orders():
             export_week_label(r.get('ref_date')),# 2  สัปดาห์
             inv,                                # 3  เลขเอกสาร (IVSC)
             case_type,                          # 4  หมวดหมู่
-            '',                                 # 5  ผู้รับผิดชอบ
-            r.get('account_name') or '',        # 6  ชื่อลูกค้า
-            r.get('customer_name') or '',       # 7  สาขา / รายละเอียด
-            '',                                 # 8  ประเภทสินค้า
-            r.get('product_name') or '',        # 9  ชื่อสินค้า
-            r.get('sku_group') or '',           # 10 SKU Group
-            r.get('sku_category') or '',        # 11 SKU Category
-            r.get('sku_type') or '',            # 12 SKU Type
-            '',                                 # 13 รายละเอียดปัญหา
-            '',                                 # 14 สาเหตุ
-            str(r.get('qty') or ''),            # 15 จำนวนสินค้าที่สั่ง
-            '',                                 # 16 จำนวนสินค้าที่พบปัญหา
-            '',                                 # 17 การดำเนินการ
+            '',                                 # 5  ผู้รับผิดชอบ (ทีม)
+            '',                                 # 6  ผู้รับผิดชอบ (พนักงาน)
+            r.get('account_name') or '',        # 7  ชื่อลูกค้า
+            r.get('customer_name') or '',       # 8  สาขา / รายละเอียด
+            '',                                 # 9  ประเภทสินค้า
+            r.get('product_name') or '',        # 10 ชื่อสินค้า
+            r.get('sku_group') or '',           # 11 SKU Group
+            r.get('sku_category') or '',        # 12 SKU Category
+            r.get('sku_type') or '',            # 13 SKU Type
+            '',                                 # 14 รายละเอียดปัญหา
+            '',                                 # 15 สาเหตุ
+            str(r.get('qty') or ''),            # 16 จำนวนสินค้าที่สั่ง
+            '',                                 # 17 จำนวนสินค้าที่พบปัญหา
+            '',                                 # 18 การดำเนินการ
         ])
 
     apply_export_widths(ws)
@@ -2432,7 +2541,7 @@ def my_team_active():
             LEFT JOIN outlets o ON o.id = t.outlet_id
             WHERE wl.action = 'Dispute'
               AND t.current_team = 'CX'
-              AND t.status = 'pending_fault'
+              AND t.status IN ('pending_fault', 'pending_ack')
             ORDER BY wl.ticket_id, wl.created_at DESC
         """)
 
