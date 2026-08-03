@@ -26,7 +26,9 @@ if not ERP_DATABASE_URL and DATABASE_URL:
 
 TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound']
 FAULT_TEAMS = TEAMS + ['Customer']
-CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล']
+CASE_TYPES = ['Complain', 'Claim', 'ตามส่งสินค้า', 'Update Invoice', 'วางบิล']
+# Case types that carry claim_items (multi-SKU) and follow the Claim workflow
+ITEM_CASE_TYPES = ['Claim', 'ตามส่งสินค้า']
 CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
 ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'สินค้าขาดตลาด', 'จัดส่งล่าช้า', 'อื่นๆ']
 PRIORITIES = ['High', 'Medium']
@@ -1543,6 +1545,50 @@ def resolve_assignment_dispute(tid):
 
     return jsonify({'ok': True})
 
+@app.route('/api/tickets/<int:tid>/claim-items', methods=['POST'])
+@require_auth
+def update_claim_items(tid):
+    """Replace a ticket's SKU list after it was opened. CX only — used by the
+    ตามส่งสินค้า flow where the item list changes as deliveries are chased."""
+    import json as _json
+    d = request.json or {}
+    items = d.get('claim_items')
+    note  = (d.get('note') or '').strip()
+
+    ticket = query("SELECT * FROM tickets WHERE id=%s", (tid,), one=True)
+    if not ticket:
+        return jsonify({'error': 'Not found'}), 404
+    if g.user['team'] != 'CX' and g.user['role'] != 'admin':
+        return jsonify({'error': 'เฉพาะทีม CX เท่านั้นที่แก้ไขรายการสินค้าได้'}), 403
+    if ticket['status'] == 'closed':
+        return jsonify({'error': 'เคสปิดแล้ว ไม่สามารถแก้ไขรายการสินค้าได้'}), 400
+
+    if isinstance(items, str):
+        try: items = _json.loads(items)
+        except Exception:
+            return jsonify({'error': 'รูปแบบรายการสินค้าไม่ถูกต้อง'}), 400
+    if not isinstance(items, list) or not items:
+        return jsonify({'error': 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ'}), 400
+
+    try:
+        old = _json.loads(ticket.get('claim_items') or '[]')
+    except Exception:
+        old = []
+    old_n, new_n = len(old), len(items)
+
+    primary = items[0]
+    mutate("""UPDATE tickets SET claim_items=%s, sku_code=%s, product_name=%s WHERE id=%s""",
+           (_json.dumps(items), primary.get('sku_code'), primary.get('product_name'), tid))
+
+    detail = f"แก้ไขรายการสินค้า: {old_n} → {new_n} รายการ"
+    mutate("""INSERT INTO ticket_workflow_log
+        (ticket_id, from_team, to_team, action, note, user_id, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+        (tid, g.user['team'], '', 'แก้ไขรายการสินค้า',
+         detail + (f" — {note}" if note else ''), g.user['user_id'], g.user['display_name']))
+
+    return jsonify({'ok': True, 'count': new_n})
+
 @app.route('/api/tickets/<int:tid>/note', methods=['POST'])
 @require_auth
 def add_ticket_note(tid):
@@ -1916,7 +1962,7 @@ def dashboard_case_invoice_ratio():
         SELECT COALESCE(tfa.fault_team, 'ยังไม่ระบุ') AS fault_team, COUNT(*) AS cnt
         FROM tickets t
         LEFT JOIN ticket_fault_attribution tfa ON tfa.ticket_id = t.id
-        WHERE t.case_type IN ('Claim', 'Complain', 'Update Invoice')
+        WHERE t.case_type IN ('Claim', 'Complain', 'Update Invoice', 'ตามส่งสินค้า')
           AND t.invoice_number = ANY(%s)
         GROUP BY COALESCE(tfa.fault_team, 'ยังไม่ระบุ') ORDER BY cnt DESC
     """, (inv_list,))
@@ -1954,7 +2000,7 @@ def dashboard_case_invoice_debug():
         included = False
         inv = t['invoice_number']
 
-        if t['case_type'] not in ('Claim', 'Complain', 'Update Invoice'):
+        if t['case_type'] not in ('Claim', 'Complain', 'Update Invoice', 'ตามส่งสินค้า'):
             reason = f"ประเภท '{t['case_type']}' ไม่ใช่ Claim/Complain/Update Invoice"
         elif not inv or inv.strip() == '':
             reason = 'ไม่มี Invoice Number'
@@ -2041,7 +2087,7 @@ def dashboard_fault_rate_trend():
     fault_rows = query("""
         SELECT t.invoice_number, COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
-        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
+        WHERE t.case_type IN ('Claim','Complain','Update Invoice','ตามส่งสินค้า')
           AND t.invoice_number = ANY(%s)
         GROUP BY t.invoice_number
     """, (all_inv_list,)) if all_inv_list else []
@@ -2052,7 +2098,7 @@ def dashboard_fault_rate_trend():
                COALESCE(t.fault_team, 'ยังไม่ระบุ') AS team,
                COUNT(DISTINCT t.id) AS fault_cnt
         FROM tickets t
-        WHERE t.case_type IN ('Claim','Complain','Update Invoice')
+        WHERE t.case_type IN ('Claim','Complain','Update Invoice','ตามส่งสินค้า')
           AND t.invoice_number = ANY(%s)
         GROUP BY t.invoice_number, team
     """, (all_inv_list,)) if all_inv_list else []

@@ -162,7 +162,9 @@ async function apiUpload(path, formData) {
 // ── constants ─────────────────────────────────────────────────────────────────
 const TEAMS = ['CX', 'Sales/KAM', 'Sales Co', 'Merchandise', 'Inbound', 'Outbound'];
 const FAULT_TEAMS = [...TEAMS, 'Customer'];
-const CASE_TYPES = ['Complain', 'Claim', 'Update Invoice', 'วางบิล'];
+const CASE_TYPES = ['Complain', 'Claim', 'ตามส่งสินค้า', 'Update Invoice', 'วางบิล'];
+// Case types that carry a multi-SKU item list and follow the Claim workflow
+const ITEM_CASE_TYPES = ['Claim', 'ตามส่งสินค้า'];
 const CLAIM_SUBTYPES = ['Express (same day)', 'Next delivery (date TBD)', 'Next delivery (date confirmed)'];
 const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'สินค้าขาดตลาด', 'จัดส่งล่าช้า', 'อื่นๆ'];
 const PRIORITIES = ['High', 'Medium'];
@@ -1421,7 +1423,7 @@ function Dashboard() {
           <div className="card p-4">
             <h3 className="font-semibold text-gray-700 mb-3">Case Type</h3>
             {(() => {
-              const FAULT_TYPES = ['Complain','Claim','Update Invoice'];
+              const FAULT_TYPES = ['Complain','Claim','Update Invoice','ตามส่งสินค้า'];
               const all = overview.by_case_type || [];
               const fault = all.filter(d => FAULT_TYPES.includes(d.case_type));
               const service = all.filter(d => !FAULT_TYPES.includes(d.case_type));
@@ -1778,7 +1780,7 @@ function CreateTicket({ user, onCreated }) {
   const submit = async e => {
     e.preventDefault();
     if (!form.case_type) return setMsg('Please select a case type');
-    if (form.case_type === 'Claim' && claimItems.length === 0) return setMsg('Please select at least 1 claim item');
+    if (ITEM_CASE_TYPES.includes(form.case_type) && claimItems.length === 0) return setMsg('Please select at least 1 item');
     if (form.case_type === 'Claim' && !form.resolution_type) return setMsg('Please select a resolution type');
     if (form.case_type === 'Complain' && form.initial_teams.length === 0) return setMsg('Please select at least 1 team');
     if (form.case_type !== 'Complain' && form.initial_teams.length === 0) return setMsg('Please select a team');
@@ -1798,6 +1800,8 @@ function CreateTicket({ user, onCreated }) {
   const isComplain = form.case_type === 'Complain';
   const isClaim = form.case_type === 'Claim';
   const isWangBil = form.case_type === 'วางบิล';
+  // ตามส่งสินค้า shares Claim's multi-SKU flow (CX can revise the list later)
+  const hasItems = ITEM_CASE_TYPES.includes(form.case_type);
 
   return (
     <div className="p-6 max-w-2xl">
@@ -1809,12 +1813,12 @@ function CreateTicket({ user, onCreated }) {
           {/* Case type */}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-2">Case Type *</label>
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {CASE_TYPES.map(t => (
                 <label key={t} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${form.case_type===t?'border-teal-600 bg-teal-50 text-teal-700 font-semibold':'border-gray-200'}`}>
                   <input type="radio" name="case_type" value={t} checked={form.case_type===t}
                     onChange={e=>{ set('case_type',t); set('initial_teams',[]); }} className="hidden"/>
-                  {t==='Complain'?'😤':t==='Claim'?'🔄':'📄'} {t}
+                  {t==='Complain'?'😤':t==='Claim'?'🔄':t==='ตามส่งสินค้า'?'🚚':'📄'} {t}
                 </label>
               ))}
             </div>
@@ -1857,7 +1861,7 @@ function CreateTicket({ user, onCreated }) {
           {/* Invoice — shows after outlet selected, NOT for วางบิล */}
           {form.outlet_id && !isWangBil && (
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Invoice Number {isClaim && <span className="text-red-500">*</span>}</label>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Invoice Number {hasItems && <span className="text-red-500">*</span>}</label>
               {invoices.length === 0
                 ? <p className="text-xs text-gray-400">No invoices found for this outlet</p>
                 : <select value={selectedInvoice} onChange={e=>setSelectedInvoice(e.target.value)}>
@@ -1876,8 +1880,8 @@ function CreateTicket({ user, onCreated }) {
           {selectedInvoice && invoiceSkus.length > 0 && !isWangBil && (
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-2">
-                {isClaim ? <>Claim Items <span className="text-red-500">*</span></> : 'Related Items'}
-                <span className="text-xs text-gray-400 font-normal ml-1">— tick items with issues{isClaim && ' and fill claim qty'}</span>
+                {hasItems ? <>{isClaim ? 'Claim Items' : 'รายการสินค้าที่ตามส่ง'} <span className="text-red-500">*</span></> : 'Related Items'}
+                <span className="text-xs text-gray-400 font-normal ml-1">— เลือกได้หลายรายการ{hasItems && ' และระบุจำนวน'}</span>
               </label>
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
@@ -2525,6 +2529,10 @@ function TicketDetail({ ticketId, user, onBack }) {
   const [faultTeam, setFaultTeam] = useState('');
   const [faultEmployee, setFaultEmployee] = useState('');
   const [disputeNote, setDisputeNote] = useState('');
+  // CX-only SKU editing (ตามส่งสินค้า)
+  const [editingItems, setEditingItems] = useState(false);
+  const [editSkus, setEditSkus] = useState([]);      // all SKUs on the invoice
+  const [editSelected, setEditSelected] = useState([]); // chosen items
   const addImage    = url => setImageUrls(u => [...u, url]);
   const removeImage = i   => setImageUrls(u => u.filter((_, j) => j !== i));
 
@@ -2557,6 +2565,40 @@ function TicketDetail({ ticketId, user, onBack }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // --- CX-only SKU editing for ตามส่งสินค้า ---
+  const openItemEditor = async () => {
+    setMsg('');
+    let current = [];
+    try { current = ticket.claim_items ? JSON.parse(ticket.claim_items) : []; } catch(e) {}
+    setEditSelected(current);
+    setEditingItems(true);
+    if (ticket.invoice_number) {
+      const skus = await api(`/api/invoices/${ticket.invoice_number}/skus`);
+      setEditSkus(skus || []);
+    }
+  };
+  const toggleEditItem = (sku) => {
+    setEditSelected(prev => prev.find(i => i.sku_code === sku.sku_code)
+      ? prev.filter(i => i.sku_code !== sku.sku_code)
+      : [...prev, { ...sku, claimed_qty: sku.qty }]);
+  };
+  const setEditQty = (sku_code, qty) => {
+    setEditSelected(prev => prev.map(i => i.sku_code === sku_code ? { ...i, claimed_qty: qty } : i));
+  };
+  const saveItems = async () => {
+    if (editSelected.length === 0) return setMsg('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ');
+    setSaving(true); setMsg('');
+    try {
+      const res = await api(`/api/tickets/${ticketId}/claim-items`, {
+        method: 'POST',
+        body: JSON.stringify({ claim_items: editSelected, note }),
+      });
+      if (res && res.ok) { setEditingItems(false); setNote(''); load(); }
+      else setMsg(res?.error || 'An error occurred');
+    } catch(ex) { setMsg('Error: ' + ex.message); }
+    finally { setSaving(false); }
   };
 
   if (loading) return <div className="p-8 text-center text-gray-400"><Spinner/></div>;
@@ -2703,7 +2745,7 @@ function TicketDetail({ ticketId, user, onBack }) {
       <div className="flex items-center gap-3 mb-5">
         <button onClick={onBack} className="btn btn-secondary text-sm">← Back</button>
         <h2 className="text-lg font-bold" style={{color:'var(--primary)'}}>Case #{ticket.id}</h2>
-        {ticket.case_type === 'Claim' && claimItemsParsed.length > 0 && (
+        {ITEM_CASE_TYPES.includes(ticket.case_type) && claimItemsParsed.length > 0 && (
           <button onClick={downloadPDF} className="btn btn-primary text-sm ml-auto">
             📄 Download PDF
           </button>
@@ -2762,7 +2804,9 @@ function TicketDetail({ ticketId, user, onBack }) {
             if (!items || items.length === 0) return null;
             return (
               <div className="mt-2">
-                <div className="text-xs font-medium text-gray-500 mb-1">Claim Items:</div>
+                <div className="text-xs font-medium text-gray-500 mb-1">
+                  {ticket.case_type === 'ตามส่งสินค้า' ? 'รายการสินค้าที่ตามส่ง:' : 'Claim Items:'}
+                </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full text-xs">
                     <thead><tr className="bg-gray-50 border-b text-gray-400">
@@ -2869,6 +2913,85 @@ function TicketDetail({ ticketId, user, onBack }) {
                 <p className="text-xs text-gray-500 mt-2" style={{background:'#fef2f2',padding:'8px 10px',borderRadius:6}}>
                   เหตุผล: {myDisputed.dispute_note}
                 </p>}
+            </div>
+          )}
+
+          {/* 1c. ตามส่งสินค้า — CX can revise the SKU list after the case is open */}
+          {ticket.case_type === 'ตามส่งสินค้า' && ticket.status !== 'closed' && (
+            <div className="card p-4 border-l-4 border-teal-500">
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className="font-semibold text-gray-700">🚚 รายการสินค้าที่ตามส่ง</h4>
+                {isCX && !editingItems && (
+                  <button className="btn btn-secondary text-xs ml-auto" onClick={openItemEditor}>
+                    ✏️ แก้ไขรายการ
+                  </button>
+                )}
+              </div>
+
+              {!isCX && (
+                <p className="text-xs text-gray-400">เฉพาะทีม CX เท่านั้นที่แก้ไขรายการสินค้าได้</p>
+              )}
+
+              {editingItems && (
+                <div>
+                  {editSkus.length === 0 ? (
+                    <p className="text-xs text-gray-400 mb-2">ไม่พบรายการสินค้าของ invoice นี้</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-2">
+                      <table className="w-full text-xs">
+                        <thead><tr className="bg-gray-50 border-b text-gray-400">
+                          <th className="p-2 text-left" style={{width:36}}></th>
+                          <th className="p-2 text-left">Product</th>
+                          <th className="p-2 text-center">สั่ง</th>
+                          <th className="p-2 text-center">ตามส่ง</th>
+                        </tr></thead>
+                        <tbody>
+                          {editSkus.map(sku => {
+                            const sel = editSelected.find(i => i.sku_code === sku.sku_code);
+                            return (
+                              <tr key={sku.sku_code}
+                                className={`border-b last:border-0 cursor-pointer ${sel?'bg-teal-50':''}`}
+                                onClick={()=>toggleEditItem(sku)}>
+                                <td className="p-2 text-center">
+                                  <div className={`w-4 h-4 rounded border-2 inline-flex items-center justify-center text-xs
+                                    ${sel?'bg-teal-600 border-teal-600 text-white':'border-gray-300'}`}>
+                                    {sel?'✓':''}
+                                  </div>
+                                </td>
+                                <td className="p-2">
+                                  <div className="font-medium text-gray-700">{sku.product_name}</div>
+                                  <div className="text-gray-400 font-mono">{sku.sku_code}</div>
+                                </td>
+                                <td className="p-2 text-center text-gray-500">{sku.qty} {sku.unit}</td>
+                                <td className="p-2 text-center" onClick={e=>e.stopPropagation()}>
+                                  {sel && (
+                                    <input type="number" min="0.01" step="0.01" value={sel.claimed_qty}
+                                      onChange={e=>setEditQty(sku.sku_code, parseFloat(e.target.value)||0)}
+                                      style={{width:70,textAlign:'center',border:'1px solid #d1d5db',borderRadius:6,padding:'3px 6px'}}/>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
+                    placeholder="เหตุผลในการแก้ไข (ถ้ามี)" className="mb-2"/>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">เลือกแล้ว {editSelected.length} รายการ</span>
+                    <button className="btn btn-secondary text-xs ml-auto" disabled={saving}
+                      onClick={()=>{ setEditingItems(false); setNote(''); setMsg(''); }}>
+                      ยกเลิก
+                    </button>
+                    <button className="btn btn-primary text-xs" disabled={saving||editSelected.length===0}
+                      onClick={saveItems}>
+                      {saving?<Spinner/>:'💾 บันทึกรายการ'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
