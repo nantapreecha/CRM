@@ -167,6 +167,17 @@ const CASE_TYPES = ['Complain', 'Claim', 'ตามส่งสินค้า',
 const ITEM_CASE_TYPES = ['Claim', 'ตามส่งสินค้า'];
 const CLAIM_SUBTYPES = ['Express (same day)', 'Next delivery (date TBD)', 'Next delivery (date confirmed)'];
 const ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'สินค้าขาดตลาด', 'จัดส่งล่าช้า', 'อื่นๆ'];
+// ตามส่งสินค้า uses its own root causes instead of the list above
+const DELIVERY_ROOT_CAUSES = [
+  { value: 'รอสินค้า (Merchandising)',   desc: 'สินค้ายังไม่พร้อมจัดส่ง หรืออยู่ระหว่างรอสินค้าจากต้นทาง' },
+  { value: 'สินค้าตกหล่น (Outbound)',    desc: 'สินค้าไม่ได้ถูกจัดส่งไปพร้อมออเดอร์ เนื่องจากตกหล่นในกระบวนการจัดสินค้า' },
+  { value: 'รอยืนยันสเปค (ลูกค้า)',      desc: 'อยู่ระหว่างรอการยืนยันสเปคสินค้าจากลูกค้าหรือผู้เกี่ยวข้องก่อนดำเนินการจัดส่ง' },
+  { value: 'ตรวจสอบล่าช้า (Qc)',         desc: 'จัดเตรียมสินค้าล่าช้า' },
+  { value: 'จัดเตรียมล่าช้า (Outbound)', desc: 'จัดเตรียมสินค้าล่าช้า' },
+];
+const rootCausesFor = ct => ct === 'ตามส่งสินค้า'
+  ? DELIVERY_ROOT_CAUSES.map(r => r.value)
+  : ROOT_CAUSES;
 const PRIORITIES = ['High', 'Medium'];
 
 const TEAM_ICONS = {
@@ -1817,7 +1828,13 @@ function CreateTicket({ user, onCreated }) {
               {CASE_TYPES.map(t => (
                 <label key={t} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm ${form.case_type===t?'border-teal-600 bg-teal-50 text-teal-700 font-semibold':'border-gray-200'}`}>
                   <input type="radio" name="case_type" value={t} checked={form.case_type===t}
-                    onChange={e=>{ set('case_type',t); set('initial_teams',[]); }} className="hidden"/>
+                    onChange={e=>{
+                      setForm(f => ({
+                        ...f, case_type: t, initial_teams: [],
+                        // drop a root cause that doesn't belong to the new type's list
+                        root_cause: rootCausesFor(t).includes(f.root_cause) ? f.root_cause : '',
+                      }));
+                    }} className="hidden"/>
                   {t==='Complain'?'😤':t==='Claim'?'🔄':t==='ตามส่งสินค้า'?'🚚':'📄'} {t}
                 </label>
               ))}
@@ -1825,13 +1842,17 @@ function CreateTicket({ user, onCreated }) {
           </div>
 
 
-          {/* Root cause */}
+          {/* Root cause — ตามส่งสินค้า has its own list */}
           <div>
             <label className="text-sm font-medium text-gray-700 block mb-1">Root Cause</label>
             <select value={form.root_cause} onChange={e=>set('root_cause',e.target.value)}>
               <option value="">-- None --</option>
-              {ROOT_CAUSES.map(r => <option key={r} value={r}>{r}</option>)}
+              {rootCausesFor(form.case_type).map(r => <option key={r} value={r}>{r}</option>)}
             </select>
+            {form.case_type === 'ตามส่งสินค้า' && form.root_cause && (() => {
+              const hit = DELIVERY_ROOT_CAUSES.find(r => r.value === form.root_cause);
+              return hit ? <p className="text-xs text-gray-400 mt-1">{hit.desc}</p> : null;
+            })()}
           </div>
 
           {/* Priority */}

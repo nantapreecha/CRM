@@ -29,6 +29,14 @@ FAULT_TEAMS = TEAMS + ['Customer']
 CASE_TYPES = ['Complain', 'Claim', 'ตามส่งสินค้า', 'Update Invoice', 'วางบิล']
 # Case types that carry claim_items (multi-SKU) and follow the Claim workflow
 ITEM_CASE_TYPES = ['Claim', 'ตามส่งสินค้า']
+# ตามส่งสินค้า replaces ROOT_CAUSES with its own list
+DELIVERY_ROOT_CAUSES = [
+    'รอสินค้า (Merchandising)',
+    'สินค้าตกหล่น (Outbound)',
+    'รอยืนยันสเปค (ลูกค้า)',
+    'ตรวจสอบล่าช้า (Qc)',
+    'จัดเตรียมล่าช้า (Outbound)',
+]
 CLAIM_SUBTYPES = ['ด่วน (ภายในวัน)', 'รอรอบถัดไป (ไม่รู้วัน)', 'รอรอบถัดไป (รู้วันแล้ว)']
 ROOT_CAUSES = ['สินค้าตกหล่น', 'คุณภาพไม่ผ่าน/ไม่ได้ spec', 'น้ำหนักไม่ครบ', 'ส่งผิด SKU', 'Master SKU ผิด', 'เอกสารผิดพลาด', 'สินค้าขาดตลาด', 'จัดส่งล่าช้า', 'อื่นๆ']
 PRIORITIES = ['High', 'Medium']
@@ -559,6 +567,7 @@ def get_config():
         'case_types': CASE_TYPES,
         'claim_subtypes': CLAIM_SUBTYPES,
         'root_causes': ROOT_CAUSES,
+        'delivery_root_causes': DELIVERY_ROOT_CAUSES,
         'priorities': PRIORITIES,
     })
 
