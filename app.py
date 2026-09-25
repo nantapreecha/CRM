@@ -183,25 +183,27 @@ def migrate_orders_reset_and_fix():
 migrate_orders_reset_and_fix()
 
 def migrate_accounts_outlets_unique():
-    """Add missing UNIQUE indexes on accounts.name, outlets.erp_outlet_id, outlets(account_id,name)."""
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS accounts_name_uidx ON accounts (name)
-        """)
-        cur.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_uidx ON outlets (erp_outlet_id)
-            WHERE erp_outlet_id IS NOT NULL
-        """)
-        cur.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS outlets_account_name_uidx ON outlets (account_id, name)
-        """)
-        conn.commit()
-        conn.close()
-        print("[migrate] accounts/outlets unique indexes ensured")
-    except Exception as e:
-        print(f"[migrate] accounts/outlets unique: {e}")
+    """Ensure lookup indexes on accounts/outlets.
+
+    No UNIQUE index on outlets.erp_outlet_id: the ERP reuses MoveMax outlet IDs
+    across customers (a re-created "(ใหม่)" customer keeps the old SC code), so
+    that column can never be unique. The stable ERP key is erp_customer_id.
+    Each statement runs in its own transaction so one failure can't roll back
+    the others."""
+    stmts = [
+        "CREATE UNIQUE INDEX IF NOT EXISTS accounts_name_uidx ON accounts (name)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS outlets_account_name_uidx ON outlets (account_id, name)",
+        "CREATE INDEX IF NOT EXISTS outlets_erp_customer_id_idx ON outlets (erp_customer_id)",
+    ]
+    for sql in stmts:
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute(sql)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[migrate] accounts/outlets index: {e}")
 
 migrate_accounts_outlets_unique()
 
@@ -264,7 +266,7 @@ CREATE TABLE IF NOT EXISTS outlets (
     account_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     erp_customer_id TEXT,
-    erp_outlet_id TEXT UNIQUE,
+    erp_outlet_id TEXT,
     csc_code TEXT,
     status TEXT DEFAULT 'active',
     FOREIGN KEY (account_id) REFERENCES accounts(id)
@@ -512,7 +514,6 @@ def init_db():
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fault_attributed_at TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS image_url TEXT",
         "ALTER TABLE ticket_workflow_log ADD COLUMN IF NOT EXISTS user_id INTEGER",
-        "CREATE UNIQUE INDEX IF NOT EXISTS outlets_erp_outlet_id_idx ON outlets(erp_outlet_id) WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != ''",
         "UPDATE tickets SET status='pending_ack' WHERE case_type='Complain' AND current_team='pending_ack' AND status='open'",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claim_items TEXT",
         "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_type TEXT",
@@ -920,6 +921,35 @@ def get_outlet(oid):
     if not row:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
+
+@app.route('/api/debug/outlet-merge-check', methods=['GET'])
+def debug_outlet_merge_check():
+    """TEMPORARY — aggregate-only verification of the outlet merge. Remove after use."""
+    out = {}
+    checks = {
+        'outlets_now': "SELECT COUNT(*) AS n FROM outlets",
+        'outlets_backup': "SELECT COUNT(*) AS n FROM outlets_backup_20260925",
+        'links_backup': "SELECT COUNT(*) AS n FROM outlet_links_backup_20260925",
+        'merged_rows': "SELECT COUNT(*) AS n FROM outlet_merge_log",
+        'dup_customer_id_groups': """SELECT COUNT(*) AS n FROM (SELECT erp_customer_id FROM outlets
+            WHERE erp_customer_id IS NOT NULL AND erp_customer_id != '' GROUP BY 1 HAVING COUNT(*)>1) x""",
+        'dup_outlet_id_groups': """SELECT COUNT(*) AS n FROM (SELECT erp_outlet_id FROM outlets
+            WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != '' GROUP BY 1 HAVING COUNT(*)>1) x""",
+        'orphan_tickets': """SELECT COUNT(*) AS n FROM tickets t WHERE t.outlet_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM outlets o WHERE o.id = t.outlet_id)""",
+        'orphan_orders': """SELECT COUNT(*) AS n FROM orders r WHERE r.outlet_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM outlets o WHERE o.id = r.outlet_id)""",
+        'tickets_total': "SELECT COUNT(*) AS n FROM tickets",
+        'tickets_with_outlet': "SELECT COUNT(*) AS n FROM tickets WHERE outlet_id IS NOT NULL",
+        'sc00182_rows': "SELECT COUNT(*) AS n FROM outlets WHERE erp_outlet_id = 'SC00182'",
+        'without_customer_id': "SELECT COUNT(*) AS n FROM outlets WHERE erp_customer_id IS NULL OR erp_customer_id = ''",
+    }
+    for k, sql in checks.items():
+        try:
+            out[k] = query(sql, one=True)['n']
+        except Exception as e:
+            out[k] = f'error: {e}'
+    return jsonify(out)
 
 @app.route('/api/outlets/<int:oid>/invoices', methods=['GET'])
 @require_auth
@@ -2838,10 +2868,20 @@ def import_erp():
             erp_cid = p['erp_customer_id']
             erp_oid = p['erp_outlet_id']
             csc = p['csc_code']
-            # Always look up by (account_id, name) — most reliable key
-            cur.execute("SELECT id, name FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
+            # Match on the stable ERP customer id first, so a branch renamed in
+            # ERP maps to its existing outlet instead of creating a duplicate
+            r = None
+            if erp_cid:
+                cur.execute("SELECT id FROM outlets WHERE erp_customer_id=%s ORDER BY id LIMIT 1", (erp_cid,))
+                r = cur.fetchone()
+            if r:
+                outlet_map[(acc_id, out_name)] = r['id']
+                continue
+            cur.execute("SELECT id, name, erp_customer_id FROM outlets WHERE account_id=%s AND name=%s", (acc_id, out_name))
             r = cur.fetchone()
             if r:
+                if erp_cid and not r['erp_customer_id']:
+                    cur.execute("UPDATE outlets SET erp_customer_id=%s WHERE id=%s", (erp_cid, r['id']))
                 outlet_map[(acc_id, r['name'])] = r['id']
             else:
                 cur.execute("""
@@ -3350,7 +3390,9 @@ def sales_dashboard_reps():
 # ---------------------------------------------------------------------------
 
 def sync_outlets_from_erp():
-    """Sync new outlets from ERP sourcing_erp_order_items into CRM outlets table."""
+    """Keep CRM outlets in step with ERP customers, keyed on the stable ERP
+    customer_id. A branch renamed in ERP updates its existing outlet instead of
+    creating a second one (the old name-keyed sync produced duplicates)."""
     if not ERP_DATABASE_URL:
         return
     try:
@@ -3359,57 +3401,207 @@ def sync_outlets_from_erp():
         ec = erp.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cc = crm.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-        # ERP: distinct outlets
+        # ERP: one row per customer, carrying its most recent name/codes
         ec.execute("""
-            SELECT DISTINCT ON (customer_name)
-                outlet_id, customer_name, account_name, csc_code
+            SELECT DISTINCT ON (customer_id)
+                customer_id, customer_name, account_name, outlet_id, csc_code
             FROM sourcing_erp_order_items
-            WHERE customer_name IS NOT NULL AND customer_name != ''
-            ORDER BY customer_name, outlet_id
+            WHERE customer_id IS NOT NULL AND customer_id != ''
+              AND customer_name IS NOT NULL AND customer_name != ''
+            ORDER BY customer_id, doc_date DESC NULLS LAST
         """)
-        erp_outlets = ec.fetchall()
+        erp_customers = ec.fetchall()
 
-        # CRM: existing names and accounts
-        cc.execute("SELECT name FROM outlets")
-        crm_names = {r['name'] for r in cc.fetchall()}
+        cc.execute("SELECT id, account_id, name, erp_customer_id, erp_outlet_id, csc_code FROM outlets")
+        outlets = cc.fetchall()
+        by_cid = {o['erp_customer_id']: o for o in outlets if o['erp_customer_id']}
+        by_acc_name = {(o['account_id'], o['name']): o for o in outlets}
         cc.execute("SELECT id, name FROM accounts")
         crm_accounts = {r['name']: r['id'] for r in cc.fetchall()}
 
-        added = 0
-        for o in erp_outlets:
-            name = (o['customer_name'] or '').strip()
-            acc_name = (o['account_name'] or '').strip()
-            if not name or not acc_name or name in crm_names:
+        added = updated = 0
+        for c in erp_customers:
+            cid = c['customer_id'].strip()
+            name = (c['customer_name'] or '').strip()
+            acc_name = (c['account_name'] or '').strip()
+            oid = (c['outlet_id'] or '').strip() or None
+            csc = (c['csc_code'] or '').strip() or None
+            if not name or not acc_name:
                 continue
 
-            # Find or create account
+            existing = by_cid.get(cid)
+            if existing:
+                # Known customer: follow renames / code changes in place
+                new_name = existing['name']
+                if name != existing['name'] and (existing['account_id'], name) not in by_acc_name:
+                    new_name = name
+                new_oid = oid or existing['erp_outlet_id']
+                new_csc = csc or existing['csc_code']
+                if (new_name, new_oid, new_csc) != (existing['name'], existing['erp_outlet_id'], existing['csc_code']):
+                    cc.execute("""UPDATE outlets SET name=%s, erp_outlet_id=%s, csc_code=%s WHERE id=%s""",
+                               (new_name, new_oid, new_csc, existing['id']))
+                    by_acc_name.pop((existing['account_id'], existing['name']), None)
+                    existing.update(name=new_name, erp_outlet_id=new_oid, csc_code=new_csc)
+                    by_acc_name[(existing['account_id'], new_name)] = existing
+                    updated += 1
+                continue
+
             if acc_name not in crm_accounts:
                 cc.execute("INSERT INTO accounts (name, status) VALUES (%s, 'active') RETURNING id", (acc_name,))
-                aid = cc.fetchone()['id']
-                crm_accounts[acc_name] = aid
-            else:
-                aid = crm_accounts[acc_name]
+                crm_accounts[acc_name] = cc.fetchone()['id']
+            aid = crm_accounts[acc_name]
 
-            # Create outlet
+            match = by_acc_name.get((aid, name))
+            if match:
+                # Same outlet created before we tracked customer_id — adopt it
+                if not match['erp_customer_id']:
+                    cc.execute("""UPDATE outlets SET erp_customer_id=%s,
+                                    erp_outlet_id=COALESCE(erp_outlet_id, %s),
+                                    csc_code=COALESCE(csc_code, %s) WHERE id=%s""",
+                               (cid, oid, csc, match['id']))
+                    match['erp_customer_id'] = cid
+                    by_cid[cid] = match
+                    updated += 1
+                continue
+
             cc.execute("""
-                INSERT INTO outlets (account_id, name, erp_outlet_id, csc_code, status)
-                VALUES (%s, %s, %s, %s, 'active')
+                INSERT INTO outlets (account_id, name, erp_customer_id, erp_outlet_id, csc_code, status)
+                VALUES (%s, %s, %s, %s, %s, 'active')
                 ON CONFLICT DO NOTHING
-                RETURNING id
-            """, (aid, name, o['outlet_id'], o['csc_code']))
-            if cc.fetchone():
-                crm_names.add(name)
+                RETURNING id, account_id, name, erp_customer_id, erp_outlet_id, csc_code
+            """, (aid, name, cid, oid, csc))
+            row = cc.fetchone()
+            if row:
+                by_cid[cid] = row
+                by_acc_name[(aid, name)] = row
                 added += 1
 
         crm.commit()
-        if added:
-            print(f"[sync_outlets] {added} new outlets added from ERP", flush=True)
+        if added or updated:
+            print(f"[sync_outlets] added {added}, updated {updated} outlets from ERP", flush=True)
         erp.close()
         crm.close()
     except Exception as e:
         print(f"[sync_outlets] Error: {e}", flush=True)
 
+def merge_duplicate_outlets():
+    """One-time cleanup (Sep 2026) of outlets duplicated by the old name-keyed
+    sync. Groups outlets by ERP customer_id, keeps one per customer, re-points
+    tickets/orders to it and deletes the rest.
+
+    Reversible: before touching anything it copies outlets and every
+    ticket/order -> outlet link into *_backup_20260925 tables, and records each
+    merge in outlet_merge_log. Runs once — the backup table doubles as the
+    'already done' marker, and an advisory lock stops two instances racing
+    during a deploy."""
+    if not ERP_DATABASE_URL:
+        return
+    from collections import defaultdict
+    crm = None
+    try:
+        crm = get_db()
+        cc = crm.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cc.execute("SELECT pg_advisory_xact_lock(84210925)")
+        cc.execute("SELECT to_regclass('public.outlets_backup_20260925') AS t")
+        if cc.fetchone()['t']:
+            crm.rollback(); crm.close()
+            return
+
+        erp = psycopg2.connect(ERP_DATABASE_URL, options="-c timezone=Asia/Bangkok")
+        ec = erp.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        # ERP keeps the name used on every order, so old names still map to their customer
+        ec.execute("""
+            SELECT customer_name, array_agg(DISTINCT customer_id) AS cids
+            FROM sourcing_erp_order_items
+            WHERE customer_id IS NOT NULL AND customer_id != ''
+              AND customer_name IS NOT NULL AND customer_name != ''
+            GROUP BY customer_name
+        """)
+        name_to_cids = {r['customer_name'].strip(): r['cids'] for r in ec.fetchall()}
+        ec.execute("""
+            SELECT DISTINCT ON (customer_id) customer_id, customer_name
+            FROM sourcing_erp_order_items
+            WHERE customer_id IS NOT NULL AND customer_id != ''
+            ORDER BY customer_id, doc_date DESC NULLS LAST
+        """)
+        latest_name = {r['customer_id']: (r['customer_name'] or '').strip() for r in ec.fetchall()}
+        erp.close()
+
+        cc.execute("CREATE TABLE outlets_backup_20260925 AS SELECT * FROM outlets")
+        cc.execute("""
+            CREATE TABLE outlet_links_backup_20260925 AS
+            SELECT 'tickets'::text AS tbl, id AS row_id, outlet_id FROM tickets WHERE outlet_id IS NOT NULL
+            UNION ALL
+            SELECT 'orders'::text, id, outlet_id FROM orders WHERE outlet_id IS NOT NULL
+        """)
+        cc.execute("""
+            CREATE TABLE IF NOT EXISTS outlet_merge_log (
+                dup_id INTEGER, keeper_id INTEGER, erp_customer_id TEXT,
+                dup_name TEXT, keeper_name TEXT, merged_at TIMESTAMP DEFAULT NOW())
+        """)
+
+        # 1. Give ID-less outlets their ERP customer_id when the name is unambiguous
+        cc.execute("SELECT id, name FROM outlets WHERE erp_customer_id IS NULL OR erp_customer_id = ''")
+        backfilled = 0
+        for r in cc.fetchall():
+            cids = name_to_cids.get((r['name'] or '').strip())
+            if cids and len(cids) == 1:
+                cc.execute("UPDATE outlets SET erp_customer_id=%s WHERE id=%s", (cids[0], r['id']))
+                backfilled += 1
+
+        # 2. Merge outlets that share a customer_id
+        cc.execute("""
+            SELECT o.id, o.name, o.erp_customer_id,
+                   (SELECT COUNT(*) FROM tickets t WHERE t.outlet_id = o.id) AS n_tickets
+            FROM outlets o
+            WHERE o.erp_customer_id IN (
+                SELECT erp_customer_id FROM outlets
+                WHERE erp_customer_id IS NOT NULL AND erp_customer_id != ''
+                GROUP BY erp_customer_id HAVING COUNT(*) > 1)
+            ORDER BY o.erp_customer_id, o.id
+        """)
+        groups = defaultdict(list)
+        for r in cc.fetchall():
+            groups[r['erp_customer_id']].append(r)
+
+        merged = moved_tickets = moved_orders = 0
+        for cid, members in groups.items():
+            current = latest_name.get(cid)
+            keeper = next((m for m in members if m['name'] == current), None) \
+                or max(members, key=lambda m: (m['n_tickets'], -m['id']))
+            for m in members:
+                if m['id'] == keeper['id']:
+                    continue
+                cc.execute("UPDATE tickets SET outlet_id=%s WHERE outlet_id=%s", (keeper['id'], m['id']))
+                moved_tickets += cc.rowcount
+                cc.execute("UPDATE orders SET outlet_id=%s WHERE outlet_id=%s", (keeper['id'], m['id']))
+                moved_orders += cc.rowcount
+                cc.execute("""INSERT INTO outlet_merge_log (dup_id, keeper_id, erp_customer_id, dup_name, keeper_name)
+                              VALUES (%s,%s,%s,%s,%s)""", (m['id'], keeper['id'], cid, m['name'], keeper['name']))
+                cc.execute("DELETE FROM outlets WHERE id=%s", (m['id'],))
+                merged += 1
+            # Show the name ERP uses today, if nothing else in the account holds it
+            if current and keeper['name'] != current:
+                cc.execute("""
+                    UPDATE outlets SET name=%s WHERE id=%s AND NOT EXISTS (
+                        SELECT 1 FROM outlets x
+                        WHERE x.account_id = outlets.account_id AND x.name = %s AND x.id != outlets.id)
+                """, (current, keeper['id'], current))
+
+        crm.commit()
+        crm.close()
+        print(f"[merge_outlets] backfilled {backfilled} customer ids, merged {merged} duplicates "
+              f"across {len(groups)} customers; moved {moved_tickets} tickets, {moved_orders} orders",
+              flush=True)
+    except Exception as e:
+        if crm:
+            try: crm.rollback(); crm.close()
+            except Exception: pass
+        print(f"[merge_outlets] Error (nothing changed): {e}", flush=True)
+
 # Start scheduler
+merge_duplicate_outlets()
+
 _scheduler = BackgroundScheduler(daemon=True)
 _scheduler.add_job(sync_outlets_from_erp, 'interval', hours=1, id='sync_outlets')
 _scheduler.start()
