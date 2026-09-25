@@ -922,35 +922,6 @@ def get_outlet(oid):
         return jsonify({'error': 'Not found'}), 404
     return jsonify(row)
 
-@app.route('/api/debug/outlet-merge-check', methods=['GET'])
-def debug_outlet_merge_check():
-    """TEMPORARY — aggregate-only verification of the outlet merge. Remove after use."""
-    out = {}
-    checks = {
-        'outlets_now': "SELECT COUNT(*) AS n FROM outlets",
-        'outlets_backup': "SELECT COUNT(*) AS n FROM outlets_backup_20260925",
-        'links_backup': "SELECT COUNT(*) AS n FROM outlet_links_backup_20260925",
-        'merged_rows': "SELECT COUNT(*) AS n FROM outlet_merge_log",
-        'dup_customer_id_groups': """SELECT COUNT(*) AS n FROM (SELECT erp_customer_id FROM outlets
-            WHERE erp_customer_id IS NOT NULL AND erp_customer_id != '' GROUP BY 1 HAVING COUNT(*)>1) x""",
-        'dup_outlet_id_groups': """SELECT COUNT(*) AS n FROM (SELECT erp_outlet_id FROM outlets
-            WHERE erp_outlet_id IS NOT NULL AND erp_outlet_id != '' GROUP BY 1 HAVING COUNT(*)>1) x""",
-        'orphan_tickets': """SELECT COUNT(*) AS n FROM tickets t WHERE t.outlet_id IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM outlets o WHERE o.id = t.outlet_id)""",
-        'orphan_orders': """SELECT COUNT(*) AS n FROM orders r WHERE r.outlet_id IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM outlets o WHERE o.id = r.outlet_id)""",
-        'tickets_total': "SELECT COUNT(*) AS n FROM tickets",
-        'tickets_with_outlet': "SELECT COUNT(*) AS n FROM tickets WHERE outlet_id IS NOT NULL",
-        'sc00182_rows': "SELECT COUNT(*) AS n FROM outlets WHERE erp_outlet_id = 'SC00182'",
-        'without_customer_id': "SELECT COUNT(*) AS n FROM outlets WHERE erp_customer_id IS NULL OR erp_customer_id = ''",
-    }
-    for k, sql in checks.items():
-        try:
-            out[k] = query(sql, one=True)['n']
-        except Exception as e:
-            out[k] = f'error: {e}'
-    return jsonify(out)
-
 @app.route('/api/outlets/<int:oid>/invoices', methods=['GET'])
 @require_auth
 def get_outlet_invoices(oid):
